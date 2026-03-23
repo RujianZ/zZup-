@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "sudo-app",
+    "name": "SUDO",
     "slug": "sudo-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,9 +12,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sudo.app"
     },
     "android": {
+      "package": "com.sudo.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
