@@ -1,0 +1,29 @@
+drop table if exists public.user_locations;
+create table public.user_locations (
+  user_id uuid references public.profiles(id) on delete cascade primary key,
+  latitude double precision,
+  longitude double precision,
+  updated_at timestamptz default now()
+);
+alter table public.user_locations enable row level security;
+create policy "friends_can_read"
+  on public.user_locations for select
+  using (
+    auth.uid() = user_id
+    or auth.uid() in (
+      select requester_id from public.friendships
+      where addressee_id = user_id and status = 'accepted'
+      union
+      select addressee_id from public.friendships
+      where requester_id = user_id and status = 'accepted'
+    )
+  );
+create policy "owner_can_write"
+  on public.user_locations for insert
+  with check (auth.uid() = user_id);
+create policy "owner_can_update"
+  on public.user_locations for update
+  using (auth.uid() = user_id);
+create policy "owner_can_delete"
+  on public.user_locations for delete
+  using (auth.uid() = user_id);

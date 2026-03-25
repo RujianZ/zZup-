@@ -15,14 +15,14 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.sudo.app",
       "config": {
-        "googleMapsApiKey": "process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
+        "googleMapsApiKey": "AIzaSyDuo6iYFQZNM9CV2ksTXqASflkERw4uEHM"
       }
     },
     "android": {
       "package": "com.sudo.app",
       "config": {
         "googleMaps": {
-          "apiKey": "process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
+          "apiKey": "AIzaSyDuo6iYFQZNM9CV2ksTXqASflkERw4uEHM"
         }
       },
       "adaptiveIcon": {
