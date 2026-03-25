@@ -27,3 +27,9 @@ create policy "owner_can_update"
 create policy "owner_can_delete"
   on public.user_locations for delete
   using (auth.uid() = user_id);
+-- Realtime (must be after table creation)
+do $$ begin
+  alter publication supabase_realtime drop table user_locations;
+exception when others then null;
+end $$;
+alter publication supabase_realtime add table user_locations;
