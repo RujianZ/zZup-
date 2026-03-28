@@ -193,31 +193,30 @@ export async function createDirectMessage(friendId: string): Promise<Group | nul
   } = await supabase.auth.getUser()
   if (!user) return null
 
-  // Check if a direct conversation already exists between these two users
-  const { data: myDirectGroups } = await supabase
-    .from('group_members')
-    .select('group_id, groups!inner(id, chat_type)')
-    .eq('user_id', user.id)
-    .eq('groups.chat_type', 'direct')
+  // TD-7: 用两个并行查询替代 N+1 循环，找到双方共同的 DM group
+  const [{ data: myDMs }, { data: theirDMs }] = await Promise.all([
+    supabase
+      .from('group_members')
+      .select('group_id, groups!inner(chat_type)')
+      .eq('user_id', user.id)
+      .eq('groups.chat_type', 'direct'),
+    supabase
+      .from('group_members')
+      .select('group_id, groups!inner(chat_type)')
+      .eq('user_id', friendId)
+      .eq('groups.chat_type', 'direct'),
+  ])
 
-  if (myDirectGroups) {
-    for (const row of myDirectGroups as any[]) {
-      const { data: match } = await supabase
-        .from('group_members')
-        .select('user_id')
-        .eq('group_id', row.group_id)
-        .eq('user_id', friendId)
-        .single()
+  const myDMIds = new Set((myDMs ?? []).map((r: any) => r.group_id))
+  const sharedGroupId = (theirDMs ?? []).find((r: any) => myDMIds.has(r.group_id))?.group_id
 
-      if (match) {
-        const { data: existing } = await supabase
-          .from('groups')
-          .select('*')
-          .eq('id', row.group_id)
-          .single()
-        return existing as Group
-      }
-    }
+  if (sharedGroupId) {
+    const { data: existing } = await supabase
+      .from('groups')
+      .select('*')
+      .eq('id', sharedGroupId)
+      .single()
+    return existing as Group
   }
 
   // Create new direct message conversation

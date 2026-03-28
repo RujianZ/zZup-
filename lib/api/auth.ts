@@ -140,7 +140,6 @@ export async function getProfile(userId?: string): Promise<Profile | null> {
   // 按 profile_visibility 决定显示哪个身份
   switch (p.profile_visibility) {
     case 'real_only':
-      // 只显示真人，隐藏宠物
       result.pet_name = null
       result.pet_avatar_url = null
       result.pet_bio = null
@@ -148,15 +147,22 @@ export async function getProfile(userId?: string): Promise<Profile | null> {
       result.pet_xp = null
       break
     case 'pet_only':
-      // 只显示宠物，隐藏真人
       result.real_name = null
       result.avatar_url = null
       result.bio = null
+      // TD-4: 生日/国籍/二维码属于真人身份，pet_only 时一并隐藏
+      result.date_of_birth = null
+      result.nationality = null
+      result.qr_code_url = null
       break
     case 'real_with_pet':
-      // 两个都显示，不做额外过滤
       break
   }
+
+  // TD-5: 隐私设置本身不对外暴露，对方只看到过滤后的结果
+  result.show_date_of_birth = false
+  result.show_nationality = false
+  result.show_qr_code = false
 
   return result
 }

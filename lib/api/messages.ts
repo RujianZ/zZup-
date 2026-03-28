@@ -11,6 +11,9 @@ export interface Message {
   image_url: string | null
   created_at: string
   edited_at: string | null
+  // 从 profiles 联查（Realtime 推送的消息此字段为 null）
+  author_name: string | null
+  author_avatar_url: string | null
 }
 
 // ─── Task 77: getMessages ─────────────────────────────────────────────────────
@@ -29,17 +32,37 @@ export async function getMessages(
 
   let query = supabase
     .from('messages')
-    .select('*')
+    .select(
+      `id, group_id, user_id, identity_mode, content, image_url, created_at, edited_at,
+       profiles!messages_user_id_fkey (
+         real_name, pet_name, avatar_url, pet_avatar_url
+       )`
+    )
     .eq('group_id', groupId)
     .order('created_at', { ascending: false })
     .limit(limit)
 
-  if (before) {
-    query = query.lt('created_at', before)
-  }
+  if (before) query = query.lt('created_at', before)
 
   const { data } = await query
-  return (data ?? []) as Message[]
+  if (!data) return []
+
+  return data.map((m: any) => {
+    const profile = m.profiles
+    const isReal = m.identity_mode === 'real'
+    return {
+      id: m.id,
+      group_id: m.group_id,
+      user_id: m.user_id,
+      identity_mode: m.identity_mode,
+      content: m.content,
+      image_url: m.image_url,
+      created_at: m.created_at,
+      edited_at: m.edited_at,
+      author_name: profile ? (isReal ? profile.real_name : profile.pet_name) : null,
+      author_avatar_url: profile ? (isReal ? profile.avatar_url : profile.pet_avatar_url) : null,
+    }
+  })
 }
 
 // ─── Task 78: sendMessage ─────────────────────────────────────────────────────
@@ -100,4 +123,18 @@ export function subscribeToMessages(
     .subscribe()
 
   return () => supabase.removeChannel(channel)
+}
+
+// ─── Task 80: editMessage ─────────────────────────────────────────────────────
+
+export async function editMessage(
+  messageId: string,
+  content: string
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('messages')
+    .update({ content, edited_at: new Date().toISOString() })
+    .eq('id', messageId)
+
+  return { error: error?.message ?? null }
 }

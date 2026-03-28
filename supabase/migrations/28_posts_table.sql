@@ -1,4 +1,8 @@
 -- 清理
+drop trigger if exists on_like_change on likes;
+drop trigger if exists on_comment_change on comments;
+drop function if exists update_likes_count();
+drop function if exists update_comments_count();
 drop table if exists post_viewers cascade;
 drop table if exists likes cascade;
 drop table if exists comments cascade;
@@ -105,3 +109,35 @@ create policy "Users can update own post"
   on posts for update using (auth.uid() = user_id);
 create policy "Users can delete own post"
   on posts for delete using (auth.uid() = user_id);
+-- ==================== count triggers ====================
+create or replace function update_likes_count()
+returns trigger as $$
+begin
+  if TG_OP = 'INSERT' then
+    update posts set likes_count = likes_count + 1 where id = NEW.post_id;
+  elsif TG_OP = 'DELETE' then
+    update posts set likes_count = greatest(0, likes_count - 1) where id = OLD.post_id;
+  end if;
+  return null;
+end;
+$$ language plpgsql security definer;
+
+create trigger on_like_change
+  after insert or delete on likes
+  for each row execute function update_likes_count();
+
+create or replace function update_comments_count()
+returns trigger as $$
+begin
+  if TG_OP = 'INSERT' then
+    update posts set comments_count = comments_count + 1 where id = NEW.post_id;
+  elsif TG_OP = 'DELETE' then
+    update posts set comments_count = greatest(0, comments_count - 1) where id = OLD.post_id;
+  end if;
+  return null;
+end;
+$$ language plpgsql security definer;
+
+create trigger on_comment_change
+  after insert or delete on comments
+  for each row execute function update_comments_count();

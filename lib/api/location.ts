@@ -23,10 +23,11 @@ export interface FriendLocation {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function applyFuzzyOffset(coord: Coordinate): Coordinate {
-  const GRID = 0.005 // ~555m per grid cell
+  // Multiply by 5 then divide by 1000 instead of multiplying by 0.005 directly,
+  // avoiding binary floating point drift (0.005 has no exact binary representation)
   return {
-    latitude: Math.round(coord.latitude / GRID) * GRID,
-    longitude: Math.round(coord.longitude / GRID) * GRID,
+    latitude: Math.round(coord.latitude / 0.005) * 5 / 1000,
+    longitude: Math.round(coord.longitude / 0.005) * 5 / 1000,
   }
 }
 
@@ -100,36 +101,40 @@ export async function cacheNearbyPlaces(coord: Coordinate): Promise<CachedLandma
   const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY!
   const now = new Date().toISOString()
 
-  // Check if we have already searched near this location
+  // Snap to 0.005° grid so all users in the same cell share one cache record
+  // applyFuzzyOffset uses the same 0.005° grid — reused here for cache keying
+  const snapped = applyFuzzyOffset(coord)
+
+  // Check if this exact grid cell has been cached
   const { data: zones } = await supabase
     .from('landmark_cache_zones')
     .select('id')
     .gte('expires_at', now)
-    .filter('latitude', 'gte', coord.latitude - 0.005)
-    .filter('latitude', 'lte', coord.latitude + 0.005)
-    .filter('longitude', 'gte', coord.longitude - 0.005)
-    .filter('longitude', 'lte', coord.longitude + 0.005)
+    .eq('latitude', snapped.latitude)
+    .eq('longitude', snapped.longitude)
     .limit(1)
 
   if (zones && zones.length > 0) {
-    // This area has been searched before — return whatever landmarks we have
+    // Grid cell cached — return landmarks within this cell from DB
     const { data: cached } = await supabase
       .from('landmarks')
       .select('*')
       .gte('expires_at', now)
-      .filter('latitude', 'gte', coord.latitude - 0.005)
-      .filter('latitude', 'lte', coord.latitude + 0.005)
-      .filter('longitude', 'gte', coord.longitude - 0.005)
-      .filter('longitude', 'lte', coord.longitude + 0.005)
+      .filter('latitude', 'gte', snapped.latitude - 0.005)
+      .filter('latitude', 'lte', snapped.latitude + 0.005)
+      .filter('longitude', 'gte', snapped.longitude - 0.005)
+      .filter('longitude', 'lte', snapped.longitude + 0.005)
     return (cached ?? []) as CachedLandmark[]
   }
 
-  // New area — call Google Places API
-  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${coord.latitude},${coord.longitude}&radius=${CACHE_RADIUS_METERS}&key=${apiKey}`
+  // New grid cell — call Google Places API centered on grid point
+  const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${snapped.latitude},${snapped.longitude}&radius=${CACHE_RADIUS_METERS}&key=${apiKey}`
   const response = await fetch(url)
   const data = await response.json()
 
   if (!data.results) return []
+
+  const expiresAt = new Date(Date.now() + CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString()
 
   const places = data.results.map((place: any) => ({
     place_id: place.place_id,
@@ -138,8 +143,8 @@ export async function cacheNearbyPlaces(coord: Coordinate): Promise<CachedLandma
     longitude: place.geometry.location.lng,
     place_type: getPlaceType(place.types ?? []),
     radius_meters: getPlaceRadius(place.types ?? []),
-    cached_at: new Date().toISOString(),
-    expires_at: new Date(Date.now() + CACHE_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+    cached_at: now,
+    expires_at: expiresAt,
   }))
 
   const { data: inserted } = await supabase
@@ -147,11 +152,11 @@ export async function cacheNearbyPlaces(coord: Coordinate): Promise<CachedLandma
     .upsert(places, { onConflict: 'place_id', ignoreDuplicates: true })
     .select()
 
-  // Record that this area has been searched
-  await supabase.from('landmark_cache_zones').insert({
-    latitude: coord.latitude,
-    longitude: coord.longitude,
-  })
+  // Mark this grid cell as cached; upsert refreshes expires_at if cell already exists
+  await supabase.from('landmark_cache_zones').upsert(
+    { latitude: snapped.latitude, longitude: snapped.longitude, cached_at: now, expires_at: expiresAt },
+    { onConflict: 'latitude,longitude' }
+  )
 
   return (inserted ?? []) as CachedLandmark[]
 }

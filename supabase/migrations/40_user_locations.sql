@@ -6,16 +6,24 @@ create table public.user_locations (
   updated_at timestamptz default now()
 );
 alter table public.user_locations enable row level security;
+-- TD-10: Also enforce location_sharing != 'off' at RLS level
 create policy "friends_can_read"
   on public.user_locations for select
   using (
     auth.uid() = user_id
-    or auth.uid() in (
-      select requester_id from public.friendships
-      where addressee_id = user_id and status = 'accepted'
-      union
-      select addressee_id from public.friendships
-      where requester_id = user_id and status = 'accepted'
+    or (
+      exists (
+        select 1 from public.profiles
+        where id = user_id
+          and location_sharing in ('precise', 'fuzzy')
+      )
+      and auth.uid() in (
+        select requester_id from public.friendships
+        where addressee_id = user_id and status = 'accepted'
+        union
+        select addressee_id from public.friendships
+        where requester_id = user_id and status = 'accepted'
+      )
     )
   );
 create policy "owner_can_write"

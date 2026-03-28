@@ -82,13 +82,14 @@ Joe 和 Ethan 都是 Supabase 的 owner，可以直接在 Supabase Dashboard 看
 |------|------|
 | personal_email、edu_email、region | 永远隐藏，返回 null |
 | location_sharing、ranking_opt_in | 永远隐藏，返回 null |
+| show_date_of_birth、show_nationality、show_qr_code | 永远返回 false（查看者不需要知道对方的隐私开关状态） |
 | date_of_birth | 只有对方开启了 `show_date_of_birth` 才显示 |
 | nationality | 只有对方开启了 `show_nationality` 才显示 |
 | qr_code_url | 只有对方开启了 `show_qr_code` 才显示 |
 
 **再按 profile_visibility 决定显示哪个身份**：
 - `real_only` → 隐藏宠物所有信息（pet_name、pet_avatar_url、pet_bio、pet_level、pet_xp）
-- `pet_only` → 隐藏真人信息（real_name、avatar_url、bio）
+- `pet_only` → 隐藏真人信息（real_name、avatar_url、bio），同时也隐藏 date_of_birth、nationality、qr_code_url（这些属于真实身份，宠物模式下不应泄露）
 - `real_with_pet` → 真人和宠物都显示
 
 **用户分支**：
@@ -156,10 +157,11 @@ Joe 和 Ethan 都是 Supabase 的 owner，可以直接在 Supabase Dashboard 看
 
 **流程**：
 1. 验证登录
-2. 查询 posts 表（数据库 RLS 自动过滤掉不该看到的帖子）
-3. 联查作者的 profiles，根据帖子的 identity_mode 返回对应的名字和头像
-4. 批量查当前用户对这些帖子的点赞状态（避免一条一条查）
-5. 返回 Post 数组
+2. 先查屏蔽列表（双向），把屏蔽了你或被你屏蔽的人都过滤掉
+3. 查询 posts 表（数据库 RLS 自动过滤掉不该看到的帖子）
+4. 联查作者的 profiles，根据帖子的 identity_mode 返回对应的名字和头像
+5. 批量查当前用户对这些帖子的点赞状态（避免一条一条查）
+6. 返回 Post 数组
 
 **用户分支**：
 - 滚动到底部"加载更多" → 传 `before` 参数（上一批最早的帖子时间），获取更早的帖子
@@ -211,12 +213,14 @@ Joe 和 Ethan 都是 Supabase 的 owner，可以直接在 Supabase Dashboard 看
 
 **流程**：
 1. 先查 likes 表，看当前用户是否已点赞这条帖子
-2. **已点赞** → 删除 likes 记录，帖子 likes_count - 1，返回 `{ liked: false }`
-3. **未点赞** → 插入 likes 记录，帖子 likes_count + 1，返回 `{ liked: true }`
+2. **已点赞** → 删除 likes 记录，返回 `{ liked: false }`
+3. **未点赞** → 插入 likes 记录，返回 `{ liked: true }`
+
+**注意**：likes_count 的更新由数据库触发器自动完成，代码里不需要手动 +1 / -1。
 
 **用户分支**：
-- 第一次点击点赞按钮 → 点赞，likes_count +1
-- 已点赞再次点击 → 取消点赞，likes_count -1
+- 第一次点击点赞按钮 → 点赞
+- 已点赞再次点击 → 取消点赞
 - 未登录 → 返回 `{ liked: false, error: 'Not authenticated' }`
 
 ---
@@ -225,9 +229,9 @@ Joe 和 Ethan 都是 Supabase 的 owner，可以直接在 Supabase Dashboard 看
 
 **是什么**：获取某条帖子的所有评论。
 
-**流程**：查询 comments 表，按时间升序（最早的评论在最上面），联查评论者的 profiles 获取名字和头像（根据评论的 identity_mode 返回真人或宠物信息）。
+**流程**：先查屏蔽列表（双向），过滤掉被屏蔽用户的评论。然后查询 comments 表，按时间升序（最早的评论在最上面），联查评论者的 profiles 获取名字和头像（根据评论的 identity_mode 返回真人或宠物信息）。
 
-**返回**：Comment 数组
+**返回**：Comment 数组（已过滤屏蔽用户的评论）
 
 ---
 
@@ -237,8 +241,9 @@ Joe 和 Ethan 都是 Supabase 的 owner，可以直接在 Supabase Dashboard 看
 
 **流程**：
 1. 插入 comments 记录
-2. 同时更新帖子的 comments_count + 1
-3. 返回 `{ commentId, error }`
+2. 返回 `{ commentId, error }`
+
+**注意**：comments_count 的更新由数据库触发器自动完成，代码里不需要手动 +1。
 
 ---
 
@@ -247,10 +252,44 @@ Joe 和 Ethan 都是 Supabase 的 owner，可以直接在 Supabase Dashboard 看
 **是什么**：删除本人评论。
 
 **流程**：
-1. 先查这条评论属于哪个帖子（记录 post_id）
-2. 删除评论（数据库 RLS 保证只能删自己的评论）
-3. 帖子 comments_count - 1（最小为 0，不会变负数）
-4. 返回 `{ error }`
+1. 删除评论（数据库 RLS 保证只能删自己的评论）
+2. 返回 `{ error }`
+
+**注意**：comments_count 的 -1 由数据库触发器自动完成，代码里不需要手动处理。
+
+---
+
+### editPost(postId, content, imageUrl?)
+
+**是什么**：编辑本人帖子的内容或图片。
+
+**参数**：
+- `postId`：要编辑的帖子 ID
+- `content`：新的文字内容
+- `imageUrl`（可选，三种情况）：
+  - 不传（undefined）→ 保留原来的图片不变
+  - 传 `null` → 删除图片（同时从 Storage 删除图片文件）
+  - 传新的图片 URL → 替换图片（先删旧图，再存新图 URL）
+
+**流程**：更新 posts 记录，同时设置 `edited_at` 为当前时间。数据库 RLS 保证只能编辑自己的帖子。
+
+**用户分支**：
+- ✅ 编辑成功 → 返回 `{ error: null }`
+- ❌ 编辑别人的帖子 → 数据库拒绝，返回 error
+
+---
+
+### editComment(commentId, content)
+
+**是什么**：编辑本人评论的内容。
+
+**流程**：更新 comments 记录的 content 字段，同时设置 `edited_at` 为当前时间。数据库 RLS 保证只能编辑自己的评论。
+
+**注意**：只能改文字内容，不能改 identity_mode（发布时选的身份永久固定）。
+
+**用户分支**：
+- ✅ 编辑成功 → 返回 `{ error: null }`
+- ❌ 编辑别人的评论 → 数据库拒绝，返回 error
 
 ---
 
@@ -358,8 +397,8 @@ Joe 和 Ethan 都是 Supabase 的 owner，可以直接在 Supabase Dashboard 看
 **是什么**：和某个好友开启私信对话。
 
 **流程**：
-1. 查询当前用户已有的所有 direct 类型群组
-2. 逐个检查这些群组是否包含 friendId（防止重复创建私信会话）
+1. 并行查询：同时获取当前用户的所有 direct 群组 ID 和好友的所有 direct 群组 ID
+2. 在 JS 里找两个列表的交集（共同属于的群组就是已有的私信会话）
 3. **找到已有会话** → 直接返回这个群组
 4. **没有会话** → 创建新的 chat_type = 'direct' 群组，将双方都加入 group_members
 
@@ -400,7 +439,7 @@ Joe 和 Ethan 都是 Supabase 的 owner，可以直接在 Supabase Dashboard 看
 - `limit`：每次加载几条（默认 30）
 - `before`：游标分页，传当前列表最早那条消息的 created_at
 
-**返回**：按时间降序的 Message 数组（最新的在最前面）。
+**返回**：按时间降序的 Message 数组（最新的在最前面）。每条消息现在包含 `author_name` 和 `author_avatar_url`，根据消息的 identity_mode 自动选择真人或宠物信息填充。
 
 **注意**：消息没有删除功能（设计决策：保留所有消息用于内容审核）。
 
@@ -438,6 +477,22 @@ return () => unsubscribe()
 - 对方发送消息 → onMessage 回调被触发，前端立即收到新消息
 - 进入页面时 → 建立 WebSocket 连接
 - 离开页面时 → 必须调用 unsubscribe()，否则内存泄漏
+
+**注意**：实时推送过来的消息是数据库原始行，不包含 author_name / author_avatar_url，如果需要显示作者信息要前端自己处理。
+
+---
+
+### editMessage(messageId, content)
+
+**是什么**：编辑本人发送的消息内容。
+
+**流程**：更新 messages 记录的 content 字段，同时设置 `edited_at` 为当前时间。数据库 RLS 保证只能编辑自己的消息。
+
+**注意**：只能改文字内容，不能改 identity_mode（发送时选的身份永久固定）。
+
+**用户分支**：
+- ✅ 编辑成功 → 返回 `{ error: null }`
+- ❌ 编辑别人的消息 → 数据库拒绝，返回 error
 
 ---
 
@@ -507,11 +562,16 @@ return () => unsubscribe()
 
 **是什么**：获取附近的地标（咖啡厅、图书馆、健身房等）。先查数据库缓存，缓存没有才调用 Google Places API。
 
+**核心设计：网格缓存**
+
+坐标会先被"吸附"到最近的 0.005° 网格点（约 555m 一格），整个校园可以理解成被分成了很多个格子。同一个格子里的所有用户共享一次 Google API 查询结果，不会重复请求。随着越来越多用户探索不同格子，缓存覆盖范围逐步扩大。
+
 **流程**：
-1. 查询 landmark_cache_zones 表，看这个坐标附近（±0.005°约500m）是否已经搜索过且未过期
-2. **已缓存** → 直接从 landmarks 表返回附近地标，不调用 Google API
-3. **未缓存** → 调用 Google Places API（搜索半径500m），把结果存入 landmarks 表，同时在 landmark_cache_zones 表记录本次搜索
-4. 返回 CachedLandmark 数组
+1. 把当前坐标吸附到最近的网格点
+2. 查询 landmark_cache_zones 表，用网格坐标做精确匹配，看这个格子是否已缓存且未过期
+3. **已缓存** → 直接从 landmarks 表返回附近地标，不调用 Google API
+4. **未缓存** → 以网格点为中心调用 Google Places API（搜索半径500m），把结果存入 landmarks 表，同时在 landmark_cache_zones 表记录（如果该格子之前有过期记录则刷新过期时间）
+5. 返回 CachedLandmark 数组
 
 **地标类型映射**（Google Places → SUDO 内部类型）：
 | Google 类型 | SUDO 类型 | 打卡半径 |
