@@ -30,15 +30,18 @@ function applyFuzzyOffset(coord: Coordinate): Coordinate {
   }
 }
 
-// Returns the most recent Monday at 00:00:00 local time
+// Returns the most recent Monday at 00:00:00 PT, as a UTC midnight Date
 function getWeekStart(): Date {
   const now = new Date()
-  const weekStart = new Date(now)
-  const dayOfWeek = now.getDay() // 0=Sun, 1=Mon, ..., 6=Sat
-  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
-  weekStart.setDate(now.getDate() - daysToMonday)
-  weekStart.setHours(0, 0, 0, 0)
-  return weekStart
+  const ptNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }))
+  const day = ptNow.getDay() // 0=Sun, 1=Mon, ..., 6=Sat
+  const daysToMonday = day === 0 ? 6 : day - 1
+  ptNow.setDate(ptNow.getDate() - daysToMonday)
+  ptNow.setHours(0, 0, 0, 0)
+  const y = ptNow.getFullYear()
+  const m = String(ptNow.getMonth() + 1).padStart(2, '0')
+  const d = String(ptNow.getDate()).padStart(2, '0')
+  return new Date(`${y}-${m}-${d}T00:00:00.000Z`)
 }
 
 // ─── Anti-cheat: clampMinutesSpent ───────────────────────────────────────────
@@ -141,7 +144,7 @@ export async function cacheNearbyPlaces(coord: Coordinate): Promise<CachedLandma
 
   const { data: inserted } = await supabase
     .from('landmarks')
-    .upsert(places, { onConflict: 'place_id' })
+    .upsert(places, { onConflict: 'place_id', ignoreDuplicates: true })
     .select()
 
   // Record that this area has been searched
@@ -182,6 +185,7 @@ export async function getFriendLocations(): Promise<FriendLocation[]> {
       updated_at,
       profiles!inner (
         real_name,
+        pet_name,
         avatar_url,
         pet_avatar_url,
         identity_mode,
@@ -199,7 +203,9 @@ export async function getFriendLocations(): Promise<FriendLocation[]> {
       latitude: loc.latitude,
       longitude: loc.longitude,
       updated_at: loc.updated_at,
-      display_name: loc.profiles.real_name,
+      display_name: loc.profiles.identity_mode === 'pet'
+        ? (loc.profiles.pet_name ?? loc.profiles.real_name)
+        : (loc.profiles.real_name ?? loc.profiles.pet_name),
       avatar_url: loc.profiles.avatar_url,
       pet_avatar_url: loc.profiles.pet_avatar_url,
       identity_mode: loc.profiles.identity_mode ?? 'real',
@@ -335,7 +341,7 @@ export async function discoverLandmark(
     .select('*')
     .eq('user_id', user.id)
     .eq('landmark_id', landmark.id)
-    .single()
+    .maybeSingle()
 
   let xpEarned = 0
   let isFirstVisit = false
@@ -427,7 +433,7 @@ export async function subscribeToFriendLocations(
 
   const { data: profilesData } = await supabase
     .from('profiles')
-    .select('id, real_name, avatar_url, pet_avatar_url, identity_mode, location_sharing')
+    .select('id, real_name, pet_name, avatar_url, pet_avatar_url, identity_mode, location_sharing')
     .in('id', friendIds)
 
   const profileCache = new Map<string, any>()
@@ -455,7 +461,9 @@ export async function subscribeToFriendLocations(
           latitude: loc.latitude,
           longitude: loc.longitude,
           updated_at: loc.updated_at,
-          display_name: profile.real_name,
+          display_name: profile.identity_mode === 'pet'
+            ? (profile.pet_name ?? profile.real_name)
+            : (profile.real_name ?? profile.pet_name),
           avatar_url: profile.avatar_url,
           pet_avatar_url: profile.pet_avatar_url,
           identity_mode: profile.identity_mode ?? 'real',

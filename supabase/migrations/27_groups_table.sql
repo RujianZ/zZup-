@@ -67,6 +67,13 @@ create policy "Users can join group"
   on group_members for insert with check (auth.uid() = user_id);
 create policy "Users can leave group"
   on group_members for delete using (auth.uid() = user_id);
+
+create policy "Group creator can remove members"
+  on group_members for delete
+  using (
+    auth.uid() = (select created_by from groups where id = group_id)
+    and auth.uid() != user_id
+  );
 -- ==================== groups select policy ====================
 create policy "Logged in users can view groups"
   on groups for select using (
