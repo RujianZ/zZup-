@@ -30,11 +30,11 @@ export default function RegisterScreen() {
     const { error } = await signUp(email.trim(), password);
     setLoading(false);
     if (error) {
-      Alert.alert('注册失败', error.message);
+      Alert.alert('注册失败', JSON.stringify(error));
       return;
     }
-    // 注册成功，跳转 Onboarding
-    navigation.navigate('Onboarding');
+    
+    
   };
 
   return (

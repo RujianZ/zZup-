@@ -15,7 +15,10 @@ const Stack = createNativeStackNavigator();
 
 function AuthStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator
+      initialRouteName="Login"
+      screenOptions={{ headerShown: false }}
+    >
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
     </Stack.Navigator>
@@ -26,13 +29,14 @@ function AppStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Map" component={MapScreen} />
+      <Stack.Screen name="LocationSettings" component={LocationSettingsScreen} />
     </Stack.Navigator>
   );
 }
 
 export default function RootNavigator() {
   const { session, profile, loading } = useAuth();
-
+  console.log('RootNavigator state:', { loading, session: !!session, profile: !!profile });
   // 启动时等待 session 加载完成
   if (loading) {
     return (
