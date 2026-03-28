@@ -14,18 +14,22 @@ export interface Profile {
   region: string | null
   university: string | null
   personal_email: string | null
-  personal_email_verified: boolean
+  personal_email_verified: boolean | null
   edu_email: string | null
   edu_verified: boolean
   pet_name: string | null
   pet_avatar_url: string | null
   pet_bio: string | null
-  pet_level: number
-  pet_xp: number
+  pet_level: number | null
+  pet_xp: number | null
   identity_mode: 'real' | 'pet'
-  location_sharing: 'precise' | 'fuzzy' | 'off'
-  ranking_opt_in: boolean
-  ranking_identity_mode: 'real' | 'pet'
+  location_sharing: 'precise' | 'fuzzy' | 'off' | null
+  ranking_opt_in: boolean | null
+  ranking_identity_mode: 'real' | 'pet' | null
+  profile_visibility: 'real_only' | 'real_with_pet' | 'pet_only'
+  show_date_of_birth: boolean
+  show_nationality: boolean
+  show_qr_code: boolean
   created_at: string
 }
 
@@ -48,6 +52,10 @@ export type ProfileUpdate = Partial<
     | 'location_sharing'
     | 'ranking_opt_in'
     | 'ranking_identity_mode'
+    | 'profile_visibility'
+    | 'show_date_of_birth'
+    | 'show_nationality'
+    | 'show_qr_code'
   >
 >
 
@@ -87,20 +95,90 @@ export async function signOut(): Promise<{ error: string | null }> {
 }
 
 // ─── Task 54: getProfile ──────────────────────────────────────────────────────
+// 不传 userId → 读自己（完整数据）
+// 传 userId   → 读别人（按对方的隐私设置过滤）
 
-export async function getProfile(): Promise<Profile | null> {
+export async function getProfile(userId?: string): Promise<Profile | null> {
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return null
 
+  const targetId = userId ?? user.id
+  const isSelf = targetId === user.id
+
   const { data } = await supabase
     .from('profiles')
     .select('*')
-    .eq('id', user.id)
+    .eq('id', targetId)
     .single()
 
-  return data as Profile | null
+  if (!data) return null
+
+  // 自己：返回完整数据
+  if (isSelf) return data as Profile
+
+  // 别人：按隐私设置过滤
+  const p = data as Profile
+
+  const result: Profile = {
+    ...p,
+    // 永远隐藏的私密字段
+    personal_email: null,
+    personal_email_verified: null,
+    edu_email: null,
+    region: null,
+    location_sharing: null,
+    ranking_opt_in: null,
+    ranking_identity_mode: null,
+    // 用户自选是否公开的字段
+    date_of_birth: p.show_date_of_birth ? p.date_of_birth : null,
+    nationality: p.show_nationality ? p.nationality : null,
+    qr_code_url: p.show_qr_code ? p.qr_code_url : null,
+  }
+
+  // 按 profile_visibility 决定显示哪个身份
+  switch (p.profile_visibility) {
+    case 'real_only':
+      // 只显示真人，隐藏宠物
+      result.pet_name = null
+      result.pet_avatar_url = null
+      result.pet_bio = null
+      result.pet_level = null
+      result.pet_xp = null
+      break
+    case 'pet_only':
+      // 只显示宠物，隐藏真人
+      result.real_name = null
+      result.avatar_url = null
+      result.bio = null
+      break
+    case 'real_with_pet':
+      // 两个都显示，不做额外过滤
+      break
+  }
+
+  return result
+}
+
+// ─── Task 70: getMyTitles ─────────────────────────────────────────────────────
+// 汇总当前用户所有 explorations 的 titles_earned，返回去重后的称号列表
+
+export async function getMyTitles(): Promise<string[]> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data } = await supabase
+    .from('explorations')
+    .select('titles_earned')
+    .eq('user_id', user.id)
+
+  if (!data) return []
+
+  const all = data.flatMap((row) => row.titles_earned as string[])
+  return [...new Set(all)]
 }
 
 // ─── Task 54: updateProfile ───────────────────────────────────────────────────

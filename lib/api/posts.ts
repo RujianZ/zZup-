@@ -1,0 +1,346 @@
+import { supabase } from '../supabase'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface Post {
+  id: string
+  user_id: string | null
+  identity_mode: 'real' | 'pet'
+  content: string
+  image_url: string | null
+  visibility: 'logged_in' | 'university' | 'friends' | 'specific_friends' | 'private'
+  likes_count: number
+  comments_count: number
+  created_at: string
+  edited_at: string | null
+  // 从 profiles 联查
+  author_name: string | null
+  author_avatar_url: string | null
+  // 当前用户是否已点赞
+  liked_by_me: boolean
+}
+
+export interface Comment {
+  id: string
+  post_id: string
+  user_id: string | null
+  identity_mode: 'real' | 'pet'
+  content: string
+  created_at: string
+  edited_at: string | null
+  // 从 profiles 联查
+  author_name: string | null
+  author_avatar_url: string | null
+}
+
+// ─── 内部工具函数 ──────────────────────────────────────────────────────────────
+
+// 从 Storage 公开 URL 中解析出相对路径
+function extractStoragePath(url: string, bucket: string): string | null {
+  const marker = `/object/public/${bucket}/`
+  const idx = url.indexOf(marker)
+  return idx !== -1 ? decodeURIComponent(url.slice(idx + marker.length)) : null
+}
+
+// ─── Task 86: getFeed ─────────────────────────────────────────────────────────
+// 获取 Feed 帖子列表，支持按 visibility 过滤，支持游标分页
+
+export async function getFeed(options?: {
+  visibility?: 'logged_in' | 'university' | 'friends' | 'specific_friends'
+  limit?: number
+  before?: string // 游标：最早帖子的 created_at
+}): Promise<Post[]> {
+  const { visibility, limit = 20, before } = options ?? {}
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return []
+
+  let query = supabase
+    .from('posts')
+    .select(
+      `id, user_id, identity_mode, content, image_url, visibility,
+       likes_count, comments_count, created_at, edited_at,
+       profiles!posts_user_id_fkey (
+         real_name, pet_name, avatar_url, pet_avatar_url, university
+       )`
+    )
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (visibility) query = query.eq('visibility', visibility)
+  if (before) query = query.lt('created_at', before)
+
+  const { data: postsData } = await query
+  if (!postsData || postsData.length === 0) return []
+
+  // 批量查当前用户对这些帖子的点赞状态
+  const postIds = postsData.map((p: any) => p.id)
+  const { data: myLikes } = await supabase
+    .from('likes')
+    .select('post_id')
+    .eq('user_id', user.id)
+    .in('post_id', postIds)
+
+  const likedSet = new Set((myLikes ?? []).map((l: any) => l.post_id))
+
+  return postsData.map((p: any) => {
+    const profile = p.profiles
+    const isReal = p.identity_mode === 'real'
+    return {
+      id: p.id,
+      user_id: p.user_id,
+      identity_mode: p.identity_mode,
+      content: p.content,
+      image_url: p.image_url,
+      visibility: p.visibility,
+      likes_count: p.likes_count,
+      comments_count: p.comments_count,
+      created_at: p.created_at,
+      edited_at: p.edited_at,
+      author_name: profile ? (isReal ? profile.real_name : profile.pet_name) : null,
+      author_avatar_url: profile
+        ? isReal
+          ? profile.avatar_url
+          : profile.pet_avatar_url
+        : null,
+      liked_by_me: likedSet.has(p.id),
+    }
+  })
+}
+
+// ─── Task 87: createPost ──────────────────────────────────────────────────────
+// 发帖，imageUrl 由调用方上传到 post-images bucket 后传入
+
+export async function createPost(
+  content: string,
+  identityMode: 'real' | 'pet',
+  imageUrl?: string,
+  visibility: 'logged_in' | 'university' | 'friends' | 'specific_friends' | 'private' = 'logged_in'
+): Promise<{ postId: string | null; error: string | null }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { postId: null, error: 'Not authenticated' }
+
+  const { data, error } = await supabase
+    .from('posts')
+    .insert({
+      user_id: user.id,
+      identity_mode: identityMode,
+      content,
+      image_url: imageUrl ?? null,
+      visibility,
+    })
+    .select('id')
+    .single()
+
+  if (error) return { postId: null, error: error.message }
+  return { postId: data.id, error: null }
+}
+
+// ─── Task 88: deletePost ──────────────────────────────────────────────────────
+// 删除本人帖子，同时从 Storage 删除对应图片
+
+export async function deletePost(postId: string): Promise<{ error: string | null }> {
+  // 先取 image_url，再删帖子（RLS 限制只能删自己的帖）
+  const { data: post } = await supabase
+    .from('posts')
+    .select('image_url')
+    .eq('id', postId)
+    .single()
+
+  const { error } = await supabase.from('posts').delete().eq('id', postId)
+  if (error) return { error: error.message }
+
+  // 删除 Storage 中的图片
+  if (post?.image_url) {
+    const path = extractStoragePath(post.image_url, 'post-images')
+    if (path) await supabase.storage.from('post-images').remove([path])
+  }
+
+  return { error: null }
+}
+
+// ─── Task 89: toggleLike ──────────────────────────────────────────────────────
+// 点赞 / 取消点赞，同时更新 posts.likes_count
+
+export async function toggleLike(
+  postId: string
+): Promise<{ liked: boolean; error: string | null }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { liked: false, error: 'Not authenticated' }
+
+  // 检查是否已点赞
+  const { data: existing } = await supabase
+    .from('likes')
+    .select('id')
+    .eq('post_id', postId)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (existing) {
+    // 取消点赞
+    const { error } = await supabase.from('likes').delete().eq('id', existing.id)
+    if (error) return { liked: true, error: error.message }
+
+    const { data: post } = await supabase
+      .from('posts')
+      .select('likes_count')
+      .eq('id', postId)
+      .single()
+    await supabase
+      .from('posts')
+      .update({ likes_count: Math.max(0, (post?.likes_count ?? 1) - 1) })
+      .eq('id', postId)
+
+    return { liked: false, error: null }
+  } else {
+    // 点赞
+    const { error } = await supabase
+      .from('likes')
+      .insert({ post_id: postId, user_id: user.id })
+    if (error) return { liked: false, error: error.message }
+
+    const { data: post } = await supabase
+      .from('posts')
+      .select('likes_count')
+      .eq('id', postId)
+      .single()
+    await supabase
+      .from('posts')
+      .update({ likes_count: (post?.likes_count ?? 0) + 1 })
+      .eq('id', postId)
+
+    return { liked: true, error: null }
+  }
+}
+
+// ─── Task 90: getComments ─────────────────────────────────────────────────────
+// 获取某帖子的所有评论，按 created_at 升序
+
+export async function getComments(postId: string): Promise<Comment[]> {
+  const { data } = await supabase
+    .from('comments')
+    .select(
+      `id, post_id, user_id, identity_mode, content, created_at, edited_at,
+       profiles!comments_user_id_fkey (
+         real_name, pet_name, avatar_url, pet_avatar_url
+       )`
+    )
+    .eq('post_id', postId)
+    .order('created_at', { ascending: true })
+
+  if (!data) return []
+
+  return data.map((c: any) => {
+    const profile = c.profiles
+    const isReal = c.identity_mode === 'real'
+    return {
+      id: c.id,
+      post_id: c.post_id,
+      user_id: c.user_id,
+      identity_mode: c.identity_mode,
+      content: c.content,
+      created_at: c.created_at,
+      edited_at: c.edited_at,
+      author_name: profile ? (isReal ? profile.real_name : profile.pet_name) : null,
+      author_avatar_url: profile
+        ? isReal
+          ? profile.avatar_url
+          : profile.pet_avatar_url
+        : null,
+    }
+  })
+}
+
+// ─── Task 91: createComment ───────────────────────────────────────────────────
+// 发评论，同时更新 posts.comments_count + 1
+
+export async function createComment(
+  postId: string,
+  content: string,
+  identityMode: 'real' | 'pet'
+): Promise<{ commentId: string | null; error: string | null }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { commentId: null, error: 'Not authenticated' }
+
+  const { data, error } = await supabase
+    .from('comments')
+    .insert({ post_id: postId, user_id: user.id, identity_mode: identityMode, content })
+    .select('id')
+    .single()
+
+  if (error) return { commentId: null, error: error.message }
+
+  const { data: post } = await supabase
+    .from('posts')
+    .select('comments_count')
+    .eq('id', postId)
+    .single()
+  await supabase
+    .from('posts')
+    .update({ comments_count: (post?.comments_count ?? 0) + 1 })
+    .eq('id', postId)
+
+  return { commentId: data.id, error: null }
+}
+
+// ─── addPostViewer / removePostViewer ────────────────────────────────────────
+// 仅限 specific_friends 帖子的作者调用，管理谁能看这条帖子
+
+export async function addPostViewer(
+  postId: string,
+  friendId: string
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('post_viewers')
+    .insert({ post_id: postId, user_id: friendId })
+  return { error: error?.message ?? null }
+}
+
+export async function removePostViewer(
+  postId: string,
+  friendId: string
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('post_viewers')
+    .delete()
+    .eq('post_id', postId)
+    .eq('user_id', friendId)
+  return { error: error?.message ?? null }
+}
+
+// ─── Task 92: deleteComment ───────────────────────────────────────────────────
+// 删除本人评论，同时更新 posts.comments_count - 1
+
+export async function deleteComment(commentId: string): Promise<{ error: string | null }> {
+  // 先取 post_id，再删评论（RLS 限制只能删自己的评论）
+  const { data: comment } = await supabase
+    .from('comments')
+    .select('post_id')
+    .eq('id', commentId)
+    .single()
+
+  const { error } = await supabase.from('comments').delete().eq('id', commentId)
+  if (error) return { error: error.message }
+
+  if (comment?.post_id) {
+    const { data: post } = await supabase
+      .from('posts')
+      .select('comments_count')
+      .eq('id', comment.post_id)
+      .single()
+    await supabase
+      .from('posts')
+      .update({ comments_count: Math.max(0, (post?.comments_count ?? 1) - 1) })
+      .eq('id', comment.post_id)
+  }
+
+  return { error: null }
+}

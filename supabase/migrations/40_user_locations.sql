@@ -1,8 +1,8 @@
 drop table if exists public.user_locations;
 create table public.user_locations (
   user_id uuid references public.profiles(id) on delete cascade primary key,
-  latitude double precision,
-  longitude double precision,
+  latitude  double precision not null,
+  longitude double precision not null,
   updated_at timestamptz default now()
 );
 alter table public.user_locations enable row level security;

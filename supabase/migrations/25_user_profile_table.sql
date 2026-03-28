@@ -2,7 +2,7 @@ drop table if exists profiles cascade;
 drop sequence if exists sudo_id_seq;
 create sequence sudo_id_seq start 1;
 create table profiles (
-  id                      uuid references auth.users primary key,
+  id                      uuid references auth.users on delete cascade primary key,
   sudo_id                 text unique default lpad(nextval('sudo_id_seq')::text, 5, '0'),
   real_name               text,
   bio                     text,
@@ -28,8 +28,8 @@ create table profiles (
   created_at              timestamptz default now()
 );
 alter table profiles enable row level security;
-create policy "Profiles are viewable by everyone"
-  on profiles for select using (true);
+create policy "Profiles are viewable by logged in users"
+  on profiles for select using (auth.uid() is not null);
 create policy "Users can insert own profile"
   on profiles for insert with check (auth.uid() = id);
 create policy "Users can update own profile"

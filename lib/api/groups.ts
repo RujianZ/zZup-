@@ -147,7 +147,7 @@ export async function leaveGroup(groupId: string): Promise<{ error: string | nul
       .eq('group_id', groupId)
       .order('joined_at', { ascending: true })
       .limit(1)
-      .single()
+      .maybeSingle()
 
     await supabase
       .from('groups')

@@ -13,7 +13,7 @@ returns table (
 language plpgsql security definer
 as $$
 declare
-  v_week_start date := date_trunc('week', current_date)::date;
+  v_week_start date := date_trunc('week', (now() AT TIME ZONE 'America/Los_Angeles'))::date;
 begin
   -- 只有同校且已验证的用户才能调用
   if not exists (

@@ -6,7 +6,7 @@ create table public.explorations (
   visit_count integer default 1,
   total_time_spent integer default 0,
   weekly_time_spent integer default 0,
-  week_start_date date default date_trunc('week', current_date)::date,
+  week_start_date date default date_trunc('week', (now() AT TIME ZONE 'America/Los_Angeles'))::date,
   titles_earned text[] default '{}',
   active_title text,
   first_visited_at timestamptz default now(),

@@ -20,9 +20,10 @@ create unique index one_pending_per_user
   where status = 'pending';
 -- RLS
 alter table public.offer_verifications enable row level security;
-create policy "本人可查看自己的验证记录"
+create policy "owner_can_select"
   on public.offer_verifications for select
   using (auth.uid() = user_id);
-create policy "本人可提交验证"
+
+create policy "owner_can_insert"
   on public.offer_verifications for insert
   with check (auth.uid() = user_id);
