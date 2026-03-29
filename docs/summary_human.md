@@ -5,6 +5,7 @@
 ---
 
 ## 目录
+0. [_xp.ts — XP 经验值系统](#0-xpts)
 1. [auth.ts — 用户认证与资料](#1-authts)
 2. [posts.ts — 帖子与朋友圈](#2-poststs)
 3. [groups.ts — 群组与私信](#3-groupsts)
@@ -22,6 +23,50 @@ Joe 和 Ethan 都是 Supabase 的 owner，可以直接在 Supabase Dashboard 看
 - **RLS（行级安全）**：数据库自带的权限控制。比如"只有本人能删自己的帖子"这类规则，不需要在代码里手动判断，数据库自动拒绝非法操作。
 - **所有函数都需要用户已登录**，未登录调用大多数函数会直接返回空或 null。
 - **identity_mode**：每条帖子/消息/评论发布时选择"以真人身份"还是"以宠物身份"，发布后**不可更改**。
+
+---
+
+## 0. _xp.ts
+
+**文件路径**：`lib/api/_xp.ts`
+
+这个文件是 **XP 经验值系统的统一配置中心**。所有关于宠物升级的数字都在这里，改数值只需改这一个文件，不用动其他逻辑。
+
+### 关于宠物升级
+
+- **只有宠物才有等级**，真人账号没有 level 字段。
+- 宠物等级公式：`等级 = floor(总经验值 / 100) + 1`，也就是每 100 XP 升一级。
+- 设计目标：**重度使用 2 天 ≈ 升一级**（每天约获得 50 XP）。
+
+### XP 获取方式汇总
+
+| 行为 | XP | 备注 |
+|------|----|------|
+| 发帖 | +5 XP | 每日上限：发帖+评论合计最多 20 XP |
+| 发评论 | +3 XP | 同上，共享每日 20 XP 上限 |
+| 发消息（当天第20条） | +10 XP | 每天只奖励一次，发满 20 条那一刻触发 |
+| App 在前台每小时 | +5 XP | 由 Ethan 前端每小时调用一次 |
+| 首次探索新地标 | +8 ~ +15 XP | 按地点类型不同（见探索系统章节） |
+
+### 常量列表（可调整）
+
+```
+POST_XP = 5                  // 每条帖子的 XP
+COMMENT_XP = 3               // 每条评论的 XP
+POST_COMMENT_DAILY_CAP = 20  // 发帖+评论每天合计上限
+
+MESSAGE_THRESHOLD = 20       // 每天发满多少条消息触发 XP
+MESSAGE_XP = 10              // 触发时获得的 XP
+
+FOREGROUND_XP_PER_HOUR = 5  // 前台每小时的 XP
+
+EXPLORATION_XP:
+  library / gym      → 15 XP
+  coffee_shop / dining → 10 XP
+  other              → 8 XP
+```
+
+**注意**：这些常量可以随时调整，不影响任何逻辑代码。
 
 ---
 
@@ -181,12 +226,13 @@ Joe 和 Ethan 都是 Supabase 的 owner，可以直接在 Supabase Dashboard 看
 - `imageUrl`：图片 URL（可选，图片需要 Ethan 先上传到 post-images bucket 再传 URL 进来）
 - `visibility`：可见性，默认 `'logged_in'`
 
-**流程**：插入一条 posts 记录，返回 `{ postId, error }`。
+**流程**：插入一条 posts 记录，然后统计今天已发的帖子+评论数量，在每日 20 XP 上限内给宠物加 XP。返回 `{ postId, error }`。
 
 **用户分支**：
 - 选择 `specific_friends` 可见性 → 发帖后还需要调用 `addPostViewer()` 逐个添加可以看到的好友
 - 不选图片 → imageUrl 不传，帖子纯文字
 - 未登录 → 返回 `{ postId: null, error: 'Not authenticated' }`
+- 今天发帖+评论 XP 已达 20 上限 → 发帖成功，但不再加 XP
 
 ---
 
@@ -241,9 +287,10 @@ Joe 和 Ethan 都是 Supabase 的 owner，可以直接在 Supabase Dashboard 看
 
 **流程**：
 1. 插入 comments 记录
-2. 返回 `{ commentId, error }`
+2. 统计今天已发的帖子+评论数量，在每日 20 XP 上限内给宠物加 XP（每条评论 +3 XP）
+3. 返回 `{ commentId, error }`
 
-**注意**：comments_count 的更新由数据库触发器自动完成，代码里不需要手动 +1。
+**注意**：comments_count 的更新由数据库触发器自动完成，代码里不需要手动 +1。XP 上限与 createPost 共享——同一天发帖和评论合计最多获得 20 XP。
 
 ---
 
@@ -453,7 +500,9 @@ Joe 和 Ethan 都是 Supabase 的 owner，可以直接在 Supabase Dashboard 看
 - `identityMode`：本条消息以真人还是宠物身份发送
 - `imageUrl`：图片 URL（可选，图片需先上传到 post-images bucket）
 
-**流程**：插入 messages 记录，返回 Message 对象（包含刚发送的消息数据）。
+**流程**：插入 messages 记录，然后统计今天发送的消息总数。**当天恰好发出第 20 条**消息时，宠物获得 +10 XP。返回 Message 对象（包含刚发送的消息数据）。
+
+**关于消息 XP**：每天只奖励一次（第 20 条时触发，之后不再重复）。这是为了鼓励日常活跃聊天，而不是刷消息数。
 
 ---
 
@@ -604,30 +653,32 @@ return () => unsubscribe()
 
 **用户分支**：
 - **全新地标（第一次来）**：
-  - 给 XP +10（首次探索奖励）
-  - 如果 minutesSpent >= 30，再 +对应地点类型的 XP
-  - 如果 minutesSpent >= 60，再 +更多 XP
+  - 按地点类型给宠物加 XP（见下表）
   - 在 explorations 表创建新记录
 
 - **老地标，新的一周**：
   - 重置周数据（weekly_time_spent 从 0 开始计算）
-  - 按新的 minutesSpent 计算本周 XP 奖励
+  - 不再给 XP（探索奖励只有第一次才有）
   - visit_count + 1（终身累计）
 
 - **老地标，同一周**：
-  - 检查是否突破了 30 分钟或 60 分钟阈值（只奖励首次突破）
   - visit_count + 1
   - 检查是否解锁称号（visit_count 满 7 次 → 初级称号，满 30 次 → 高级称号）
+  - 不给 XP
 
 - **找不到地标** → 返回 null
 
-**XP 奖励表**：
+**XP 奖励表（仅首次探索，之后回访不再给 XP）**：
 
-| 地点 | 首次探索 | 周累计30分钟 | 周累计60分钟 |
-|------|---------|------------|------------|
-| library | +10 | +3 | +8 |
-| dining | +10 | +2 | +6 |
-| gym/cafe/other | +10 | +2 | +5 |
+| 地点 | 首次探索 XP |
+|------|-----------|
+| library（图书馆） | +15 |
+| gym（健身房） | +15 |
+| coffee_shop（咖啡厅） | +10 |
+| dining（食堂/餐厅） | +10 |
+| other（其他） | +8 |
+
+**关于时间记录**：系统仍然记录每周在地标的累计时长（weekly_time_spent）和总时长（total_time_spent），这些数据用于**排行榜和称号解锁**，但不再影响 XP 奖励。
 
 **称号解锁表**：
 
@@ -703,6 +754,16 @@ return () => unsubscribe()
 **参数**：
 - `optIn`：true = 参加，false = 退出排行榜
 - `identityMode`：`'real'` 或 `'pet'`，排行榜上显示真名还是宠物名
+
+---
+
+### addForegroundXP()
+
+**是什么**：App 在前台运行时的时间奖励入口。
+
+**流程**：直接给当前用户的宠物加 5 XP（`FOREGROUND_XP_PER_HOUR`）。
+
+**调用方式**：由 Ethan 前端每小时调用一次（只要 App 在前台）。后端不做频率校验，完全由前端控制。
 
 ---
 

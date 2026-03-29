@@ -31,6 +31,8 @@ export interface Profile {
   show_nationality: boolean
   show_qr_code: boolean
   created_at: string
+  // 从 explorations 联查（不在 profiles 表中）
+  active_title: string | null
 }
 
 export type ProfileUpdate = Partial<
@@ -115,14 +117,25 @@ export async function getProfile(userId?: string): Promise<Profile | null> {
 
   if (!data) return null
 
+  // 查当前装备称号（explorations 表，取唯一的非 null active_title）
+  const { data: titleData } = await supabase
+    .from('explorations')
+    .select('active_title')
+    .eq('user_id', targetId)
+    .not('active_title', 'is', null)
+    .limit(1)
+    .maybeSingle()
+  const activeTitle = titleData?.active_title ?? null
+
   // 自己：返回完整数据
-  if (isSelf) return data as Profile
+  if (isSelf) return { ...data, active_title: activeTitle } as Profile
 
   // 别人：按隐私设置过滤
   const p = data as Profile
 
   const result: Profile = {
     ...p,
+    active_title: activeTitle,
     // 永远隐藏的私密字段
     personal_email: null,
     personal_email_verified: null,

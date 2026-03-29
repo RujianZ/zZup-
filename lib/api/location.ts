@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { addXP, EXPLORATION_XP, FOREGROUND_XP_PER_HOUR } from './_xp'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -85,14 +86,14 @@ export interface CachedLandmark {
 function getPlaceRadius(types: string[]): number {
   if (types.some((t) => ['library', 'university', 'stadium', 'gym'].includes(t))) return 100
   if (types.some((t) => ['restaurant', 'food', 'meal_takeaway', 'meal_delivery', 'cafeteria'].includes(t))) return 30
-  if (types.some((t) => ['cafe', 'bar'].includes(t))) return 15
+  if (types.some((t) => ['cafe', 'bakery', 'bar'].includes(t))) return 15
   return 30
 }
 
 function getPlaceType(types: string[]): string {
   if (types.includes('library')) return 'library'
   if (types.includes('gym')) return 'gym'
-  if (types.includes('cafe')) return 'cafe'
+  if (types.some((t) => ['cafe', 'bakery'].includes(t))) return 'coffee_shop'
   if (types.some((t) => ['restaurant', 'food', 'meal_takeaway', 'meal_delivery', 'cafeteria'].includes(t))) return 'dining'
   return 'other'
 }
@@ -274,17 +275,10 @@ const TITLES: Record<string, { junior: string; senior: string }> = {
   library: { junior: 'Bookworm',      senior: 'Library King'    },
   dining:  { junior: 'Big Eater',     senior: 'Dining Hall King'},
   gym:     { junior: 'Gym Newbie',    senior: 'Gym Fanatic'     },
-  cafe:    { junior: 'Coffee Lover',  senior: 'Coffee Addict'   },
+  coffee_shop: { junior: 'Coffee Lover',  senior: 'Coffee Addict'   },
   other:   { junior: 'Explorer',      senior: 'Master Explorer' },
 }
 
-const XP_TIME_REWARDS: Record<string, { min30: number; min60: number }> = {
-  library: { min30: 3, min60: 8 },
-  dining:  { min30: 2, min60: 6 },
-  gym:     { min30: 2, min60: 5 },
-  cafe:    { min30: 2, min60: 5 },
-  other:   { min30: 2, min60: 5 },
-}
 
 export interface DiscoverResult {
   xp_earned: number
@@ -295,20 +289,6 @@ export interface DiscoverResult {
   weekly_time_spent: number
 }
 
-async function addXP(userId: string, xp: number): Promise<void> {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('pet_xp, pet_level')
-    .eq('id', userId)
-    .single()
-  if (!profile) return
-  const newXP = (profile.pet_xp ?? 0) + xp
-  const newLevel = Math.floor(newXP / 100) + 1
-  await supabase
-    .from('profiles')
-    .update({ pet_xp: newXP, pet_level: newLevel })
-    .eq('id', userId)
-}
 
 export async function discoverLandmark(
   coord: Coordinate,
@@ -338,7 +318,6 @@ export async function discoverLandmark(
   if (!landmark) return null
 
   const placeType = landmark.place_type ?? 'other'
-  const timeRewards = XP_TIME_REWARDS[placeType] ?? XP_TIME_REWARDS.other
   const titles = TITLES[placeType] ?? TITLES.other
 
   const { data: existing } = await supabase
@@ -360,9 +339,7 @@ export async function discoverLandmark(
     // First visit ever
     safeMinutes = clampMinutesSpent(minutesSpent, 0, null, false)
     isFirstVisit = true
-    xpEarned = 10
-    if (safeMinutes >= 30) xpEarned += timeRewards.min30
-    if (safeMinutes >= 60) xpEarned += timeRewards.min60
+    xpEarned = EXPLORATION_XP[placeType] ?? EXPLORATION_XP.other
     await supabase.from('explorations').insert({
       user_id: user.id,
       landmark_id: landmark.id,
@@ -382,10 +359,6 @@ export async function discoverLandmark(
     const newMinutesAdded = Math.max(0, newWeeklyTime - prevWeeklyTime)
     const newTotalTime = existing.total_time_spent + newMinutesAdded
     const newVisitCount = existing.visit_count + 1
-
-    // Award XP only when crossing weekly thresholds for the first time
-    if (prevWeeklyTime < 30 && newWeeklyTime >= 30) xpEarned += timeRewards.min30
-    if (prevWeeklyTime < 60 && newWeeklyTime >= 60) xpEarned += timeRewards.min60
 
     // Title unlock
     const earnedTitles: string[] = [...(existing.titles_earned ?? [])]
@@ -481,33 +454,40 @@ export async function subscribeToFriendLocations(
 }
 
 // ─── Task 48b: setActiveTitle ─────────────────────────────────────────────────
-// title = null means unequip (user chooses to show no title)
+// title = null means unequip.
+// Clears active_title on ALL explorations first so only one can ever be active.
 
-export async function setActiveTitle(
-  explorationId: string,
-  title: string | null
-): Promise<void> {
+export async function setActiveTitle(title: string | null): Promise<void> {
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return
 
-  const { data: exploration } = await supabase
+  // Always clear all active titles first (ensures only one is ever active)
+  await supabase
     .from('explorations')
-    .select('titles_earned')
-    .eq('id', explorationId)
+    .update({ active_title: null })
     .eq('user_id', user.id)
-    .single()
 
+  if (title === null) return // unequip — done
+
+  // Find which exploration has this title earned
+  const { data: explorations } = await supabase
+    .from('explorations')
+    .select('id, titles_earned')
+    .eq('user_id', user.id)
+
+  const exploration = (explorations ?? []).find((e: any) =>
+    (e.titles_earned as string[]).includes(title)
+  )
+
+  // Silently reject if the user hasn't earned this title
   if (!exploration) return
-
-  // Prevent equipping a title the user hasn't earned
-  if (title !== null && !exploration.titles_earned.includes(title)) return
 
   await supabase
     .from('explorations')
     .update({ active_title: title })
-    .eq('id', explorationId)
+    .eq('id', exploration.id)
     .eq('user_id', user.id)
 }
 
@@ -569,6 +549,17 @@ export async function getWeeklyRankings(university: string): Promise<WeeklyRanki
   }
 
   return rankings
+}
+
+// ─── addForegroundXP ─────────────────────────────────────────────────────────
+// Called by the frontend every hour while the app is in the foreground.
+
+export async function addForegroundXP(): Promise<void> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return
+  await addXP(user.id, FOREGROUND_XP_PER_HOUR)
 }
 
 // ─── setRankingPreferences ────────────────────────────────────────────────────

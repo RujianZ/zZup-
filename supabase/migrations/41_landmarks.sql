@@ -6,7 +6,7 @@ create table public.landmarks (
   name          text not null,
   latitude      double precision not null,
   longitude     double precision not null,
-  place_type    text check (place_type in ('library', 'gym', 'cafe', 'dining', 'other')),
+  place_type    text check (place_type in ('library', 'gym', 'coffee_shop', 'dining', 'other')),
   radius_meters integer default 50,
   cached_at     timestamptz default now(),
   expires_at    timestamptz default (now() + interval '30 days')
