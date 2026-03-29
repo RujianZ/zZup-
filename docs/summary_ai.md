@@ -12,9 +12,9 @@ D:\sudo-app\
 │   ├── supabase.ts          # Supabase client init (AsyncStorage session)
 │   └── api/
 │       ├── auth.ts          # Auth + profile functions (6 functions)
-│       ├── posts.ts         # Posts, likes, comments (9 functions)
+│       ├── posts.ts         # Posts, likes, comments (11 functions)
 │       ├── groups.ts        # Groups + DMs (7 functions)
-│       ├── messages.ts      # Messaging (3 functions)
+│       ├── messages.ts      # Messaging (4 functions)
 │       ├── location.ts      # Location, landmarks, exploration (10 functions)
 │       └── friends.ts       # Friends, blocks, search (13 functions)
 ├── supabase/migrations/     # 15 SQL migration files (all executed in Supabase)
@@ -87,6 +87,9 @@ CREATE UNIQUE INDEX one_pending_per_user ON offer_verifications(user_id) WHERE s
 
 -- explorations: one record per user+landmark
 UNIQUE(user_id, landmark_id)
+
+-- landmark_cache_zones: one record per grid point
+UNIQUE(latitude, longitude)
 ```
 
 ### Database Functions (PostgreSQL)
@@ -96,6 +99,8 @@ UNIQUE(user_id, landmark_id)
 | `handle_new_user()` | DEFINER | AFTER INSERT ON auth.users | Auto-create profile row on registration |
 | `reassign_group_owner()` | DEFINER | BEFORE DELETE ON profiles | Transfer group ownership when user deletes account |
 | `get_weekly_rankings(p_university text)` | DEFINER | RPC (called via supabase.rpc()) | Aggregate weekly rankings, bypasses RLS safely |
+| `update_likes_count()` | — | AFTER INSERT OR DELETE ON likes | Auto-update posts.likes_count |
+| `update_comments_count()` | — | AFTER INSERT OR DELETE ON comments | Auto-update posts.comments_count |
 
 ### Realtime Tables
 `messages`, `posts`, `likes`, `comments`, `user_locations`
@@ -161,17 +166,16 @@ Calls `supabase.auth.signOut()`.
 ```
 Always null: personal_email, personal_email_verified, edu_email, region,
              location_sharing, ranking_opt_in, ranking_identity_mode
+Always false: show_date_of_birth, show_nationality, show_qr_code (TD-5 fixed: viewer
+             should not see the target's privacy toggle states)
 Conditional: date_of_birth (if show_date_of_birth), nationality (if show_nationality),
              qr_code_url (if show_qr_code)
 profile_visibility switch:
   'real_only'    → null: pet_name, pet_avatar_url, pet_bio, pet_level, pet_xp
-  'pet_only'     → null: real_name, avatar_url, bio
+  'pet_only'     → null: real_name, avatar_url, bio, date_of_birth, nationality, qr_code_url
+                   (TD-4 fixed: pet_only hides all real-identity fields regardless of show_* toggles)
   'real_with_pet' → no additional filtering
 ```
-
-**Known Tech Debt:**
-- Privacy meta-fields (show_date_of_birth, show_nationality, show_qr_code, profile_visibility) are still exposed to other users via `...p` spread before filtering
-- pet_only + show_date_of_birth=true still leaks date_of_birth
 
 **Branches:**
 - Not logged in → return null
@@ -226,6 +230,11 @@ LIMIT options.limit (default 20)
 ```
 RLS on posts handles visibility filtering automatically.
 
+**Block filtering (runs before query):**
+1. `Promise.all` two parallel queries: blocked_users WHERE blocker_id=uid AND blocked_users WHERE blocked_id=uid
+2. Builds `blockedIds` set (both directions)
+3. Filters returned posts: excludes any post where `user_id IN blockedIds`
+
 **Then:** batch fetch likes WHERE user_id = auth.uid() AND post_id IN (postIds) → builds likedSet
 
 **Author name/avatar selection:**
@@ -235,7 +244,7 @@ author_avatar_url = identity_mode === 'real' ? profile.avatar_url : profile.pet_
 ```
 
 **Branches:**
-- No visibility filter → returns all RLS-visible posts
+- No visibility filter → returns all RLS-visible posts (minus blocked users)
 - visibility = 'university' → RLS checks university match server-side
 - visibility = 'friends' → RLS checks friendships table server-side
 - visibility = 'specific_friends' → RLS checks post_viewers table server-side
@@ -272,41 +281,68 @@ visibility defaults to 'logged_in'.
 **File:** `lib/api/posts.ts:171`
 
 1. SELECT id FROM likes WHERE post_id = postId AND user_id = auth.uid() (.maybeSingle())
-2. If exists → DELETE + UPDATE posts SET likes_count = MAX(0, likes_count - 1)
-3. If not exists → INSERT + UPDATE posts SET likes_count = likes_count + 1
+2. If exists → DELETE FROM likes
+3. If not exists → INSERT INTO likes
 
-**Tech Debt:** likes_count update is read-then-write (race condition at high concurrency). Fix: use DB trigger.
+**Note:** likes_count is updated automatically by the `on_like_change` DB trigger (AFTER INSERT OR DELETE ON likes → UPDATE posts SET likes_count). No manual count update in JS.
 
 ---
 
 #### `getComments(postId) → Comment[]`
 **File:** `lib/api/posts.ts:227`
 
+**Pre-query:** `auth.getUser()` call required (auth check).
+
 SELECT with join: `profiles!comments_user_id_fkey(real_name, pet_name, avatar_url, pet_avatar_url)`
 ORDER BY created_at ASC
+
+**Block filtering:** same pattern as getFeed — fetches block list in both directions, filters out comments from blocked/blocking users before returning.
 
 ---
 
 #### `createComment(postId, content, identityMode) → { commentId, error }`
 **File:** `lib/api/posts.ts:265`
 
-INSERT INTO comments → then UPDATE posts SET comments_count = comments_count + 1
+INSERT INTO comments.
 
-**Tech Debt:** same race condition as likes_count.
+**Note:** comments_count is updated automatically by the `on_comment_change` DB trigger (AFTER INSERT OR DELETE ON comments → UPDATE posts SET comments_count). No manual count update in JS.
 
 ---
 
 #### `deleteComment(commentId) → { error }`
 **File:** `lib/api/posts.ts:299`
 
-1. SELECT post_id FROM comments WHERE id = commentId
-2. DELETE FROM comments (RLS: only owner)
-3. UPDATE posts SET comments_count = MAX(0, comments_count - 1)
+DELETE FROM comments WHERE id = commentId (RLS: only owner)
+
+**Note:** comments_count decrement and post_id lookup are handled by the `on_comment_change` DB trigger. No manual count update or post_id lookup in JS.
+
+---
+
+#### `editPost(postId, content, imageUrl?) → { error }`
+**File:** `lib/api/posts.ts`
+
+1. SELECT image_url FROM posts WHERE id = postId AND user_id = auth.uid()
+2. UPDATE posts SET content = content, edited_at = now() [+ image_url changes] WHERE id = postId
+3. Image handling:
+   - `imageUrl` = undefined → keep existing image (no change to image_url column)
+   - `imageUrl` = null → delete existing image from Storage + set image_url = null
+   - `imageUrl` = new string → delete old image from Storage (if any) + set image_url = new string
+
+RLS enforces owner-only (UPDATE policy: auth.uid() = user_id).
+
+---
+
+#### `editComment(commentId, content) → { error }`
+**File:** `lib/api/posts.ts`
+
+UPDATE comments SET content = content, edited_at = now() WHERE id = commentId
+
+RLS enforces owner-only. Only content is editable; identity_mode and post association are immutable.
 
 ---
 
 #### `addPostViewer(postId, friendId) → { error }`
-**File:** `lib/api/posts.ts:299` (after deleteComment)
+**File:** `lib/api/posts.ts` (after deleteComment)
 
 INSERT INTO post_viewers (post_id, user_id=friendId)
 RLS: only post owner can insert (verified via subquery: auth.uid() = SELECT user_id FROM posts WHERE id = post_id)
@@ -384,11 +420,12 @@ If university → OR filter: open/official OR (edu_verified AND university=?)
 #### `createDirectMessage(friendId) → Group | null`
 **File:** `lib/api/groups.ts:190`
 
-**Tech Debt — N+1 Query:**
-1. SELECT group_id FROM group_members WHERE user_id=auth.uid() AND groups.chat_type='direct'
-2. For each result → SELECT user_id FROM group_members WHERE group_id=? AND user_id=friendId
-   (loop queries)
-3. If match found → SELECT * FROM groups WHERE id = match.group_id → return
+**Optimized — 2 parallel queries (no loop):**
+1. `Promise.all`:
+   - SELECT group_id FROM group_members WHERE user_id=auth.uid() AND groups.chat_type='direct'
+   - SELECT group_id FROM group_members WHERE user_id=friendId AND groups.chat_type='direct'
+2. Find intersection of both group_id sets in JS → that's the existing shared DM group
+3. If match found → SELECT * FROM groups WHERE id = match → return
 4. If no match → INSERT groups (chat_type='direct') + INSERT group_members x2
 
 ---
@@ -406,16 +443,25 @@ If university → OR filter: open/official OR (edu_verified AND university=?)
 ## lib/api/messages.ts
 
 ### Types Defined Here
-- `Message` — messages table row
+- `Message` — messages table row, includes:
+  - `author_name: string | null` — resolved from identity_mode at query time
+  - `author_avatar_url: string | null` — resolved from identity_mode at query time
+  - Note: Realtime-pushed messages (raw INSERT events) will NOT have author_name/author_avatar_url populated
 
 ---
 
 #### `getMessages(groupId, limit=30, before?) → Message[]`
 **File:** `lib/api/messages.ts:20`
 
-SELECT * FROM messages WHERE group_id = groupId
+```
+SELECT messages.*, profiles!messages_user_id_fkey(real_name, pet_name, avatar_url, pet_avatar_url, identity_mode)
+FROM messages
+WHERE group_id = groupId
 [AND created_at < before]
 ORDER BY created_at DESC LIMIT limit
+```
+
+Maps result to Message objects: resolves `author_name` and `author_avatar_url` based on each message's `identity_mode`.
 
 **No DELETE policy:** by design, messages cannot be deleted.
 
@@ -435,6 +481,17 @@ Supabase Realtime channel: `messages:${groupId}`
 Event: INSERT on messages table, filter: group_id=eq.${groupId}
 Returns unsubscribe function: `() => supabase.removeChannel(channel)`
 
+**Note:** Realtime-pushed message objects are raw DB rows and will not have `author_name`/`author_avatar_url`. Frontend must resolve author info separately if needed.
+
+---
+
+#### `editMessage(messageId, content) → { error }`
+**File:** `lib/api/messages.ts`
+
+UPDATE messages SET content = content, edited_at = now() WHERE id = messageId
+
+RLS enforces owner-only. Only content is editable; identity_mode and group association are immutable.
+
 ---
 
 ## lib/api/location.ts
@@ -448,7 +505,7 @@ Returns unsubscribe function: `() => supabase.removeChannel(channel)`
 - `RankingEntry` / `WeeklyRankings` — ranking structures
 
 ### Internal Helpers
-- `applyFuzzyOffset(coord)` — rounds to nearest 0.005° grid (~555m cells)
+- `applyFuzzyOffset(coord)` — rounds to nearest 0.005° grid (~555m cells). Uses `Math.round(val / 0.005) * 5 / 1000` to avoid floating point precision issues with 0.005.
 - `getWeekStart()` — returns most recent Monday 00:00 PT as UTC Date
 - `clampMinutesSpent(claimed, prevWeekly, lastVisitedAt, isNewWeek)` — anti-cheat
 - `getPlaceRadius(types)` — Google types → radius_meters
@@ -501,15 +558,21 @@ TIMESTAMP_TOLERANCE = 10         // anti-cheat grace minutes
 #### `cacheNearbyPlaces(coord) → Promise<CachedLandmark[]>`
 **File:** `lib/api/location.ts:99`
 
+**Grid-based caching design:**
+- User coordinates are snapped to the nearest 0.005° grid point via `applyFuzzyOffset(coord)` before any cache lookup or API call.
+- All users within the same ~555m grid cell share one cache record and one Google API call.
+- Adjacent cells are independently cached; coverage expands as more users visit new cells.
+
 **Cache hit path:**
-1. SELECT id FROM landmark_cache_zones WHERE expires_at >= now() AND lat ∈ [coord.lat±0.005] AND lng ∈ [coord.lng±0.005] LIMIT 1
-2. If exists → SELECT * FROM landmarks WHERE expires_at >= now() AND lat ∈ ±0.005 AND lng ∈ ±0.005 → return
+1. Snap coord to grid point (snapped.latitude, snapped.longitude)
+2. SELECT id FROM landmark_cache_zones WHERE expires_at >= now() AND latitude = snapped.latitude AND longitude = snapped.longitude (exact match on grid key)
+3. If exists → SELECT * FROM landmarks WHERE expires_at >= now() AND lat ∈ ±0.005 AND lng ∈ ±0.005 → return
 
 **Cache miss path:**
-1. Fetch Google Places Nearby Search: `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=lat,lng&radius=500&key=...`
+1. Fetch Google Places Nearby Search centered on snapped grid point: `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=snapped_lat,snapped_lng&radius=500&key=...`
 2. Map results: place_id, name, lat, lng, place_type (via getPlaceType), radius_meters (via getPlaceRadius), cached_at, expires_at (+30d)
 3. UPSERT landmarks ON CONFLICT place_id DO NOTHING (ignoreDuplicates: true)
-4. INSERT INTO landmark_cache_zones (lat, lng)
+4. UPSERT INTO landmark_cache_zones (latitude=snapped.latitude, longitude=snapped.longitude) ON CONFLICT (latitude, longitude) → updates expires_at (refreshes TTL when revisited)
 5. Return inserted landmarks
 
 **Tech Debt:** API key (EXPO_PUBLIC_GOOGLE_MAPS_API_KEY) exposed client-side.
@@ -796,18 +859,36 @@ Returns minimal fields sufficient to identify and unblock the user.
 
 ## Known Technical Debt
 
-| ID | Severity | Location | Issue |
-|----|----------|----------|-------|
-| TD-1 | HIGH | `location.ts:discoverLandmark` | Client-supplied GPS coords trusted; cheat by sending fake coords to earn XP/titles |
-| TD-2 | MED | `posts.ts:toggleLike,createComment,deleteComment` | likes_count/comments_count: read-then-write race condition; fix with DB triggers |
-| TD-3 | MED | App layer | blocked_users not filtered in feed/comments/group queries; must add to getFeed, getComments etc. |
-| TD-4 | MED | `auth.ts:getProfile:150` | pet_only + show_date_of_birth=true still returns date_of_birth |
-| TD-5 | MED | `auth.ts:getProfile:124` | Privacy meta-fields (show_*, profile_visibility) exposed via `...p` spread |
-| TD-6 | MED | `location.ts:cacheNearbyPlaces` | EXPO_PUBLIC_GOOGLE_MAPS_API_KEY exposed client-side |
-| TD-7 | LOW | `groups.ts:createDirectMessage:204` | N+1 query loop checking for existing DM conversation |
-| TD-8 | LOW | `location.ts:subscribeToFriendLocations` | Profile cache stale during subscription lifetime |
-| TD-9 | LOW | `location.ts:cacheNearbyPlaces:151` | landmark_cache_zones: unlimited INSERT per user |
-| TD-10 | LOW | `user_locations RLS + location.ts` | location_sharing='off' only filtered JS-side; RLS friends_can_read doesn't check sharing mode |
+| ID | Severity | Location | Issue | Status |
+|----|----------|----------|-------|--------|
+| TD-1 | HIGH | `location.ts:discoverLandmark` | Client-supplied GPS coords trusted; cheat by sending fake coords to earn XP/titles | Open |
+| TD-2 | MED | `posts.ts:toggleLike,createComment,deleteComment` | likes_count/comments_count: read-then-write race condition | RESOLVED — DB triggers on_like_change/on_comment_change |
+| TD-3 | MED | App layer | blocked_users not filtered in feed/comments | RESOLVED — block filtering added to getFeed and getComments |
+| TD-4 | MED | `auth.ts:getProfile` | pet_only + show_date_of_birth=true still returned date_of_birth | RESOLVED — pet_only now nulls date_of_birth, nationality, qr_code_url |
+| TD-5 | MED | `auth.ts:getProfile` | Privacy meta-fields (show_*, profile_visibility) exposed via `...p` spread | RESOLVED — show_* fields set to false when returning other users' profiles |
+| TD-6 | MED | `location.ts:cacheNearbyPlaces` | EXPO_PUBLIC_GOOGLE_MAPS_API_KEY exposed client-side | Open |
+| TD-7 | LOW | `groups.ts:createDirectMessage` | N+1 query loop checking for existing DM conversation | RESOLVED — replaced with 2 parallel queries + JS intersection |
+| TD-9 | LOW | `location.ts:cacheNearbyPlaces` | landmark_cache_zones: unlimited INSERT per user | RESOLVED — grid-based caching with UNIQUE(latitude, longitude) + UPSERT |
+| TD-10 | LOW | `user_locations RLS + location.ts` | location_sharing='off' only filtered JS-side; RLS friends_can_read didn't check sharing mode | RESOLVED — RLS policy now also requires location_sharing IN ('precise', 'fuzzy') |
+
+---
+
+## Migration Notes
+
+### 28_posts_table.sql
+Defines `posts`, `likes`, `comments`, `post_viewers` tables and their RLS policies.
+Cleanup section drops `on_like_change`, `on_comment_change` triggers and `update_likes_count`, `update_comments_count` functions if they exist.
+Includes `update_likes_count()` trigger function and `on_like_change` trigger (AFTER INSERT OR DELETE ON likes → UPDATE posts SET likes_count).
+Includes `update_comments_count()` trigger function and `on_comment_change` trigger (AFTER INSERT OR DELETE ON comments → UPDATE posts SET comments_count).
+
+### 40_user_locations.sql
+Defines `user_locations` table and RLS policies.
+`friends_can_read` policy: allows SELECT if caller has an accepted friendship with the row owner AND `location_sharing IN ('precise', 'fuzzy')` from the profiles table. The location_sharing check is enforced at DB level (not just JS layer).
+
+### 46_landmark_cache_zones.sql
+Defines `landmark_cache_zones` table.
+Includes `UNIQUE(latitude, longitude)` constraint — ensures one cache record per grid cell, enables UPSERT on conflict.
+Includes `authenticated_can_update` RLS policy — allows authenticated users to UPDATE rows (required for UPSERT to refresh expires_at on revisited cells).
 
 ---
 
@@ -838,7 +919,7 @@ Returns minimal fields sufficient to identify and unblock the user.
 - SELECT/INSERT/DELETE: `auth.uid() = (SELECT user_id FROM posts WHERE id = post_id)`
 
 ### user_locations
-- SELECT: own row OR accepted friend
+- SELECT: own row OR accepted friend with location_sharing IN ('precise', 'fuzzy')
 - INSERT/UPDATE/DELETE: own row
 
 ### landmarks
@@ -851,6 +932,10 @@ Returns minimal fields sufficient to identify and unblock the user.
 ### offer_verifications
 - SELECT/INSERT: `auth.uid() = user_id`
 - No UPDATE (only service role via Edge Function can update status)
+
+### landmark_cache_zones
+- SELECT/INSERT: `auth.uid() IS NOT NULL`
+- UPDATE: `auth.uid() IS NOT NULL` (needed for UPSERT to refresh expires_at)
 
 ---
 

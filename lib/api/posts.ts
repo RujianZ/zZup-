@@ -57,6 +57,16 @@ export async function getFeed(options?: {
   } = await supabase.auth.getUser()
   if (!user) return []
 
+  // TD-3: 过滤双向屏蔽用户的帖子
+  const [{ data: iBlockedData }, { data: blockedMeData }] = await Promise.all([
+    supabase.from('blocked_users').select('blocked_id').eq('blocker_id', user.id),
+    supabase.from('blocked_users').select('blocker_id').eq('blocked_id', user.id),
+  ])
+  const blockedIds = [
+    ...(iBlockedData ?? []).map((r: any) => r.blocked_id),
+    ...(blockedMeData ?? []).map((r: any) => r.blocker_id),
+  ]
+
   let query = supabase
     .from('posts')
     .select(
@@ -69,6 +79,7 @@ export async function getFeed(options?: {
     .order('created_at', { ascending: false })
     .limit(limit)
 
+  if (blockedIds.length > 0) query = query.not('user_id', 'in', `(${blockedIds.join(',')})`)
   if (visibility) query = query.eq('visibility', visibility)
   if (before) query = query.lt('created_at', before)
 
@@ -183,38 +194,16 @@ export async function toggleLike(
     .maybeSingle()
 
   if (existing) {
-    // 取消点赞
+    // 取消点赞（likes_count 由 DB trigger on_like_change 自动更新）
     const { error } = await supabase.from('likes').delete().eq('id', existing.id)
     if (error) return { liked: true, error: error.message }
-
-    const { data: post } = await supabase
-      .from('posts')
-      .select('likes_count')
-      .eq('id', postId)
-      .single()
-    await supabase
-      .from('posts')
-      .update({ likes_count: Math.max(0, (post?.likes_count ?? 1) - 1) })
-      .eq('id', postId)
-
     return { liked: false, error: null }
   } else {
-    // 点赞
+    // 点赞（likes_count 由 DB trigger on_like_change 自动更新）
     const { error } = await supabase
       .from('likes')
       .insert({ post_id: postId, user_id: user.id })
     if (error) return { liked: false, error: error.message }
-
-    const { data: post } = await supabase
-      .from('posts')
-      .select('likes_count')
-      .eq('id', postId)
-      .single()
-    await supabase
-      .from('posts')
-      .update({ likes_count: (post?.likes_count ?? 0) + 1 })
-      .eq('id', postId)
-
     return { liked: true, error: null }
   }
 }
@@ -223,7 +212,22 @@ export async function toggleLike(
 // 获取某帖子的所有评论，按 created_at 升序
 
 export async function getComments(postId: string): Promise<Comment[]> {
-  const { data } = await supabase
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return []
+
+  // TD-3: 过滤双向屏蔽用户的评论
+  const [{ data: iBlockedData }, { data: blockedMeData }] = await Promise.all([
+    supabase.from('blocked_users').select('blocked_id').eq('blocker_id', user.id),
+    supabase.from('blocked_users').select('blocker_id').eq('blocked_id', user.id),
+  ])
+  const blockedIds = [
+    ...(iBlockedData ?? []).map((r: any) => r.blocked_id),
+    ...(blockedMeData ?? []).map((r: any) => r.blocker_id),
+  ]
+
+  let query = supabase
     .from('comments')
     .select(
       `id, post_id, user_id, identity_mode, content, created_at, edited_at,
@@ -234,6 +238,9 @@ export async function getComments(postId: string): Promise<Comment[]> {
     .eq('post_id', postId)
     .order('created_at', { ascending: true })
 
+  if (blockedIds.length > 0) query = query.not('user_id', 'in', `(${blockedIds.join(',')})`)
+
+  const { data } = await query
   if (!data) return []
 
   return data.map((c: any) => {
@@ -276,19 +283,58 @@ export async function createComment(
     .select('id')
     .single()
 
+  // comments_count 由 DB trigger on_comment_change 自动更新
   if (error) return { commentId: null, error: error.message }
+  return { commentId: data.id, error: null }
+}
 
+// ─── Task 93: editPost ────────────────────────────────────────────────────────
+// imageUrl 传 undefined = 不改图片；传 null = 删图；传新 URL = 换图
+
+export async function editPost(
+  postId: string,
+  content: string,
+  imageUrl?: string | null
+): Promise<{ error: string | null }> {
+  // 读取现有图片 URL（RLS 保证只有作者能读自己的帖）
   const { data: post } = await supabase
     .from('posts')
-    .select('comments_count')
+    .select('image_url')
     .eq('id', postId)
-    .single()
-  await supabase
-    .from('posts')
-    .update({ comments_count: (post?.comments_count ?? 0) + 1 })
-    .eq('id', postId)
+    .maybeSingle()
 
-  return { commentId: data.id, error: null }
+  if (!post) return { error: 'Post not found or permission denied' }
+
+  const updatePayload: Record<string, unknown> = {
+    content,
+    edited_at: new Date().toISOString(),
+  }
+  if (imageUrl !== undefined) updatePayload.image_url = imageUrl
+
+  const { error } = await supabase.from('posts').update(updatePayload).eq('id', postId)
+  if (error) return { error: error.message }
+
+  // 图片有变化且旧图存在且与新图不同 → 从 Storage 删除旧文件
+  if (imageUrl !== undefined && post.image_url && post.image_url !== imageUrl) {
+    const path = extractStoragePath(post.image_url, 'post-images')
+    if (path) await supabase.storage.from('post-images').remove([path])
+  }
+
+  return { error: null }
+}
+
+// ─── Task 94: editComment ─────────────────────────────────────────────────────
+
+export async function editComment(
+  commentId: string,
+  content: string
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('comments')
+    .update({ content, edited_at: new Date().toISOString() })
+    .eq('id', commentId)
+
+  return { error: error?.message ?? null }
 }
 
 // ─── addPostViewer / removePostViewer ────────────────────────────────────────
@@ -327,20 +373,8 @@ export async function deleteComment(commentId: string): Promise<{ error: string 
     .eq('id', commentId)
     .single()
 
+  // comments_count 由 DB trigger on_comment_change 自动更新
   const { error } = await supabase.from('comments').delete().eq('id', commentId)
   if (error) return { error: error.message }
-
-  if (comment?.post_id) {
-    const { data: post } = await supabase
-      .from('posts')
-      .select('comments_count')
-      .eq('id', comment.post_id)
-      .single()
-    await supabase
-      .from('posts')
-      .update({ comments_count: Math.max(0, (post?.comments_count ?? 1) - 1) })
-      .eq('id', comment.post_id)
-  }
-
   return { error: null }
 }
