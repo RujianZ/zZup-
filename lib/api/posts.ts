@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { addXP, getTodayStart, POST_XP, COMMENT_XP, POST_COMMENT_DAILY_CAP } from './_xp'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -148,6 +149,21 @@ export async function createPost(
     .single()
 
   if (error) return { postId: null, error: error.message }
+
+  // XP: count today's posts + comments (already created) and compute marginal gain
+  const todayStart = getTodayStart()
+  const [{ count: postsToday }, { count: commentsToday }] = await Promise.all([
+    supabase.from('posts').select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id).gte('created_at', todayStart),
+    supabase.from('comments').select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id).gte('created_at', todayStart),
+  ])
+  const p = postsToday ?? 1
+  const c = commentsToday ?? 0
+  const xpAfter  = Math.min(p * POST_XP + c * COMMENT_XP, POST_COMMENT_DAILY_CAP)
+  const xpBefore = Math.min((p - 1) * POST_XP + c * COMMENT_XP, POST_COMMENT_DAILY_CAP)
+  if (xpAfter > xpBefore) await addXP(user.id, xpAfter - xpBefore)
+
   return { postId: data.id, error: null }
 }
 
@@ -285,6 +301,21 @@ export async function createComment(
 
   // comments_count 由 DB trigger on_comment_change 自动更新
   if (error) return { commentId: null, error: error.message }
+
+  // XP: count today's posts + comments (already created) and compute marginal gain
+  const todayStart = getTodayStart()
+  const [{ count: postsToday }, { count: commentsToday }] = await Promise.all([
+    supabase.from('posts').select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id).gte('created_at', todayStart),
+    supabase.from('comments').select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id).gte('created_at', todayStart),
+  ])
+  const p = postsToday ?? 0
+  const c = commentsToday ?? 1
+  const xpAfter  = Math.min(p * POST_XP + c * COMMENT_XP, POST_COMMENT_DAILY_CAP)
+  const xpBefore = Math.min(p * POST_XP + (c - 1) * COMMENT_XP, POST_COMMENT_DAILY_CAP)
+  if (xpAfter > xpBefore) await addXP(user.id, xpAfter - xpBefore)
+
   return { commentId: data.id, error: null }
 }
 

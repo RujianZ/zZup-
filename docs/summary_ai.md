@@ -11,11 +11,12 @@ D:\sudo-app\
 ├── lib/
 │   ├── supabase.ts          # Supabase client init (AsyncStorage session)
 │   └── api/
+│       ├── _xp.ts           # XP constants + addXP helper (shared across API files)
 │       ├── auth.ts          # Auth + profile functions (6 functions)
 │       ├── posts.ts         # Posts, likes, comments (11 functions)
 │       ├── groups.ts        # Groups + DMs (7 functions)
 │       ├── messages.ts      # Messaging (4 functions)
-│       ├── location.ts      # Location, landmarks, exploration (10 functions)
+│       ├── location.ts      # Location, landmarks, exploration (11 functions)
 │       └── friends.ts       # Friends, blocks, search (13 functions)
 ├── supabase/migrations/     # 15 SQL migration files (all executed in Supabase)
 │   ├── 25_user_profile_table.sql
@@ -104,6 +105,47 @@ UNIQUE(latitude, longitude)
 
 ### Realtime Tables
 `messages`, `posts`, `likes`, `comments`, `user_locations`
+
+---
+
+## lib/api/_xp.ts
+
+Centralizes all XP constants and the shared `addXP` helper. Imported by `posts.ts`, `messages.ts`, and `location.ts`. Previously, `addXP` and some constants lived in `location.ts`; they were extracted here to avoid circular dependencies and to make tuning XP values a single-file change.
+
+### Constants
+```typescript
+POST_XP = 5                    // XP awarded per post created
+COMMENT_XP = 3                 // XP awarded per comment created
+POST_COMMENT_DAILY_CAP = 20    // Max XP/day from posts + comments combined
+
+MESSAGE_THRESHOLD = 20         // Messages/day needed to earn message XP
+MESSAGE_XP = 10                // XP awarded once per day when MESSAGE_THRESHOLD is hit
+
+FOREGROUND_XP_PER_HOUR = 5    // XP per hour the app is in foreground
+
+EXPLORATION_XP: Record<place_type, number> = {
+  library:    15,
+  gym:        15,
+  coffee_shop: 10,
+  dining:     10,
+  other:      8,
+}
+```
+
+### Internal Helpers
+
+#### `getTodayStart() → string`
+Returns today's date at 00:00:00 as a UTC ISO string. Used as the lower bound for daily XP cap queries.
+
+#### `addXP(userId, xp) → Promise<void>`
+**Logic:**
+1. SELECT pet_xp, pet_level FROM profiles WHERE id = userId
+2. newXp = pet_xp + xp
+3. newLevel = Math.floor(newXp / 100) + 1
+4. UPDATE profiles SET pet_xp = newXp, pet_level = newLevel WHERE id = userId
+
+**Level formula:** `floor(xp / 100) + 1` — 100 XP per level, no upper cap.
+**Note:** Only pets level up; human users have no level field.
 
 ---
 
@@ -263,6 +305,12 @@ visibility defaults to 'logged_in'.
 
 **Post-creation for specific_friends:** caller must follow up with addPostViewer() for each friend.
 
+**XP logic (post-insert):**
+1. COUNT posts + comments created today WHERE user_id = uid AND created_at >= getTodayStart()
+2. marginalXP = min(POST_XP, max(0, POST_COMMENT_DAILY_CAP - existingTodayCount))
+3. If marginalXP > 0 → addXP(uid, marginalXP)
+Cap ensures a user earns at most POST_COMMENT_DAILY_CAP (20) XP/day from posts and comments combined.
+
 ---
 
 #### `deletePost(postId) → { error }`
@@ -306,6 +354,8 @@ ORDER BY created_at ASC
 INSERT INTO comments.
 
 **Note:** comments_count is updated automatically by the `on_comment_change` DB trigger (AFTER INSERT OR DELETE ON comments → UPDATE posts SET comments_count). No manual count update in JS.
+
+**XP logic (post-insert):** Same marginal cap logic as createPost — counts today's posts + comments, awards up to COMMENT_XP (3) XP subject to POST_COMMENT_DAILY_CAP (20) shared cap.
 
 ---
 
@@ -472,6 +522,11 @@ Maps result to Message objects: resolves `author_name` and `author_avatar_url` b
 
 INSERT INTO messages → returns inserted row.
 
+**XP logic (post-insert):**
+1. COUNT messages sent today WHERE user_id = uid AND created_at >= getTodayStart()
+2. If count === MESSAGE_THRESHOLD (exactly 20) → addXP(uid, MESSAGE_XP) (10 XP)
+The threshold fires once per day: checking for equality (not >=) means XP is awarded only on the message that crosses the boundary.
+
 ---
 
 #### `subscribeToMessages(groupId, onMessage) → () => void`
@@ -504,13 +559,19 @@ RLS enforces owner-only. Only content is editable; identity_mode and group assoc
 - `DiscoverResult` — XP, title, visit info
 - `RankingEntry` / `WeeklyRankings` — ranking structures
 
+### Imports & Dependencies
+```typescript
+import { addXP, EXPLORATION_XP, FOREGROUND_XP_PER_HOUR, getTodayStart } from './_xp'
+```
+
 ### Internal Helpers
 - `applyFuzzyOffset(coord)` — rounds to nearest 0.005° grid (~555m cells). Uses `Math.round(val / 0.005) * 5 / 1000` to avoid floating point precision issues with 0.005.
 - `getWeekStart()` — returns most recent Monday 00:00 PT as UTC Date
 - `clampMinutesSpent(claimed, prevWeekly, lastVisitedAt, isNewWeek)` — anti-cheat
 - `getPlaceRadius(types)` — Google types → radius_meters
 - `getPlaceType(types)` — Google types → SUDO place_type
-- `addXP(userId, xp)` — reads pet_xp/pet_level, adds xp, recalculates level (floor(xp/100)+1)
+
+**Removed:** `addXP` (moved to `_xp.ts`); `XP_TIME_REWARDS` constant (time-milestone XP for 30/60 min no longer used — replaced by `EXPLORATION_XP` flat first-visit rewards).
 
 ### Constants
 ```typescript
@@ -593,13 +654,12 @@ TIMESTAMP_TOLERANCE = 10         // anti-cheat grace minutes
 ```
 safeMinutes = clampMinutesSpent(minutesSpent, 0, null, false)
 isFirstVisit = true
-xpEarned = 10
-if safeMinutes >= 30 → xpEarned += timeRewards.min30
-if safeMinutes >= 60 → xpEarned += timeRewards.min60
+xpEarned = EXPLORATION_XP[placeType]   // library/gym=15, coffee_shop/dining=10, other=8
 INSERT explorations (visit_count=1, total_time_spent=safeMinutes, weekly_time_spent=safeMinutes, ...)
+addXP(uid, xpEarned)
 ```
 
-**Branch B — Existing record:**
+**Branch B — Existing record (return visit):**
 ```
 prevWeeklyTime = needsReset ? 0 : existing.weekly_time_spent
 safeMinutes = clampMinutesSpent(minutesSpent, prevWeeklyTime, existing.last_visited_at, needsReset)
@@ -608,8 +668,7 @@ newMinutesAdded = max(0, newWeeklyTime - prevWeeklyTime)
 newTotalTime = existing.total_time_spent + newMinutesAdded
 newVisitCount = existing.visit_count + 1
 
-XP: if prevWeeklyTime < 30 && newWeeklyTime >= 30 → xpEarned += min30
-    if prevWeeklyTime < 60 && newWeeklyTime >= 60 → xpEarned += min60
+XP: 0 (no XP awarded for return visits — exploration bonus is first-visit only)
 
 Titles: if newVisitCount >= 7 && !titles.includes(junior) → unlock junior
         if newVisitCount >= 30 && !titles.includes(senior) → unlock senior
@@ -618,13 +677,17 @@ UPDATE explorations ... WHERE id=existing.id AND last_visited_at=existing.last_v
   (optimistic lock — concurrent update returns empty array → return null)
 ```
 
-**XP table:**
+**EXPLORATION_XP table (from _xp.ts):**
 ```
-library: { min30: 3, min60: 8 }
-dining:  { min30: 2, min60: 6 }
-gym/cafe/other: { min30: 2, min60: 5 }
-First visit always: +10 XP
+library:     15 XP (first visit only)
+gym:         15 XP (first visit only)
+coffee_shop: 10 XP (first visit only)
+dining:      10 XP (first visit only)
+other:        8 XP (first visit only)
+Return visits: 0 XP
 ```
+
+**Note:** Time tracking (weekly_time_spent, total_time_spent, visit_count) is preserved on all branches. These fields drive weekly rankings and title unlocks but no longer influence XP.
 
 **Title table:**
 ```
@@ -685,6 +748,15 @@ Groups rows by place_type into WeeklyRankings object.
 **File:** `lib/api/location.ts:571`
 
 UPDATE profiles SET ranking_opt_in=optIn, ranking_identity_mode=identityMode WHERE id=auth.uid()
+
+---
+
+#### `addForegroundXP() → Promise<void>`
+**File:** `lib/api/location.ts` (exported)
+
+Calls `addXP(uid, FOREGROUND_XP_PER_HOUR)` (5 XP).
+
+**Caller contract:** Frontend calls this once per hour while the app is in the foreground. The backend performs no time-based validation — rate enforcement is purely the frontend's responsibility.
 
 ---
 
@@ -862,6 +934,7 @@ Returns minimal fields sufficient to identify and unblock the user.
 | ID | Severity | Location | Issue | Status |
 |----|----------|----------|-------|--------|
 | TD-1 | HIGH | `location.ts:discoverLandmark` | Client-supplied GPS coords trusted; cheat by sending fake coords to earn XP/titles | Open |
+| TD-11 | LOW | `location.ts:addForegroundXP` | Frontend controls call frequency; malicious client can call addForegroundXP more than once per hour | Open |
 | TD-2 | MED | `posts.ts:toggleLike,createComment,deleteComment` | likes_count/comments_count: read-then-write race condition | RESOLVED — DB triggers on_like_change/on_comment_change |
 | TD-3 | MED | App layer | blocked_users not filtered in feed/comments | RESOLVED — block filtering added to getFeed and getComments |
 | TD-4 | MED | `auth.ts:getProfile` | pet_only + show_date_of_birth=true still returned date_of_birth | RESOLVED — pet_only now nulls date_of_birth, nationality, qr_code_url |

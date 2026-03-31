@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { addXP, getTodayStart, MESSAGE_THRESHOLD, MESSAGE_XP } from './_xp'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -91,6 +92,16 @@ export async function sendMessage(
     .single()
 
   if (error) return null
+
+  // XP: award MESSAGE_XP exactly when today's message count hits MESSAGE_THRESHOLD
+  const todayStart = getTodayStart()
+  const { count: msgToday } = await supabase
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .gte('created_at', todayStart)
+  if (msgToday === MESSAGE_THRESHOLD) await addXP(user.id, MESSAGE_XP)
+
   return data as Message
 }
 
