@@ -393,6 +393,90 @@ export async function removePostViewer(
   return { error: error?.message ?? null }
 }
 
+// ─── Task 103b: getUserPosts ──────────────────────────────────────────────────
+// 查某用户的帖子列表，支持游标分页
+// - 查自己：返回全部（含 private）
+// - 查他人：visibility 由 RLS 自动过滤；双向拉黑时帖子列表为空
+
+export async function getUserPosts(
+  userId: string,
+  options?: {
+    limit?: number
+    before?: string // 游标：上一页最后一条的 created_at
+  }
+): Promise<Post[]> {
+  const { limit = 20, before } = options ?? {}
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return []
+
+  // TD-3: 双向拉黑时过滤帖子（不拦截进入主页，只让帖子列表为空）
+  const [{ data: iBlockedData }, { data: blockedMeData }] = await Promise.all([
+    supabase.from('blocked_users').select('blocked_id').eq('blocker_id', user.id),
+    supabase.from('blocked_users').select('blocker_id').eq('blocked_id', user.id),
+  ])
+  const blockedIds = new Set([
+    ...(iBlockedData ?? []).map((r: any) => r.blocked_id),
+    ...(blockedMeData ?? []).map((r: any) => r.blocker_id),
+  ])
+
+  if (blockedIds.has(userId)) return []
+
+  let query = supabase
+    .from('posts')
+    .select(
+      `id, user_id, identity_mode, content, image_url, visibility,
+       likes_count, comments_count, created_at, edited_at,
+       profiles!posts_user_id_fkey (
+         real_name, pet_name, avatar_url, pet_avatar_url
+       )`
+    )
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (before) query = query.lt('created_at', before)
+
+  const { data: postsData } = await query
+  if (!postsData || postsData.length === 0) return []
+
+  // 批量查当前用户对这些帖子的点赞状态
+  const postIds = postsData.map((p: any) => p.id)
+  const { data: myLikes } = await supabase
+    .from('likes')
+    .select('post_id')
+    .eq('user_id', user.id)
+    .in('post_id', postIds)
+
+  const likedSet = new Set((myLikes ?? []).map((l: any) => l.post_id))
+
+  return postsData.map((p: any) => {
+    const profile = p.profiles
+    const isReal = p.identity_mode === 'real'
+    return {
+      id: p.id,
+      user_id: p.user_id,
+      identity_mode: p.identity_mode,
+      content: p.content,
+      image_url: p.image_url,
+      visibility: p.visibility,
+      likes_count: p.likes_count,
+      comments_count: p.comments_count,
+      created_at: p.created_at,
+      edited_at: p.edited_at,
+      author_name: profile ? (isReal ? profile.real_name : profile.pet_name) : null,
+      author_avatar_url: profile
+        ? isReal
+          ? profile.avatar_url
+          : profile.pet_avatar_url
+        : null,
+      liked_by_me: likedSet.has(p.id),
+    }
+  })
+}
+
 // ─── Task 92: deleteComment ───────────────────────────────────────────────────
 // 删除本人评论，同时更新 posts.comments_count - 1
 
