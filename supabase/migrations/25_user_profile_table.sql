@@ -1,3 +1,4 @@
+drop function if exists add_xp(uuid, integer);
 drop table if exists profiles cascade;
 drop sequence if exists sudo_id_seq;
 create sequence sudo_id_seq start 1;
@@ -36,3 +37,14 @@ create policy "Users can update own profile"
   on profiles for update using (auth.uid() = id);
 create policy "Users can delete own profile"
   on profiles for delete using (auth.uid() = id);
+
+create or replace function add_xp(p_user_id uuid, p_xp integer)
+returns void as $$
+begin
+  update profiles
+  set
+    pet_xp    = pet_xp + p_xp,
+    pet_level = floor((pet_xp + p_xp) / 100) + 1
+  where id = p_user_id;
+end;
+$$ language plpgsql security definer;

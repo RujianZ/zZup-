@@ -1,6 +1,9 @@
 -- 清理
 drop trigger if exists on_owner_delete on profiles;
 drop function if exists reassign_group_owner();
+drop trigger if exists on_group_member_insert on group_members;
+drop trigger if exists on_group_member_delete on group_members;
+drop function if exists update_members_count();
 drop table if exists messages cascade;
 drop table if exists group_members cascade;
 drop table if exists groups cascade;
@@ -133,3 +136,23 @@ create policy "Group members can send messages"
   );
 create policy "Users can edit own message"
   on messages for update using (auth.uid() = user_id);
+-- ==================== members_count triggers（新增）====================
+create or replace function update_members_count()
+returns trigger as $$
+begin
+  if TG_OP = 'INSERT' then
+    update groups set members_count = members_count + 1 where id = NEW.group_id;
+  elsif TG_OP = 'DELETE' then
+    update groups set members_count = greatest(0, members_count - 1) where id = OLD.group_id;
+  end if;
+  return null;
+end;
+$$ language plpgsql security definer;
+
+create trigger on_group_member_insert
+  after insert on group_members
+  for each row execute function update_members_count();
+
+create trigger on_group_member_delete
+  after delete on group_members
+  for each row execute function update_members_count();

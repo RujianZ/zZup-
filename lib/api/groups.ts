@@ -25,19 +25,6 @@ export interface CreateGroupData {
   is_searchable?: boolean
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-async function syncMembersCount(groupId: string): Promise<void> {
-  const { count } = await supabase
-    .from('group_members')
-    .select('*', { count: 'exact', head: true })
-    .eq('group_id', groupId)
-  await supabase
-    .from('groups')
-    .update({ members_count: count ?? 0 })
-    .eq('id', groupId)
-}
-
 // ─── Task 71: createGroup ─────────────────────────────────────────────────────
 
 export async function createGroup(data: CreateGroupData): Promise<Group | null> {
@@ -70,8 +57,7 @@ export async function createGroup(data: CreateGroupData): Promise<Group | null> 
     role: 'admin',
   })
 
-  await supabase.from('groups').update({ members_count: 1 }).eq('id', group.id)
-
+  // members_count 由 DB trigger on_group_member_insert 自动维护
   return { ...group, members_count: 1 } as Group
 }
 
@@ -83,18 +69,12 @@ export async function getMyGroups(): Promise<Group[]> {
   } = await supabase.auth.getUser()
   if (!user) return []
 
-  const { data: memberships } = await supabase
+  const { data } = await supabase
     .from('group_members')
-    .select('group_id')
+    .select('groups(*)')
     .eq('user_id', user.id)
 
-  if (!memberships || memberships.length === 0) return []
-
-  const groupIds = memberships.map((m) => m.group_id)
-
-  const { data } = await supabase.from('groups').select('*').in('id', groupIds)
-
-  return (data ?? []) as Group[]
+  return (data ?? []).map((m: any) => m.groups).filter(Boolean) as Group[]
 }
 
 // ─── Task 73: joinGroup ───────────────────────────────────────────────────────
@@ -113,7 +93,7 @@ export async function joinGroup(groupId: string): Promise<{ error: string | null
 
   if (error) return { error: error.message }
 
-  await syncMembersCount(groupId)
+  // members_count 由 DB trigger on_group_member_insert 自动维护
   return { error: null }
 }
 
@@ -155,7 +135,7 @@ export async function leaveGroup(groupId: string): Promise<{ error: string | nul
       .eq('id', groupId)
   }
 
-  await syncMembersCount(groupId)
+  // members_count 由 DB trigger on_group_member_delete 自动维护
   return { error: null }
 }
 
@@ -228,7 +208,7 @@ export async function createDirectMessage(friendId: string): Promise<Group | nul
       group_type: 'direct',
       is_searchable: false,
       created_by: user.id,
-      members_count: 2,
+      members_count: 0,
     })
     .select()
     .single()
@@ -240,7 +220,8 @@ export async function createDirectMessage(friendId: string): Promise<Group | nul
     { group_id: group.id, user_id: friendId, role: 'member' },
   ])
 
-  return group as Group
+  // members_count 由 DB trigger 维护，返回时手动修正为 2 供前端立即使用
+  return { ...group, members_count: 2 } as Group
 }
 
 // ─── Task 85: removeMember ────────────────────────────────────────────────────
@@ -271,6 +252,6 @@ export async function removeMember(
 
   if (error) return { error: error.message }
 
-  await syncMembersCount(groupId)
+  // members_count 由 DB trigger on_group_member_delete 自动维护
   return { error: null }
 }

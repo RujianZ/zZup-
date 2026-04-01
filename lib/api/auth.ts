@@ -163,6 +163,7 @@ export async function getProfile(userId?: string): Promise<Profile | null> {
       result.real_name = null
       result.avatar_url = null
       result.bio = null
+      result.university = null
       // TD-4: 生日/国籍/二维码属于真人身份，pet_only 时一并隐藏
       result.date_of_birth = null
       result.nationality = null

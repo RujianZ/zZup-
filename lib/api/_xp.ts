@@ -21,22 +21,18 @@ export const EXPLORATION_XP: Record<string, number> = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 export function getTodayStart(): string {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return d.toISOString()
+  // Use PT (America/Los_Angeles) so the daily cap resets at midnight PT
+  // consistent with the weekly ranking reset in location.ts
+  const now = new Date()
+  const ptNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }))
+  ptNow.setHours(0, 0, 0, 0)
+  const y = ptNow.getFullYear()
+  const m = String(ptNow.getMonth() + 1).padStart(2, '0')
+  const d = String(ptNow.getDate()).padStart(2, '0')
+  return new Date(`${y}-${m}-${d}T00:00:00.000Z`).toISOString()
 }
 
 export async function addXP(userId: string, xp: number): Promise<void> {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('pet_xp, pet_level')
-    .eq('id', userId)
-    .single()
-  if (!profile) return
-  const newXP = (profile.pet_xp ?? 0) + xp
-  const newLevel = Math.floor(newXP / 100) + 1
-  await supabase
-    .from('profiles')
-    .update({ pet_xp: newXP, pet_level: newLevel })
-    .eq('id', userId)
+  // 原子自增：pet_xp 和 pet_level 在数据库内一步完成，避免并发竞态
+  await supabase.rpc('add_xp', { p_user_id: userId, p_xp: xp })
 }

@@ -45,7 +45,7 @@ begin
       and p.ranking_opt_in = true
       and e.week_start_date = v_week_start
       and e.weekly_time_spent > 0
-      and lm.place_type in ('library', 'cafe', 'gym', 'dining')
+      and lm.place_type in ('library', 'coffee_shop', 'gym', 'dining')
     group by
       lm.place_type, p.id, p.real_name, p.avatar_url,
       p.pet_name, p.pet_avatar_url, p.ranking_identity_mode

@@ -73,11 +73,11 @@ export async function sendMessage(
   content: string,
   identityMode: 'real' | 'pet',
   imageUrl?: string
-): Promise<Message | null> {
+): Promise<{ data: Message | null; error: string | null }> {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) return null
+  if (!user) return { data: null, error: 'Not authenticated' }
 
   const { data, error } = await supabase
     .from('messages')
@@ -91,18 +91,23 @@ export async function sendMessage(
     .select()
     .single()
 
-  if (error) return null
+  if (error) return { data: null, error: error.message }
 
-  // XP: award MESSAGE_XP exactly when today's message count hits MESSAGE_THRESHOLD
+  // XP: award MESSAGE_XP the first time today's message count reaches MESSAGE_THRESHOLD
+  // Uses before/after diff so skipping over the threshold still triggers exactly once
   const todayStart = getTodayStart()
   const { count: msgToday } = await supabase
     .from('messages')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
     .gte('created_at', todayStart)
-  if (msgToday === MESSAGE_THRESHOLD) await addXP(user.id, MESSAGE_XP)
+  if (msgToday !== null) {
+    const xpBefore = (msgToday - 1) >= MESSAGE_THRESHOLD ? MESSAGE_XP : 0
+    const xpAfter  = msgToday >= MESSAGE_THRESHOLD ? MESSAGE_XP : 0
+    if (xpAfter > xpBefore) await addXP(user.id, MESSAGE_XP)
+  }
 
-  return data as Message
+  return { data: data as Message, error: null }
 }
 
 // ─── Task 79: subscribeToMessages ────────────────────────────────────────────
@@ -127,8 +132,39 @@ export function subscribeToMessages(
         table: 'messages',
         filter: `group_id=eq.${groupId}`,
       },
-      (payload) => {
-        onMessage(payload.new as Message)
+      async (payload) => {
+        const msg = payload.new as any
+
+        // Realtime payload 不含 profiles join，补查一次拿名字和头像
+        let author_name: string | null = null
+        let author_avatar_url: string | null = null
+
+        if (msg.user_id) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('real_name, pet_name, avatar_url, pet_avatar_url')
+            .eq('id', msg.user_id)
+            .single()
+
+          if (profile) {
+            const isReal = msg.identity_mode === 'real'
+            author_name = isReal ? profile.real_name : profile.pet_name
+            author_avatar_url = isReal ? profile.avatar_url : profile.pet_avatar_url
+          }
+        }
+
+        onMessage({
+          id: msg.id,
+          group_id: msg.group_id,
+          user_id: msg.user_id,
+          identity_mode: msg.identity_mode,
+          content: msg.content,
+          image_url: msg.image_url,
+          created_at: msg.created_at,
+          edited_at: msg.edited_at,
+          author_name,
+          author_avatar_url,
+        })
       }
     )
     .subscribe()

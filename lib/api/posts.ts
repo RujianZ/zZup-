@@ -43,6 +43,18 @@ function extractStoragePath(url: string, bucket: string): string | null {
   return idx !== -1 ? decodeURIComponent(url.slice(idx + marker.length)) : null
 }
 
+// 查询当前用户的双向拉黑列表，返回 Set<userId>
+async function getBlockedIds(userId: string): Promise<Set<string>> {
+  const [{ data: iBlockedData }, { data: blockedMeData }] = await Promise.all([
+    supabase.from('blocked_users').select('blocked_id').eq('blocker_id', userId),
+    supabase.from('blocked_users').select('blocker_id').eq('blocked_id', userId),
+  ])
+  return new Set([
+    ...(iBlockedData ?? []).map((r: any) => r.blocked_id),
+    ...(blockedMeData ?? []).map((r: any) => r.blocker_id),
+  ])
+}
+
 // ─── Task 86: getFeed ─────────────────────────────────────────────────────────
 // 获取 Feed 帖子列表，支持按 visibility 过滤，支持游标分页
 
@@ -50,23 +62,16 @@ export async function getFeed(options?: {
   visibility?: 'logged_in' | 'university' | 'friends' | 'specific_friends'
   limit?: number
   before?: string // 游标：最早帖子的 created_at
-}): Promise<Post[]> {
+}): Promise<{ data: Post[]; error: string | null }> {
   const { visibility, limit = 20, before } = options ?? {}
 
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) return []
+  if (!user) return { data: [], error: 'Not authenticated' }
 
   // TD-3: 过滤双向屏蔽用户的帖子
-  const [{ data: iBlockedData }, { data: blockedMeData }] = await Promise.all([
-    supabase.from('blocked_users').select('blocked_id').eq('blocker_id', user.id),
-    supabase.from('blocked_users').select('blocker_id').eq('blocked_id', user.id),
-  ])
-  const blockedIds = [
-    ...(iBlockedData ?? []).map((r: any) => r.blocked_id),
-    ...(blockedMeData ?? []).map((r: any) => r.blocker_id),
-  ]
+  const blockedIds = await getBlockedIds(user.id)
 
   let query = supabase
     .from('posts')
@@ -74,18 +79,19 @@ export async function getFeed(options?: {
       `id, user_id, identity_mode, content, image_url, visibility,
        likes_count, comments_count, created_at, edited_at,
        profiles!posts_user_id_fkey (
-         real_name, pet_name, avatar_url, pet_avatar_url, university
+         real_name, pet_name, avatar_url, pet_avatar_url
        )`
     )
     .order('created_at', { ascending: false })
     .limit(limit)
 
-  if (blockedIds.length > 0) query = query.not('user_id', 'in', `(${blockedIds.join(',')})`)
+  if (blockedIds.size > 0) query = query.not('user_id', 'in', `(${[...blockedIds].join(',')})`)
   if (visibility) query = query.eq('visibility', visibility)
   if (before) query = query.lt('created_at', before)
 
-  const { data: postsData } = await query
-  if (!postsData || postsData.length === 0) return []
+  const { data: postsData, error } = await query
+  if (error) return { data: [], error: error.message }
+  if (!postsData || postsData.length === 0) return { data: [], error: null }
 
   // 批量查当前用户对这些帖子的点赞状态
   const postIds = postsData.map((p: any) => p.id)
@@ -97,7 +103,7 @@ export async function getFeed(options?: {
 
   const likedSet = new Set((myLikes ?? []).map((l: any) => l.post_id))
 
-  return postsData.map((p: any) => {
+  const data = postsData.map((p: any) => {
     const profile = p.profiles
     const isReal = p.identity_mode === 'real'
     return {
@@ -120,6 +126,8 @@ export async function getFeed(options?: {
       liked_by_me: likedSet.has(p.id),
     }
   })
+
+  return { data, error: null }
 }
 
 // ─── Task 87: createPost ──────────────────────────────────────────────────────
@@ -191,7 +199,7 @@ export async function deletePost(postId: string): Promise<{ error: string | null
 }
 
 // ─── Task 89: toggleLike ──────────────────────────────────────────────────────
-// 点赞 / 取消点赞，同时更新 posts.likes_count
+// 点赞 / 取消点赞，likes_count 由 DB trigger on_like_change 自动维护
 
 export async function toggleLike(
   postId: string
@@ -210,12 +218,12 @@ export async function toggleLike(
     .maybeSingle()
 
   if (existing) {
-    // 取消点赞（likes_count 由 DB trigger on_like_change 自动更新）
+    // 取消点赞
     const { error } = await supabase.from('likes').delete().eq('id', existing.id)
     if (error) return { liked: true, error: error.message }
     return { liked: false, error: null }
   } else {
-    // 点赞（likes_count 由 DB trigger on_like_change 自动更新）
+    // 点赞
     const { error } = await supabase
       .from('likes')
       .insert({ post_id: postId, user_id: user.id })
@@ -227,21 +235,16 @@ export async function toggleLike(
 // ─── Task 90: getComments ─────────────────────────────────────────────────────
 // 获取某帖子的所有评论，按 created_at 升序
 
-export async function getComments(postId: string): Promise<Comment[]> {
+export async function getComments(
+  postId: string
+): Promise<{ data: Comment[]; error: string | null }> {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) return []
+  if (!user) return { data: [], error: 'Not authenticated' }
 
   // TD-3: 过滤双向屏蔽用户的评论
-  const [{ data: iBlockedData }, { data: blockedMeData }] = await Promise.all([
-    supabase.from('blocked_users').select('blocked_id').eq('blocker_id', user.id),
-    supabase.from('blocked_users').select('blocker_id').eq('blocked_id', user.id),
-  ])
-  const blockedIds = [
-    ...(iBlockedData ?? []).map((r: any) => r.blocked_id),
-    ...(blockedMeData ?? []).map((r: any) => r.blocker_id),
-  ]
+  const blockedIds = await getBlockedIds(user.id)
 
   let query = supabase
     .from('comments')
@@ -254,12 +257,13 @@ export async function getComments(postId: string): Promise<Comment[]> {
     .eq('post_id', postId)
     .order('created_at', { ascending: true })
 
-  if (blockedIds.length > 0) query = query.not('user_id', 'in', `(${blockedIds.join(',')})`)
+  if (blockedIds.size > 0) query = query.not('user_id', 'in', `(${[...blockedIds].join(',')})`)
 
-  const { data } = await query
-  if (!data) return []
+  const { data, error } = await query
+  if (error) return { data: [], error: error.message }
+  if (!data) return { data: [], error: null }
 
-  return data.map((c: any) => {
+  const comments = data.map((c: any) => {
     const profile = c.profiles
     const isReal = c.identity_mode === 'real'
     return {
@@ -278,10 +282,12 @@ export async function getComments(postId: string): Promise<Comment[]> {
         : null,
     }
   })
+
+  return { data: comments, error: null }
 }
 
 // ─── Task 91: createComment ───────────────────────────────────────────────────
-// 发评论，同时更新 posts.comments_count + 1
+// 发评论，comments_count 由 DB trigger on_comment_change 自动维护
 
 export async function createComment(
   postId: string,
@@ -299,7 +305,6 @@ export async function createComment(
     .select('id')
     .single()
 
-  // comments_count 由 DB trigger on_comment_change 自动更新
   if (error) return { commentId: null, error: error.message }
 
   // XP: count today's posts + comments (already created) and compute marginal gain
@@ -396,7 +401,7 @@ export async function removePostViewer(
 // ─── Task 103b: getUserPosts ──────────────────────────────────────────────────
 // 查某用户的帖子列表，支持游标分页
 // - 查自己：返回全部（含 private）
-// - 查他人：visibility 由 RLS 自动过滤；双向拉黑时帖子列表为空
+// - 查他人：visibility 由 RLS 自动过滤；双向拉黑时返回空数组
 
 export async function getUserPosts(
   userId: string,
@@ -404,25 +409,17 @@ export async function getUserPosts(
     limit?: number
     before?: string // 游标：上一页最后一条的 created_at
   }
-): Promise<Post[]> {
+): Promise<{ data: Post[]; error: string | null }> {
   const { limit = 20, before } = options ?? {}
 
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) return []
+  if (!user) return { data: [], error: 'Not authenticated' }
 
   // TD-3: 双向拉黑时过滤帖子（不拦截进入主页，只让帖子列表为空）
-  const [{ data: iBlockedData }, { data: blockedMeData }] = await Promise.all([
-    supabase.from('blocked_users').select('blocked_id').eq('blocker_id', user.id),
-    supabase.from('blocked_users').select('blocker_id').eq('blocked_id', user.id),
-  ])
-  const blockedIds = new Set([
-    ...(iBlockedData ?? []).map((r: any) => r.blocked_id),
-    ...(blockedMeData ?? []).map((r: any) => r.blocker_id),
-  ])
-
-  if (blockedIds.has(userId)) return []
+  const blockedIds = await getBlockedIds(user.id)
+  if (blockedIds.has(userId)) return { data: [], error: null }
 
   let query = supabase
     .from('posts')
@@ -439,8 +436,9 @@ export async function getUserPosts(
 
   if (before) query = query.lt('created_at', before)
 
-  const { data: postsData } = await query
-  if (!postsData || postsData.length === 0) return []
+  const { data: postsData, error } = await query
+  if (error) return { data: [], error: error.message }
+  if (!postsData || postsData.length === 0) return { data: [], error: null }
 
   // 批量查当前用户对这些帖子的点赞状态
   const postIds = postsData.map((p: any) => p.id)
@@ -452,7 +450,7 @@ export async function getUserPosts(
 
   const likedSet = new Set((myLikes ?? []).map((l: any) => l.post_id))
 
-  return postsData.map((p: any) => {
+  const data = postsData.map((p: any) => {
     const profile = p.profiles
     const isReal = p.identity_mode === 'real'
     return {
@@ -475,20 +473,14 @@ export async function getUserPosts(
       liked_by_me: likedSet.has(p.id),
     }
   })
+
+  return { data, error: null }
 }
 
 // ─── Task 92: deleteComment ───────────────────────────────────────────────────
-// 删除本人评论，同时更新 posts.comments_count - 1
+// 删除本人评论，comments_count 由 DB trigger on_comment_change 自动维护
 
 export async function deleteComment(commentId: string): Promise<{ error: string | null }> {
-  // 先取 post_id，再删评论（RLS 限制只能删自己的评论）
-  const { data: comment } = await supabase
-    .from('comments')
-    .select('post_id')
-    .eq('id', commentId)
-    .single()
-
-  // comments_count 由 DB trigger on_comment_change 自动更新
   const { error } = await supabase.from('comments').delete().eq('id', commentId)
   if (error) return { error: error.message }
   return { error: null }
