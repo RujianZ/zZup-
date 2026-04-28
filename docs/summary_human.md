@@ -1,5 +1,5 @@
 # SUDO App — 后端函数大白话说明书
-> 给 Ethan 看的版本 | 更新于 2026年3月
+> 给 Ethan 看的版本 | 更新于 2026年4月
 > 代码位置：`D:\sudo-app\lib\api\`
 
 ---
@@ -12,6 +12,7 @@
 4. [messages.ts — 消息](#4-messagests)
 5. [location.ts — 位置与探索系统](#5-locationts)
 6. [friends.ts — 好友与屏蔽](#6-friendsts)
+7. [Storage Bucket 使用说明](#附录storage-bucket-使用说明)
 
 ---
 
@@ -20,8 +21,9 @@
 Joe 和 Ethan 都是 Supabase 的 owner，可以直接在 Supabase Dashboard 看到所有表结构。
 
 关键概念：
-- **RLS（行级安全）**：数据库自带的权限控制。比如"只有本人能删自己的帖子"这类规则，不需要在代码里手动判断，数据库自动拒绝非法操作。
-- **所有函数都需要用户已登录**，未登录调用大多数函数会直接返回空或 null。
+- **RLS（行级安全）**：数据库自带的权限控制，"只有本人能删自己的帖子"这类规则由数据库自动拒绝非法操作，不需要在代码里手动判断。
+- **DB Trigger（数据库触发器）**：某些计数字段（likes_count、comments_count、members_count）由数据库触发器自动维护，代码里不需要手动 +1 / -1。
+- **所有函数都需要用户已登录**，未登录调用大多数函数会直接返回空数组或 null。
 - **identity_mode**：每条帖子/消息/评论发布时选择"以真人身份"还是"以宠物身份"，发布后**不可更改**。
 
 ---
@@ -35,7 +37,7 @@ Joe 和 Ethan 都是 Supabase 的 owner，可以直接在 Supabase Dashboard 看
 ### 关于宠物升级
 
 - **只有宠物才有等级**，真人账号没有 level 字段。
-- 宠物等级公式：`等级 = floor(总经验值 / 100) + 1`，也就是每 100 XP 升一级。
+- 宠物等级公式：`等级 = floor(总经验值 / 100) + 1`，每 100 XP 升一级。
 - 设计目标：**重度使用 2 天 ≈ 升一级**（每天约获得 50 XP）。
 
 ### XP 获取方式汇总
@@ -44,9 +46,9 @@ Joe 和 Ethan 都是 Supabase 的 owner，可以直接在 Supabase Dashboard 看
 |------|----|------|
 | 发帖 | +5 XP | 每日上限：发帖+评论合计最多 20 XP |
 | 发评论 | +3 XP | 同上，共享每日 20 XP 上限 |
-| 发消息（当天第20条） | +10 XP | 每天只奖励一次，发满 20 条那一刻触发 |
-| App 在前台每小时 | +5 XP | 由 Ethan 前端每小时调用一次 |
-| 首次探索新地标 | +8 ~ +15 XP | 按地点类型不同（见探索系统章节） |
+| 发消息（当天累计到第20条） | +10 XP | 每天只奖励一次，恰好到达 20 条那一刻触发 |
+| App 在前台每小时 | +5 XP | 由 Ethan 前端每小时调用一次，无每日上限 |
+| 首次探索新地标 | +8 ~ +15 XP | 按地点类型不同 |
 
 ### 常量列表（可调整）
 
@@ -61,12 +63,18 @@ MESSAGE_XP = 10              // 触发时获得的 XP
 FOREGROUND_XP_PER_HOUR = 5  // 前台每小时的 XP
 
 EXPLORATION_XP:
-  library / gym      → 15 XP
-  coffee_shop / dining → 10 XP
-  other              → 8 XP
+  library / gym        → 15 XP（首次探索）
+  coffee_shop / dining → 10 XP（首次探索）
+  other                → 8 XP（首次探索）
 ```
 
-**注意**：这些常量可以随时调整，不影响任何逻辑代码。
+### 关于每日上限的计算方式
+
+发帖/评论 XP 用的是**差值法**：每次发帖/评论时，系统计算"加上这一条之后今天的总 XP"和"没加之前今天的总 XP"，两者之差就是这次实际获得的 XP。这样无论你是先发帖还是先评论，总量永远不会超过 20 XP 上限。
+
+### 关于 XP 的写入方式
+
+XP 通过数据库的原子操作写入，不会出现两个操作同时读取同一个值然后互相覆盖的情况（旧版代码有这个竞态问题，已修复）。
 
 ---
 
@@ -80,7 +88,7 @@ EXPLORATION_XP:
 
 **流程**：
 1. 调用 Supabase Auth 创建账号
-2. Supabase 自动触发数据库触发器，在 `profiles` 表给这个用户建一行空记录
+2. 数据库自动触发，在 `profiles` 表给这个用户建一行空记录
 3. 返回 `{ userId, error }`
 
 **用户分支**：
@@ -93,13 +101,11 @@ EXPLORATION_XP:
 
 **是什么**：登录。
 
-**流程**：
-1. 调用 Supabase Auth 验证邮箱密码
-2. 返回 `{ userId, error }`
+**流程**：调用 Supabase Auth 验证邮箱密码，返回 `{ userId, error }`。
 
 **用户分支**：
 - ✅ 登录成功 → 返回 userId，前端跳转主页
-- ❌ 密码错误 / 账号不存在 → 返回 error，前端显示"邮箱或密码错误"
+- ❌ 密码错误 / 账号不存在 → 返回 error，前端显示报错
 
 ---
 
@@ -117,7 +123,9 @@ EXPLORATION_XP:
 
 **两种用法**：
 - 不传 userId → 读自己的完整资料（所有字段都返回）
-- 传别人的 userId → 读对方的资料，但会按对方的隐私设置过滤
+- 传别人的 userId → 读对方的资料，会按对方的隐私设置过滤
+
+**关于 active_title**：返回的 Profile 对象中包含 `active_title` 字段（当前装备的称号），这个字段从 `explorations` 表联查而来，不在 `profiles` 表中。
 
 **查自己时**：直接返回所有字段，无过滤。
 
@@ -126,21 +134,22 @@ EXPLORATION_XP:
 | 字段 | 规则 |
 |------|------|
 | personal_email、edu_email、region | 永远隐藏，返回 null |
-| location_sharing、ranking_opt_in | 永远隐藏，返回 null |
-| show_date_of_birth、show_nationality、show_qr_code | 永远返回 false（查看者不需要知道对方的隐私开关状态） |
+| location_sharing、ranking_opt_in、ranking_identity_mode | 永远隐藏，返回 null |
+| show_date_of_birth、show_nationality、show_qr_code | 永远返回 false（你不需要知道对方的隐私开关状态） |
 | date_of_birth | 只有对方开启了 `show_date_of_birth` 才显示 |
 | nationality | 只有对方开启了 `show_nationality` 才显示 |
 | qr_code_url | 只有对方开启了 `show_qr_code` 才显示 |
 
 **再按 profile_visibility 决定显示哪个身份**：
+
 - `real_only` → 隐藏宠物所有信息（pet_name、pet_avatar_url、pet_bio、pet_level、pet_xp）
-- `pet_only` → 隐藏真人信息（real_name、avatar_url、bio），同时也隐藏 date_of_birth、nationality、qr_code_url（这些属于真实身份，宠物模式下不应泄露）
+- `pet_only` → 隐藏真人信息（real_name、avatar_url、bio、**university**），同时也隐藏 date_of_birth、nationality、qr_code_url
+  - 注意：university 也会隐藏。原因是：如果对方以宠物身份发了公开帖子，所有人都能看，就不应该能从资料里推断出这只宠物来自哪所学校。
 - `real_with_pet` → 真人和宠物都显示
 
 **用户分支**：
 - 查自己 → 返回完整资料
-- 查好友（已接受）→ 返回按隐私设置过滤后的资料
-- 查陌生人 → 同上，按对方隐私设置过滤
+- 查好友或陌生人 → 返回按对方隐私设置过滤后的资料
 - 未登录 → 返回 null
 
 ---
@@ -164,7 +173,7 @@ EXPLORATION_XP:
 
 **是什么**：获取当前用户所有已解锁的称号列表。
 
-**流程**：查询 `explorations` 表中本用户所有记录的 `titles_earned` 字段（每条记录是一个地标的探索记录，每个地标最多解锁2个称号），汇总去重后返回所有称号。
+**流程**：查询 `explorations` 表中本用户所有记录的 `titles_earned` 字段，汇总去重后返回所有称号。
 
 **返回**：`string[]`，比如 `["Bookworm", "Coffee Lover", "Explorer"]`
 
@@ -179,6 +188,7 @@ EXPLORATION_XP:
 ### 关于帖子可见性（重要）
 
 帖子有 5 种可见性：
+
 | 值 | 谁能看 |
 |----|--------|
 | `logged_in` | 所有登录用户（默认） |
@@ -195,24 +205,31 @@ EXPLORATION_XP:
 
 **是什么**：获取帖子列表（朋友圈首页）。
 
+**返回值**：`{ data: Post[], error: string | null }` — 需要解构！
+
 **参数**（都是可选的）：
 - `visibility`：只看某种可见性的帖子（不传则看所有可见帖子）
-- `limit`：每次加载几条（默认20）
-- `before`：游标分页，传上一批最早那条帖子的 created_at，用于"加载更多"
+- `limit`：每次加载几条（默认 20）
+- `before`：游标分页，传上一批最早那条帖子的 `created_at`，用于"加载更多"
 
 **流程**：
 1. 验证登录
-2. 先查屏蔽列表（双向），把屏蔽了你或被你屏蔽的人都过滤掉
-3. 查询 posts 表（数据库 RLS 自动过滤掉不该看到的帖子）
+2. 查屏蔽列表（双向），把屏蔽了你或被你屏蔽的人都过滤掉
+3. 查询 posts 表（数据库 RLS 自动过滤不该看到的帖子）
 4. 联查作者的 profiles，根据帖子的 identity_mode 返回对应的名字和头像
-5. 批量查当前用户对这些帖子的点赞状态（避免一条一条查）
-6. 返回 Post 数组
+5. 批量查当前用户对这些帖子的点赞状态
+6. 返回 `{ data: Post[], error: null }`
 
 **用户分支**：
-- 滚动到底部"加载更多" → 传 `before` 参数（上一批最早的帖子时间），获取更早的帖子
+- 滚动到底部"加载更多" → 传 `before` 参数，获取更早的帖子
 - 只看好友帖子 → 传 `visibility: 'friends'`
 - 只看同校帖子 → 传 `visibility: 'university'`
-- 未登录 → 返回空数组
+- 未登录 → `{ data: [], error: 'Not authenticated' }`
+
+**调用方式**：
+```typescript
+const { data: posts, error } = await getFeed({ visibility: 'logged_in', limit: 20 })
+```
 
 ---
 
@@ -223,15 +240,17 @@ EXPLORATION_XP:
 **参数**：
 - `content`：帖子文字内容
 - `identityMode`：`'real'`（以真人身份发）或 `'pet'`（以宠物身份发）
-- `imageUrl`：图片 URL（可选，图片需要 Ethan 先上传到 post-images bucket 再传 URL 进来）
+- `imageUrl`：图片 URL（可选，图片需要先上传到 post-images bucket 再传 URL 进来）
 - `visibility`：可见性，默认 `'logged_in'`
 
-**流程**：插入一条 posts 记录，然后统计今天已发的帖子+评论数量，在每日 20 XP 上限内给宠物加 XP。返回 `{ postId, error }`。
+**返回值**：`{ postId: string | null, error: string | null }`
+
+**流程**：插入一条 posts 记录，然后统计今天已发的帖子+评论数量，在每日 20 XP 上限内给宠物加 XP。
 
 **用户分支**：
-- 选择 `specific_friends` 可见性 → 发帖后还需要调用 `addPostViewer()` 逐个添加可以看到的好友
+- 选择 `specific_friends` 可见性 → 发帖后还需要对每个选中的好友分别调用 `addPostViewer(postId, friendId)`
 - 不选图片 → imageUrl 不传，帖子纯文字
-- 未登录 → 返回 `{ postId: null, error: 'Not authenticated' }`
+- 未登录 → `{ postId: null, error: 'Not authenticated' }`
 - 今天发帖+评论 XP 已达 20 上限 → 发帖成功，但不再加 XP
 
 ---
@@ -242,7 +261,7 @@ EXPLORATION_XP:
 
 **流程**：
 1. 先查这条帖子的 image_url
-2. 从数据库删除帖子（数据库 RLS 保证只能删自己的帖子，评论和点赞会自动级联删除）
+2. 从数据库删除帖子（RLS 保证只能删自己的帖子；评论和点赞会自动级联删除）
 3. 如果帖子有图片，同时从 Storage 删除图片文件
 4. 返回 `{ error }`
 
@@ -257,17 +276,19 @@ EXPLORATION_XP:
 
 **是什么**：点赞或取消点赞（自动判断当前状态）。
 
+**返回值**：`{ liked: boolean, error: string | null }`
+
 **流程**：
 1. 先查 likes 表，看当前用户是否已点赞这条帖子
 2. **已点赞** → 删除 likes 记录，返回 `{ liked: false }`
 3. **未点赞** → 插入 likes 记录，返回 `{ liked: true }`
 
-**注意**：likes_count 的更新由数据库触发器自动完成，代码里不需要手动 +1 / -1。
+**注意**：`likes_count` 的更新由数据库触发器自动完成，代码里不需要手动 +1 / -1。
 
 **用户分支**：
-- 第一次点击点赞按钮 → 点赞
-- 已点赞再次点击 → 取消点赞
-- 未登录 → 返回 `{ liked: false, error: 'Not authenticated' }`
+- 第一次点击点赞 → 点赞，liked: true
+- 已点赞再次点击 → 取消点赞，liked: false
+- 未登录 → `{ liked: false, error: 'Not authenticated' }`
 
 ---
 
@@ -275,9 +296,14 @@ EXPLORATION_XP:
 
 **是什么**：获取某条帖子的所有评论。
 
-**流程**：先查屏蔽列表（双向），过滤掉被屏蔽用户的评论。然后查询 comments 表，按时间升序（最早的评论在最上面），联查评论者的 profiles 获取名字和头像（根据评论的 identity_mode 返回真人或宠物信息）。
+**返回值**：`{ data: Comment[], error: string | null }` — 需要解构！
 
-**返回**：Comment 数组（已过滤屏蔽用户的评论）
+**流程**：先查屏蔽列表（双向），过滤掉被屏蔽用户的评论。然后查询 comments 表，按时间升序（最早的在最上面），联查评论者的 profiles。
+
+**调用方式**：
+```typescript
+const { data: comments, error } = await getComments(postId)
+```
 
 ---
 
@@ -285,12 +311,14 @@ EXPLORATION_XP:
 
 **是什么**：发评论。
 
+**返回值**：`{ commentId: string | null, error: string | null }`
+
 **流程**：
 1. 插入 comments 记录
 2. 统计今天已发的帖子+评论数量，在每日 20 XP 上限内给宠物加 XP（每条评论 +3 XP）
 3. 返回 `{ commentId, error }`
 
-**注意**：comments_count 的更新由数据库触发器自动完成，代码里不需要手动 +1。XP 上限与 createPost 共享——同一天发帖和评论合计最多获得 20 XP。
+**注意**：`comments_count` 的更新由数据库触发器自动完成。XP 上限与 createPost 共享——同一天发帖和评论合计最多获得 20 XP。
 
 ---
 
@@ -298,11 +326,9 @@ EXPLORATION_XP:
 
 **是什么**：删除本人评论。
 
-**流程**：
-1. 删除评论（数据库 RLS 保证只能删自己的评论）
-2. 返回 `{ error }`
+**流程**：删除评论（RLS 保证只能删自己的评论），返回 `{ error }`。
 
-**注意**：comments_count 的 -1 由数据库触发器自动完成，代码里不需要手动处理。
+**注意**：`comments_count` 的 -1 由数据库触发器自动完成。
 
 ---
 
@@ -318,7 +344,7 @@ EXPLORATION_XP:
   - 传 `null` → 删除图片（同时从 Storage 删除图片文件）
   - 传新的图片 URL → 替换图片（先删旧图，再存新图 URL）
 
-**流程**：更新 posts 记录，同时设置 `edited_at` 为当前时间。数据库 RLS 保证只能编辑自己的帖子。
+**流程**：更新 posts 记录，同时设置 `edited_at` 为当前时间。RLS 保证只能编辑自己的帖子。
 
 **用户分支**：
 - ✅ 编辑成功 → 返回 `{ error: null }`
@@ -330,7 +356,7 @@ EXPLORATION_XP:
 
 **是什么**：编辑本人评论的内容。
 
-**流程**：更新 comments 记录的 content 字段，同时设置 `edited_at` 为当前时间。数据库 RLS 保证只能编辑自己的评论。
+**流程**：更新 comments 记录的 content 字段，同时设置 `edited_at` 为当前时间。RLS 保证只能编辑自己的评论。
 
 **注意**：只能改文字内容，不能改 identity_mode（发布时选的身份永久固定）。
 
@@ -346,13 +372,48 @@ EXPLORATION_XP:
 
 **用法**：用户发了一条 `specific_friends` 可见的帖子后，对每个选中的好友调用一次。
 
-**流程**：在 post_viewers 表插入一条记录，数据库 RLS 保证只有帖子作者可以操作。
+**流程**：在 post_viewers 表插入一条记录，RLS 保证只有帖子作者可以操作。
 
 ---
 
 ### removePostViewer(postId, friendId)
 
 **是什么**：将某个好友从 `specific_friends` 帖子的可见名单中移除。
+
+---
+
+### getUserPosts(userId, options?)
+
+**是什么**：获取某个用户的帖子列表（用于"我的帖子"或他人主页的帖子列表）。
+
+**返回值**：`{ data: Post[], error: string | null }` — 需要解构！
+
+**参数**：
+- `userId`：要查询的用户 ID
+- `options.limit`：每次加载几条（默认 20）
+- `options.before`：游标分页，传上一页最后一条的 `created_at`
+
+**权限规则（重要）**：
+- **查自己** → 返回所有帖子，包括 `private`（私密帖子）
+- **查别人** → 数据库 RLS 自动过滤，只返回对当前用户可见的帖子
+- **双向拉黑** → 返回空数组（不报错，帖子列表就是空的）
+
+**流程**：
+1. 检查拉黑关系，有拉黑则直接返回空数组
+2. 查询该用户的帖子列表（RLS 处理可见性）
+3. 批量查点赞状态
+4. 返回 `{ data, error }`
+
+**调用方式**：
+```typescript
+// 第一次加载
+const { data: posts, error } = await getUserPosts(userId)
+
+// 上拉加载更多
+const { data: more } = await getUserPosts(userId, {
+  before: posts[posts.length - 1].created_at
+})
+```
 
 ---
 
@@ -369,6 +430,10 @@ EXPLORATION_XP:
 | `group` | `official` | 官方群，平台创建 |
 | `direct` | `direct` | 私信，两人之间的对话 |
 
+### 关于 members_count
+
+`members_count` 字段由**数据库触发器**自动维护——有人加入时 +1，有人退出时 -1，代码里不需要任何手动更新。函数返回的 members_count 是给前端立即使用的临时值，真实值以数据库为准。
+
 ---
 
 ### createGroup(data)
@@ -378,12 +443,12 @@ EXPLORATION_XP:
 **流程**：
 1. 创建 groups 记录（chat_type = 'group'）
 2. 自动将创建者加入 group_members（role = 'admin'）
-3. 设置 members_count = 1
-4. 返回 Group 对象
+3. 数据库触发器自动将 members_count 更新为 1
+4. 返回 Group 对象（members_count 固定返回 1 供前端立即使用）
 
 **用户分支**：
-- 创建成功 → 返回群组信息，前端跳转群聊页
-- 未登录 → 返回 null
+- ✅ 创建成功 → 返回群组信息，前端跳转群聊页
+- ❌ 未登录 → 返回 null
 
 ---
 
@@ -391,7 +456,7 @@ EXPLORATION_XP:
 
 **是什么**：获取当前用户加入的所有群组列表（包括群聊和私信）。
 
-**流程**：先查 group_members 找到所有 group_id，再查 groups 表获取详情。
+**流程**：通过一次 join 查询，从 group_members 出发直接拿到所有关联的 groups 数据，返回 Group 数组。
 
 ---
 
@@ -401,7 +466,7 @@ EXPLORATION_XP:
 
 **流程**：
 1. 插入 group_members 记录（role = 'member'）
-2. 更新 members_count
+2. 数据库触发器自动将 members_count + 1
 3. 返回 `{ error }`
 
 **用户分支**：
@@ -418,14 +483,14 @@ EXPLORATION_XP:
 **流程**：
 1. 查群组的 created_by（群主是谁）
 2. 删除自己的 group_members 记录
-3. **如果退出的人是群主** → JS 层找到最早加入的其他成员，更新 groups.created_by 转让群主
-4. 更新 members_count
+3. 数据库触发器自动将 members_count - 1
+4. **如果退出的人是群主** → 找到加入时间最早的其他成员，更新 groups.created_by 转让群主（无人可继承则设为 null）
 5. 返回 `{ error }`
 
 **用户分支**：
 - 普通成员退出 → 直接退出，members_count - 1
 - 群主退出 → 自动转让给入群时间最早的其他成员
-- 最后一个成员退出 → 群组变成空群，保留记录（不自动删除，用于内容审核）
+- 最后一个成员退出 → 群组变成空群，**保留记录不自动删除**（用于内容审核，万一有违规内容）
 
 ---
 
@@ -433,9 +498,11 @@ EXPLORATION_XP:
 
 **是什么**：搜索可以加入的群组。
 
-**条件**：is_searchable = true，members_count >= 3，group_type 为 open/official/edu_verified。
+**条件**：is_searchable = true，members_count >= 3，group_type 为 open/official/edu_verified，群名包含 keyword。
 
-**university 参数**：如果传了，则 edu_verified 类型的群只搜索该校的。
+**university 参数**：如果传了，则 edu_verified 类型的群只搜索该校的（open/official 不受限）。
+
+**返回**：Group 数组。
 
 ---
 
@@ -444,10 +511,10 @@ EXPLORATION_XP:
 **是什么**：和某个好友开启私信对话。
 
 **流程**：
-1. 并行查询：同时获取当前用户的所有 direct 群组 ID 和好友的所有 direct 群组 ID
-2. 在 JS 里找两个列表的交集（共同属于的群组就是已有的私信会话）
+1. 并行查询：同时获取当前用户的所有私信群 ID 和好友的所有私信群 ID
+2. 在 JS 里找两个列表的交集（共同的群就是已有的私信会话）
 3. **找到已有会话** → 直接返回这个群组
-4. **没有会话** → 创建新的 chat_type = 'direct' 群组，将双方都加入 group_members
+4. **没有会话** → 创建新的 chat_type = 'direct' 群组，双方都加入 group_members，数据库触发器把 members_count 更新到 2，返回 `{ ...group, members_count: 2 }`
 
 **用户分支**：
 - 已经有私信会话 → 返回现有会话，直接跳转聊天页
@@ -463,13 +530,13 @@ EXPLORATION_XP:
 1. 验证当前用户是否是群主（created_by）
 2. 不能踢自己
 3. 删除目标用户的 group_members 记录
-4. 更新 members_count
+4. 数据库触发器自动将 members_count - 1
 5. 返回 `{ error }`
 
 **用户分支**：
-- 群主踢人 → 成功
-- 非群主调用 → 返回 `{ error: 'Permission denied' }`
-- 踢自己 → 返回 `{ error: 'Cannot remove yourself' }`
+- ✅ 群主踢人 → 成功
+- ❌ 非群主调用 → 返回 `{ error: 'Permission denied' }`
+- ❌ 踢自己 → 返回 `{ error: 'Cannot remove yourself' }`
 
 ---
 
@@ -484,9 +551,9 @@ EXPLORATION_XP:
 **参数**：
 - `groupId`：群组/私信 ID
 - `limit`：每次加载几条（默认 30）
-- `before`：游标分页，传当前列表最早那条消息的 created_at
+- `before`：游标分页，传当前列表最早那条消息的 `created_at`
 
-**返回**：按时间降序的 Message 数组（最新的在最前面）。每条消息现在包含 `author_name` 和 `author_avatar_url`，根据消息的 identity_mode 自动选择真人或宠物信息填充。
+**返回**：按时间降序的 Message 数组（最新的在最前面）。每条消息包含 `author_name` 和 `author_avatar_url`，根据消息的 identity_mode 自动填充真人或宠物信息。
 
 **注意**：消息没有删除功能（设计决策：保留所有消息用于内容审核）。
 
@@ -496,13 +563,28 @@ EXPLORATION_XP:
 
 **是什么**：发送消息。
 
+**返回值**：`{ data: Message | null, error: string | null }` — 需要解构！
+
 **参数**：
 - `identityMode`：本条消息以真人还是宠物身份发送
 - `imageUrl`：图片 URL（可选，图片需先上传到 post-images bucket）
 
-**流程**：插入 messages 记录，然后统计今天发送的消息总数。**当天恰好发出第 20 条**消息时，宠物获得 +10 XP。返回 Message 对象（包含刚发送的消息数据）。
+**流程**：插入 messages 记录，然后统计今天发送的消息总数。用差值法判断——当消息数**刚好越过 20 条门槛时**，宠物获得 +10 XP（每天只触发一次）。
 
-**关于消息 XP**：每天只奖励一次（第 20 条时触发，之后不再重复）。这是为了鼓励日常活跃聊天，而不是刷消息数。
+**关于消息 XP**：
+- 发第 1-19 条：不加 XP
+- 发第 20 条：加 10 XP（触发！）
+- 发第 21 条以后：不再重复加 XP
+
+**用户分支**：
+- ✅ 发送成功 → `{ data: Message, error: null }`
+- ❌ 未登录 → `{ data: null, error: 'Not authenticated' }`
+- ❌ 数据库报错 → `{ data: null, error: message }`
+
+**调用方式**：
+```typescript
+const { data: message, error } = await sendMessage(groupId, '你好！', 'real')
+```
 
 ---
 
@@ -514,7 +596,7 @@ EXPLORATION_XP:
 ```typescript
 // 进入聊天页时调用
 const unsubscribe = subscribeToMessages(groupId, (newMessage) => {
-  // 把新消息加到消息列表最前面
+  // newMessage 包含完整的 author_name 和 author_avatar_url
   setMessages(prev => [newMessage, ...prev])
 })
 
@@ -522,12 +604,11 @@ const unsubscribe = subscribeToMessages(groupId, (newMessage) => {
 return () => unsubscribe()
 ```
 
-**用户分支**：
-- 对方发送消息 → onMessage 回调被触发，前端立即收到新消息
-- 进入页面时 → 建立 WebSocket 连接
-- 离开页面时 → 必须调用 unsubscribe()，否则内存泄漏
+**注意**：实时推送的消息本身不含作者信息（数据库只推原始行），后端会自动补查一次 profiles 来填充 `author_name` 和 `author_avatar_url`，所以回调里拿到的消息是完整的，Ethan 不需要额外处理。
 
-**注意**：实时推送过来的消息是数据库原始行，不包含 author_name / author_avatar_url，如果需要显示作者信息要前端自己处理。
+**用户分支**：
+- 对方发送消息 → onMessage 回调被触发，前端立即收到新消息（含作者信息）
+- 离开页面时 → **必须调用 unsubscribe()**，否则内存泄漏
 
 ---
 
@@ -535,7 +616,7 @@ return () => unsubscribe()
 
 **是什么**：编辑本人发送的消息内容。
 
-**流程**：更新 messages 记录的 content 字段，同时设置 `edited_at` 为当前时间。数据库 RLS 保证只能编辑自己的消息。
+**流程**：更新 messages 记录的 content 字段，同时设置 `edited_at` 为当前时间。RLS 保证只能编辑自己的消息。
 
 **注意**：只能改文字内容，不能改 identity_mode（发送时选的身份永久固定）。
 
@@ -553,8 +634,12 @@ return () => unsubscribe()
 
 用户在设置里可以选择三种位置共享模式：
 - `precise`：好友看到精确位置
-- `fuzzy`：好友看到模糊位置（精度约 500m，会对坐标取整）
-- `off`：不共享位置（从 user_locations 表删除自己的记录）
+- `fuzzy`：好友看到模糊位置（精度约 500m，会对坐标取整到最近的网格点）
+- `off`：不共享位置（从 user_locations 表删除自己的记录，好友地图上消失）
+
+### 关于每日重置时间
+
+所有"每天"的计时（发帖/评论/消息 XP 上限）以及"每周"的计时（排行榜、探索时长），都以**美西时间（Pacific Time）午夜**为基准重置。不是北京时间，也不是用户手机的本地时间。
 
 ---
 
@@ -565,12 +650,12 @@ return () => unsubscribe()
 **流程**：
 1. 查询当前用户的 location_sharing 设置
 2. **off 模式** → 从 user_locations 表删除自己的记录
-3. **fuzzy 模式** → 对坐标取整（精度约 500m）后 upsert 到 user_locations
+3. **fuzzy 模式** → 对坐标取整后 upsert 到 user_locations
 4. **precise 模式** → 直接 upsert 精确坐标到 user_locations
 
 **用户分支**：
-- 用户关闭位置共享 → 删除 user_locations 记录，好友地图上消失
-- 用户选择模糊位置 → 好友看到的是附近 ~500m 范围内的某个点
+- 用户关闭位置共享 → 删除记录，好友地图上消失
+- 用户选择模糊位置 → 好友看到的是附近约 500m 范围内的某个点（不精确）
 - 用户选择精确位置 → 好友看到真实位置
 
 ---
@@ -603,7 +688,7 @@ const unsubscribe = await subscribeToFriendLocations(friendIds, (location) => {
 return () => unsubscribe()
 ```
 
-**注意**：订阅创建时会预加载所有好友的 profile 到内存缓存。如果好友在订阅期间修改了 identity_mode，需要重新订阅才能生效。
+**注意**：订阅创建时会预加载所有好友的 profile 到内存缓存。如果好友在订阅期间修改了 identity_mode 或位置共享设置，需要**重新调用**此函数才能生效（重建订阅）。
 
 ---
 
@@ -613,21 +698,22 @@ return () => unsubscribe()
 
 **核心设计：网格缓存**
 
-坐标会先被"吸附"到最近的 0.005° 网格点（约 555m 一格），整个校园可以理解成被分成了很多个格子。同一个格子里的所有用户共享一次 Google API 查询结果，不会重复请求。随着越来越多用户探索不同格子，缓存覆盖范围逐步扩大。
+坐标会先被"吸附"到最近的 0.005° 网格点（约 555m 一格），整个校园被分成很多格子。同一个格子里的所有用户共享一次 Google API 查询结果，不会重复请求。随着越来越多用户探索不同格子，缓存覆盖范围逐步扩大。
 
 **流程**：
 1. 把当前坐标吸附到最近的网格点
-2. 查询 landmark_cache_zones 表，用网格坐标做精确匹配，看这个格子是否已缓存且未过期
-3. **已缓存** → 直接从 landmarks 表返回附近地标，不调用 Google API
-4. **未缓存** → 以网格点为中心调用 Google Places API（搜索半径500m），把结果存入 landmarks 表，同时在 landmark_cache_zones 表记录（如果该格子之前有过期记录则刷新过期时间）
+2. 查询 landmark_cache_zones 表，看这个格子是否已缓存且未过期
+3. **已缓存** → 直接从 landmarks 表返回附近地标
+4. **未缓存** → 以网格点为中心调用 Google Places API（搜索半径500m），把结果存入 landmarks 表，并记录本次缓存
 5. 返回 CachedLandmark 数组
 
 **地标类型映射**（Google Places → SUDO 内部类型）：
+
 | Google 类型 | SUDO 类型 | 打卡半径 |
 |------------|----------|---------|
 | library, university, gym, stadium | library / gym | 100m |
 | restaurant, cafeteria, food | dining | 30m |
-| cafe, bar | cafe | 15m |
+| cafe, bar, bakery | coffee_shop | 15m |
 | 其他 | other | 30m |
 
 ---
@@ -649,26 +735,31 @@ return () => unsubscribe()
 1. 调用 cacheNearbyPlaces() 获取附近地标
 2. 找到用户当前所在的地标（判断距离是否在 radius_meters 内）
 3. 查询 explorations 表，看这个用户+地标是否有记录
-4. 判断是否需要重置周数据（当前周开始时间 > 记录中的 week_start_date）
+4. 判断是否需要重置周数据
 
 **用户分支**：
+
 - **全新地标（第一次来）**：
   - 按地点类型给宠物加 XP（见下表）
   - 在 explorations 表创建新记录
+  - `is_first_visit = true`
 
 - **老地标，新的一周**：
-  - 重置周数据（weekly_time_spent 从 0 开始计算）
-  - 不再给 XP（探索奖励只有第一次才有）
-  - visit_count + 1（终身累计）
+  - 重置本周时长（从 0 开始计算）
+  - visit_count + 1（终身累计，不重置）
+  - 检查是否解锁称号
+  - **不再给 XP**（探索奖励只有第一次才有）
 
 - **老地标，同一周**：
   - visit_count + 1
-  - 检查是否解锁称号（visit_count 满 7 次 → 初级称号，满 30 次 → 高级称号）
-  - 不给 XP
+  - 更新 weekly_time_spent
+  - 检查是否解锁称号（7次初级，30次高级）
+  - **不给 XP**
 
 - **找不到地标** → 返回 null
+- **两个设备同时触发** → 乐观锁冲突，返回 null（前端重试即可）
 
-**XP 奖励表（仅首次探索，之后回访不再给 XP）**：
+**XP 奖励表（仅首次探索）**：
 
 | 地点 | 首次探索 XP |
 |------|-----------|
@@ -678,7 +769,7 @@ return () => unsubscribe()
 | dining（食堂/餐厅） | +10 |
 | other（其他） | +8 |
 
-**关于时间记录**：系统仍然记录每周在地标的累计时长（weekly_time_spent）和总时长（total_time_spent），这些数据用于**排行榜和称号解锁**，但不再影响 XP 奖励。
+**关于时间记录**：系统仍然记录每周在地标的累计时长（weekly_time_spent），这些数据用于**排行榜和称号解锁**，不影响 XP。
 
 **称号解锁表**：
 
@@ -687,27 +778,34 @@ return () => unsubscribe()
 | library | Bookworm | Library King |
 | dining | Big Eater | Dining Hall King |
 | gym | Gym Newbie | Gym Fanatic |
-| cafe | Coffee Lover | Coffee Addict |
+| coffee_shop | Coffee Lover | Coffee Addict |
 | other | Explorer | Master Explorer |
 
 **返回**：DiscoverResult 对象，包含 `{ xp_earned, is_first_visit, title_unlocked, visit_count, weekly_time_spent }`
 
 **反作弊机制**：
 - 单次调用最多记录 480 分钟（8小时上限）
-- 同一周内，系统会对比上次记录时间，按实际经过时间校验传入的 minutesSpent 是否合理
-- 使用乐观锁防止并发冲突（两个设备同时打开 App 时）
+- 同一周内，系统会对比上次记录时间，按实际经过时间校验传入的 minutesSpent 是否合理（防止刷时长）
+- 乐观锁防并发冲突
 
 ---
 
-### setActiveTitle(explorationId, title)
+### setActiveTitle(title)
 
 **是什么**：装备或卸下一个称号。
 
-**用法**：
-- `title` 传某个称号字符串 → 装备这个称号
-- `title` 传 `null` → 卸下当前称号
+**函数签名**：`setActiveTitle(title: string | null)` — **只有一个参数，不需要传 explorationId**
 
-**安全校验**：只能装备 titles_earned 数组中已解锁的称号，装备未解锁的称号会被静默忽略。
+**用法**：
+- `setActiveTitle('Bookworm')` → 装备这个称号
+- `setActiveTitle(null)` → 卸下当前称号
+
+**流程**：
+1. 先清除该用户所有 explorations 记录上的 active_title（确保同一时刻只有一个称号处于激活状态）
+2. 如果 title 是 null → 结束（纯卸下操作）
+3. 查找哪条 exploration 记录的 titles_earned 里包含这个 title
+4. 找到了 → 设置 active_title
+5. 找不到 → 静默忽略（安全校验：不能装备没解锁的称号）
 
 ---
 
@@ -725,7 +823,7 @@ return () => unsubscribe()
 
 **是什么**：获取当前用户所有探索过的路径，用于渲染地图雾效果（已探索区域清除雾）。
 
-**返回**：`{ lat, lng }[][]`（路径段数组，每个元素是一段路径的坐标数组）
+**返回**：`{ lat, lng }[][]`（每个元素是一段路径的坐标数组）
 
 ---
 
@@ -733,15 +831,17 @@ return () => unsubscribe()
 
 **是什么**：获取本周排行榜数据。
 
-**安全机制**：调用的是数据库 SECURITY DEFINER 函数 `get_weekly_rankings()`。只有 edu_verified = true 且 university 匹配的用户才能看到排行榜数据，其他人调用返回空对象。
+**安全机制**：调用的是数据库函数。只有 `edu_verified = true` 且 university 匹配的用户才能看到数据，其他人调用返回空对象。
 
-**返回**：按地点类型分组的排行榜，格式为：
-```
+**排行榜包含的地点类型**：library、coffee_shop、gym、dining（other 类型不参与排行）
+
+**返回**：按地点类型分组的本周前 3 名，格式为：
+```typescript
 {
-  library: [{ rank: 1, user_id, display_name, avatar_url, weekly_time_spent, active_title }, ...],
-  cafe: [...],
-  gym: [...],
-  dining: [...]
+  library:     [{ rank: 1, display_name, avatar_url, weekly_time_spent, active_title }, ...],
+  coffee_shop: [...],
+  gym:         [...],
+  dining:      [...]
 }
 ```
 
@@ -761,9 +861,9 @@ return () => unsubscribe()
 
 **是什么**：App 在前台运行时的时间奖励入口。
 
-**流程**：直接给当前用户的宠物加 5 XP（`FOREGROUND_XP_PER_HOUR`）。
+**流程**：直接给当前用户的宠物加 5 XP。
 
-**调用方式**：由 Ethan 前端每小时调用一次（只要 App 在前台）。后端不做频率校验，完全由前端控制。
+**调用方式**：由 Ethan 前端每小时调用一次（只要 App 在前台）。后端不做频率校验，**没有每日上限**——用户越喜欢开着 App，获得的 XP 越多，这是有意为之的设计。
 
 ---
 
@@ -786,7 +886,7 @@ return () => unsubscribe()
 **是什么**：向某人发送好友申请。
 
 **流程**：
-1. 检查双方是否有屏蔽关系（任意方向）
+1. 检查双方是否有屏蔽关系（任意方向，包括对方屏蔽你）
 2. 检查对方是否已经向你发过申请（提示去申请列表接受，而不是重复创建）
 3. 两项检查通过 → 在 `friendships` 表插入一条 pending 记录
 4. 返回 `{ error }`
@@ -802,7 +902,7 @@ return () => unsubscribe()
 
 **是什么**：接受别人发来的好友申请。
 
-**流程**：把 `friendships` 表里那条记录的 status 从 `pending` 改为 `accepted`。数据库 RLS 保证只有收到申请的人（addressee）才能执行这个操作。
+**流程**：把 `friendships` 表里那条记录的 status 从 `pending` 改为 `accepted`。RLS 保证只有收到申请的人才能执行这个操作。
 
 返回 `{ error }`。
 
@@ -847,15 +947,13 @@ return () => unsubscribe()
 2. 同时删除双方所有好友关系（无论是 pending 还是 accepted，无论谁是发起人）
 3. 返回 `{ error }`
 
-**注意**：屏蔽后，被屏蔽的人可以知道自己被屏蔽了（调用 `getFriendshipStatus` 时会返回相应状态）。但屏蔽不会发通知，只有对方主动查才会知道。
-
 ---
 
 ### unblockUser(userId)
 
 **是什么**：解除屏蔽。
 
-**流程**：从 `blocked_users` 表删除对应记录。解除屏蔽后双方不会自动恢复好友关系，需要重新发申请。
+**流程**：从 `blocked_users` 表删除对应记录。解除屏蔽后双方**不会**自动恢复好友关系，需要重新发申请。
 
 返回 `{ error }`。
 

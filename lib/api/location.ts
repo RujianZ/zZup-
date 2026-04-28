@@ -1,5 +1,6 @@
 import { supabase } from '../supabase'
-import { addXP, EXPLORATION_XP, FOREGROUND_XP_PER_HOUR } from './_xp'
+import { addXP, FOREGROUND_XP_PER_HOUR } from './_xp'
+import { getProfile } from './auth'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -14,6 +15,7 @@ export interface FriendLocation {
   user_id: string
   latitude: number
   longitude: number
+  mode: 'precise' | 'fuzzy'  // From user_locations.mode (added in migration 40)
   updated_at: string
   display_name: string
   avatar_url: string | null
@@ -32,41 +34,9 @@ function applyFuzzyOffset(coord: Coordinate): Coordinate {
   }
 }
 
-// Returns the most recent Monday at 00:00:00 PT, as a UTC midnight Date
-function getWeekStart(): Date {
-  const now = new Date()
-  const ptNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }))
-  const day = ptNow.getDay() // 0=Sun, 1=Mon, ..., 6=Sat
-  const daysToMonday = day === 0 ? 6 : day - 1
-  ptNow.setDate(ptNow.getDate() - daysToMonday)
-  ptNow.setHours(0, 0, 0, 0)
-  const y = ptNow.getFullYear()
-  const m = String(ptNow.getMonth() + 1).padStart(2, '0')
-  const d = String(ptNow.getDate()).padStart(2, '0')
-  return new Date(`${y}-${m}-${d}T00:00:00.000Z`)
-}
-
-// ─── Anti-cheat: clampMinutesSpent ───────────────────────────────────────────
-
-const MAX_MINUTES_PER_CALL = 480  // hard cap: 8 hours per single call
-const TIMESTAMP_TOLERANCE = 10    // minutes of grace for network / processing delay
-
-function clampMinutesSpent(
-  claimed: number,
-  prevWeeklyTime: number,
-  lastVisitedAt: string | null,
-  isNewWeek: boolean
-): number {
-  // First visit or new week: no prior timestamp to compare, apply hard cap only
-  if (!lastVisitedAt || isNewWeek) {
-    return Math.min(Math.max(0, claimed), MAX_MINUTES_PER_CALL)
-  }
-  // Same week: cap by both hard limit and elapsed real-world time
-  const delta = Math.max(0, claimed - prevWeeklyTime)
-  const elapsedMinutes = (Date.now() - new Date(lastVisitedAt).getTime()) / 60000
-  const safeDelta = Math.min(delta, MAX_MINUTES_PER_CALL, elapsedMinutes + TIMESTAMP_TOLERANCE)
-  return prevWeeklyTime + safeDelta
-}
+// Note: anti-cheat logic (clampMinutesSpent, getWeekStart) and TITLES table
+// have been moved into the discover_landmark SECURITY DEFINER RPC (migration 42).
+// The corresponding JS helpers were removed since they're no longer called.
 
 // ─── Task 47: cacheNearbyPlaces ──────────────────────────────────────────────
 
@@ -163,6 +133,9 @@ export async function cacheNearbyPlaces(coord: Coordinate): Promise<CachedLandma
 }
 
 // ─── Task 46: getFriendLocations ─────────────────────────────────────────────
+// Reads mode directly from user_locations (migration 40).
+// Row existence in user_locations <=> user is currently sharing —
+// off-mode users have no row, so RLS naturally excludes them.
 
 export async function getFriendLocations(): Promise<FriendLocation[]> {
   const {
@@ -188,39 +161,45 @@ export async function getFriendLocations(): Promise<FriendLocation[]> {
       user_id,
       latitude,
       longitude,
+      mode,
       updated_at,
       profiles!inner (
         real_name,
         pet_name,
         avatar_url,
         pet_avatar_url,
-        identity_mode,
-        location_sharing
+        identity_mode
       )
     `)
     .in('user_id', friendIds)
 
   if (!locations) return []
 
-  return locations
-    .filter((loc: any) => loc.profiles.location_sharing !== 'off')
-    .map((loc: any) => ({
-      user_id: loc.user_id,
-      latitude: loc.latitude,
-      longitude: loc.longitude,
-      updated_at: loc.updated_at,
-      display_name: loc.profiles.identity_mode === 'pet'
-        ? (loc.profiles.pet_name ?? loc.profiles.real_name)
-        : (loc.profiles.real_name ?? loc.profiles.pet_name),
-      avatar_url: loc.profiles.avatar_url,
-      pet_avatar_url: loc.profiles.pet_avatar_url,
-      identity_mode: loc.profiles.identity_mode ?? 'real',
-    }))
+  return locations.map((loc: any) => ({
+    user_id: loc.user_id,
+    latitude: loc.latitude,
+    longitude: loc.longitude,
+    mode: loc.mode,
+    updated_at: loc.updated_at,
+    display_name: loc.profiles.identity_mode === 'pet'
+      ? (loc.profiles.pet_name ?? loc.profiles.real_name)
+      : (loc.profiles.real_name ?? loc.profiles.pet_name),
+    avatar_url: loc.profiles.avatar_url,
+    pet_avatar_url: loc.profiles.pet_avatar_url,
+    identity_mode: loc.profiles.identity_mode ?? 'real',
+  }))
 }
 
 // ─── Task 45: updateMyLocation ───────────────────────────────────────────────
-// Only updates friend-visible location. Discovery path recording is handled
-// separately by saveExploredPath(), called by Ethan's frontend.
+// Reads own location_sharing via getProfile() (which uses get_my_profile RPC)
+// because direct SELECT on profiles.location_sharing is REVOKE'd from
+// authenticated (migration 25 — kept private from strangers).
+//
+// Writes the resolved mode into user_locations.mode so friends can render
+// the correct UI (precise = small dot, fuzzy = big circle) without needing
+// access to profiles.location_sharing.
+//
+// off mode = delete the row entirely (no presence on map).
 
 export async function updateMyLocation(coord: Coordinate): Promise<void> {
   const {
@@ -228,25 +207,22 @@ export async function updateMyLocation(coord: Coordinate): Promise<void> {
   } = await supabase.auth.getUser()
   if (!user) return
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('location_sharing')
-    .eq('id', user.id)
-    .single()
-
+  const profile = await getProfile()
   const mode: LocationSharingMode = profile?.location_sharing ?? 'fuzzy'
 
   if (mode === 'off') {
     await supabase.from('user_locations').delete().eq('user_id', user.id)
-  } else {
-    const storedCoord = mode === 'fuzzy' ? applyFuzzyOffset(coord) : coord
-    await supabase.from('user_locations').upsert({
-      user_id: user.id,
-      latitude: storedCoord.latitude,
-      longitude: storedCoord.longitude,
-      updated_at: new Date().toISOString(),
-    })
+    return
   }
+
+  const storedCoord = mode === 'fuzzy' ? applyFuzzyOffset(coord) : coord
+  await supabase.from('user_locations').upsert({
+    user_id: user.id,
+    latitude: storedCoord.latitude,
+    longitude: storedCoord.longitude,
+    mode,
+    updated_at: new Date().toISOString(),
+  })
 }
 
 // ─── Task 44 (new): saveExploredPath ─────────────────────────────────────────
@@ -270,15 +246,11 @@ export async function saveExploredPath(
 // ─── Task 48: discoverLandmark ────────────────────────────────────────────────
 // minutesSpent = cumulative weekly total at this landmark (maintained by frontend)
 // Called at: 2 min (first arrival), 30 min cumulative, 60 min cumulative
-
-const TITLES: Record<string, { junior: string; senior: string }> = {
-  library: { junior: 'Bookworm',      senior: 'Library King'    },
-  dining:  { junior: 'Big Eater',     senior: 'Dining Hall King'},
-  gym:     { junior: 'Gym Newbie',    senior: 'Gym Fanatic'     },
-  coffee_shop: { junior: 'Coffee Lover',  senior: 'Coffee Addict'   },
-  other:   { junior: 'Explorer',      senior: 'Master Explorer' },
-}
-
+//
+// Server-side anti-cheat (clampMinutesSpent, optimistic lock, radius check),
+// XP awarding, and title unlocking all happen inside the discover_landmark RPC
+// (migration 42). JS just needs to identify which landmark the user is at and
+// pass the current coordinate + minutes_spent.
 
 export interface DiscoverResult {
   xp_earned: number
@@ -289,19 +261,15 @@ export interface DiscoverResult {
   weekly_time_spent: number
 }
 
-
 export async function discoverLandmark(
   coord: Coordinate,
   minutesSpent: number
 ): Promise<DiscoverResult | null> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return null
-
   const landmarks = await cacheNearbyPlaces(coord)
   if (!landmarks.length) return null
 
+  // Find which landmark user is currently within radius of.
+  // The RPC re-verifies this server-side; this is just to pick the landmark_id.
   const landmark = landmarks.find((lm) => {
     const dist = Math.sqrt(
       Math.pow((coord.latitude - lm.latitude) * 111000, 2) +
@@ -317,91 +285,22 @@ export async function discoverLandmark(
 
   if (!landmark) return null
 
-  const placeType = landmark.place_type ?? 'other'
-  const titles = TITLES[placeType] ?? TITLES.other
+  const { data, error } = await supabase.rpc('discover_landmark', {
+    p_landmark_id: landmark.id,
+    p_lat: coord.latitude,
+    p_lng: coord.longitude,
+    p_minutes_spent: minutesSpent,
+  })
 
-  const { data: existing } = await supabase
-    .from('explorations')
-    .select('*')
-    .eq('user_id', user.id)
-    .eq('landmark_id', landmark.id)
-    .maybeSingle()
+  if (error || !data) return null
 
-  let xpEarned = 0
-  let isFirstVisit = false
-  let titleUnlocked: string | null = null
-  let safeMinutes = minutesSpent
-  const now = new Date()
-  const weekStart = getWeekStart()
-  const needsReset = !existing || new Date(existing.week_start_date) < weekStart
-
-  if (!existing) {
-    // First visit ever
-    safeMinutes = clampMinutesSpent(minutesSpent, 0, null, false)
-    isFirstVisit = true
-    xpEarned = EXPLORATION_XP[placeType] ?? EXPLORATION_XP.other
-    await supabase.from('explorations').insert({
-      user_id: user.id,
-      landmark_id: landmark.id,
-      visit_count: 1,
-      total_time_spent: safeMinutes,
-      weekly_time_spent: safeMinutes,
-      week_start_date: weekStart.toISOString().split('T')[0],
-      titles_earned: [],
-      first_visited_at: now.toISOString(),
-      last_visited_at: now.toISOString(),
-    })
-  } else {
-    // Return visit — minutesSpent is the cumulative weekly total passed by frontend
-    const prevWeeklyTime = needsReset ? 0 : existing.weekly_time_spent
-    safeMinutes = clampMinutesSpent(minutesSpent, prevWeeklyTime, existing.last_visited_at, needsReset)
-    const newWeeklyTime = safeMinutes
-    const newMinutesAdded = Math.max(0, newWeeklyTime - prevWeeklyTime)
-    const newTotalTime = existing.total_time_spent + newMinutesAdded
-    const newVisitCount = existing.visit_count + 1
-
-    // Title unlock
-    const earnedTitles: string[] = [...(existing.titles_earned ?? [])]
-    if (newVisitCount >= 7 && !earnedTitles.includes(titles.junior)) {
-      earnedTitles.push(titles.junior)
-      titleUnlocked = titles.junior
-    }
-    if (newVisitCount >= 30 && !earnedTitles.includes(titles.senior)) {
-      earnedTitles.push(titles.senior)
-      titleUnlocked = titles.senior
-    }
-
-    const { data: updated } = await supabase
-      .from('explorations')
-      .update({
-        visit_count: newVisitCount,
-        total_time_spent: newTotalTime,
-        weekly_time_spent: newWeeklyTime,
-        week_start_date: weekStart.toISOString().split('T')[0],
-        titles_earned: earnedTitles,
-        last_visited_at: now.toISOString(),
-      })
-      .eq('id', existing.id)
-      .eq('last_visited_at', existing.last_visited_at)
-      .select('id')
-
-    // Concurrent update detected — another request already modified this record
-    if (!updated || updated.length === 0) return null
-  }
-
-  if (xpEarned > 0) await addXP(user.id, xpEarned)
-
-  return {
-    xp_earned: xpEarned,
-    is_first_visit: isFirstVisit,
-    title_unlocked: titleUnlocked,
-    last_visited_at: existing?.last_visited_at ?? null,
-    visit_count: existing ? existing.visit_count + 1 : 1,
-    weekly_time_spent: safeMinutes,
-  }
+  return data as DiscoverResult
 }
 
 // ─── Task 49: subscribeToFriendLocations ─────────────────────────────────────
+// Doesn't query profiles.location_sharing anymore (REVOKE'd in migration 25).
+// Mode is read from the realtime payload's user_locations.mode column.
+// Off-mode users have no row → no realtime event for them.
 
 export async function subscribeToFriendLocations(
   friendIds: string[],
@@ -411,7 +310,7 @@ export async function subscribeToFriendLocations(
 
   const { data: profilesData } = await supabase
     .from('profiles')
-    .select('id, real_name, pet_name, avatar_url, pet_avatar_url, identity_mode, location_sharing')
+    .select('id, real_name, pet_name, avatar_url, pet_avatar_url, identity_mode')
     .in('id', friendIds)
 
   const profileCache = new Map<string, any>()
@@ -432,12 +331,13 @@ export async function subscribeToFriendLocations(
         if (!loc?.user_id) return
 
         const profile = profileCache.get(loc.user_id)
-        if (!profile || profile.location_sharing === 'off') return
+        if (!profile) return
 
         onUpdate({
           user_id: loc.user_id,
           latitude: loc.latitude,
           longitude: loc.longitude,
+          mode: loc.mode,
           updated_at: loc.updated_at,
           display_name: profile.identity_mode === 'pet'
             ? (profile.pet_name ?? profile.real_name)
@@ -455,40 +355,12 @@ export async function subscribeToFriendLocations(
 
 // ─── Task 48b: setActiveTitle ─────────────────────────────────────────────────
 // title = null means unequip.
-// Clears active_title on ALL explorations first so only one can ever be active.
+// Server-side validation (title must be in titles_earned) happens inside
+// the set_active_title RPC (migration 42). Direct UPDATE on explorations is
+// REVOKE'd, so going through this RPC is the only way.
 
 export async function setActiveTitle(title: string | null): Promise<void> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return
-
-  // Always clear all active titles first (ensures only one is ever active)
-  await supabase
-    .from('explorations')
-    .update({ active_title: null })
-    .eq('user_id', user.id)
-
-  if (title === null) return // unequip — done
-
-  // Find which exploration has this title earned
-  const { data: explorations } = await supabase
-    .from('explorations')
-    .select('id, titles_earned')
-    .eq('user_id', user.id)
-
-  const exploration = (explorations ?? []).find((e: any) =>
-    (e.titles_earned as string[]).includes(title)
-  )
-
-  // Silently reject if the user hasn't earned this title
-  if (!exploration) return
-
-  await supabase
-    .from('explorations')
-    .update({ active_title: title })
-    .eq('id', exploration.id)
-    .eq('user_id', user.id)
+  await supabase.rpc('set_active_title', { p_title: title })
 }
 
 // ─── Task 50: getExploredPaths ────────────────────────────────────────────────
@@ -514,7 +386,6 @@ export interface RankingEntry {
   user_id: string
   display_name: string
   avatar_url: string | null
-  pet_avatar_url: string | null
   identity_mode: 'real' | 'pet'
   weekly_time_spent: number
   active_title: string | null
@@ -541,7 +412,6 @@ export async function getWeeklyRankings(university: string): Promise<WeeklyRanki
       user_id: row.user_id,
       display_name: row.display_name,
       avatar_url: row.avatar_url,
-      pet_avatar_url: row.pet_avatar_url,
       identity_mode: row.identity_mode,
       weekly_time_spent: Number(row.weekly_time_spent),
       active_title: row.active_title,

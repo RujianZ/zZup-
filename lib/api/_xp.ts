@@ -10,6 +10,10 @@ export const MESSAGE_THRESHOLD = 20      // messages per day needed to earn XP
 export const MESSAGE_XP = 10            // XP for hitting the daily message threshold
 export const FOREGROUND_XP_PER_HOUR = 5 // XP per hour of foreground app usage
 
+// EXPLORATION_XP — reference values, NOT imported anywhere in JS.
+// The actual XP grant happens inside the discover_landmark RPC (migration 42),
+// which hardcodes these same numbers. If you change rewards here, also update
+// the case statement in 42_explorations.sql.
 export const EXPLORATION_XP: Record<string, number> = {
   library:     15,
   gym:         15,

@@ -35,12 +35,23 @@ export interface Profile {
   active_title: string | null
 }
 
+// Fields the user is allowed to update on themselves.
+// Protected fields (edu_verified, pet_xp, pet_level, sudo_id,
+// personal_email_verified, id, created_at) are intentionally omitted —
+// those are written by Edge Functions or the add_xp() RPC only.
+// Enforced at the database level by migration 55_protect_profile_columns.sql.
+//
+// NOTE: `university` IS editable by the user — they pick it from a list during
+// onboarding / before email verification. Setting this column DOES NOT grant
+// edu_verified; verification still requires offer screenshot AI match or .edu
+// email domain verification (both server-side).
 export type ProfileUpdate = Partial<
   Pick<
     Profile,
     | 'real_name'
     | 'bio'
     | 'avatar_url'
+    | 'qr_code_url'
     | 'date_of_birth'
     | 'nationality'
     | 'region'
@@ -97,8 +108,12 @@ export async function signOut(): Promise<{ error: string | null }> {
 }
 
 // ─── Task 54: getProfile ──────────────────────────────────────────────────────
-// 不传 userId → 读自己（完整数据）
-// 传 userId   → 读别人（按对方的隐私设置过滤）
+// 不传 userId → 读自己（完整数据，走 get_my_profile RPC）
+// 传 userId   → 读别人（按对方隐私设置过滤，走 get_other_profile RPC）
+//
+// 隐私过滤逻辑全部搬到 DB 层的 SECURITY DEFINER 函数，避免被绕过。
+// 受保护列（personal_email 等）在 profiles 表上已 REVOKE SELECT，直接查表会报错，
+// 只能走这两个 RPC —— 见 migration 25 column-level privileges 节。
 
 export async function getProfile(userId?: string): Promise<Profile | null> {
   const {
@@ -106,37 +121,23 @@ export async function getProfile(userId?: string): Promise<Profile | null> {
   } = await supabase.auth.getUser()
   if (!user) return null
 
-  const targetId = userId ?? user.id
-  const isSelf = targetId === user.id
+  const isSelf = !userId || userId === user.id
 
-  const { data } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', targetId)
-    .single()
+  if (isSelf) {
+    // Own profile — RPC returns full data (all fields)
+    const { data, error } = await supabase.rpc('get_my_profile')
+    if (error || !data) return null
+    return data as Profile
+  }
 
-  if (!data) return null
+  // Other user — RPC applies privacy filter server-side
+  const { data, error } = await supabase.rpc('get_other_profile', { target_id: userId })
+  if (error || !data) return null
 
-  // 查当前装备称号（explorations 表，取唯一的非 null active_title）
-  const { data: titleData } = await supabase
-    .from('explorations')
-    .select('active_title')
-    .eq('user_id', targetId)
-    .not('active_title', 'is', null)
-    .limit(1)
-    .maybeSingle()
-  const activeTitle = titleData?.active_title ?? null
-
-  // 自己：返回完整数据
-  if (isSelf) return { ...data, active_title: activeTitle } as Profile
-
-  // 别人：按隐私设置过滤
-  const p = data as Profile
-
-  const result: Profile = {
-    ...p,
-    active_title: activeTitle,
-    // 永远隐藏的私密字段
+  // get_other_profile omits fields that are never visible to others.
+  // Fill with null / false so the shape matches the Profile interface.
+  return {
+    ...(data as object),
     personal_email: null,
     personal_email_verified: null,
     edu_email: null,
@@ -144,41 +145,10 @@ export async function getProfile(userId?: string): Promise<Profile | null> {
     location_sharing: null,
     ranking_opt_in: null,
     ranking_identity_mode: null,
-    // 用户自选是否公开的字段
-    date_of_birth: p.show_date_of_birth ? p.date_of_birth : null,
-    nationality: p.show_nationality ? p.nationality : null,
-    qr_code_url: p.show_qr_code ? p.qr_code_url : null,
-  }
-
-  // 按 profile_visibility 决定显示哪个身份
-  switch (p.profile_visibility) {
-    case 'real_only':
-      result.pet_name = null
-      result.pet_avatar_url = null
-      result.pet_bio = null
-      result.pet_level = null
-      result.pet_xp = null
-      break
-    case 'pet_only':
-      result.real_name = null
-      result.avatar_url = null
-      result.bio = null
-      result.university = null
-      // TD-4: 生日/国籍/二维码属于真人身份，pet_only 时一并隐藏
-      result.date_of_birth = null
-      result.nationality = null
-      result.qr_code_url = null
-      break
-    case 'real_with_pet':
-      break
-  }
-
-  // TD-5: 隐私设置本身不对外暴露，对方只看到过滤后的结果
-  result.show_date_of_birth = false
-  result.show_nationality = false
-  result.show_qr_code = false
-
-  return result
+    show_date_of_birth: false,
+    show_nationality: false,
+    show_qr_code: false,
+  } as Profile
 }
 
 // ─── Task 70: getMyTitles ─────────────────────────────────────────────────────

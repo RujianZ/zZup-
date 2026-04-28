@@ -43,3 +43,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# UI mockup prototype (separate Vite+React project, not part of main app)
+mockup/

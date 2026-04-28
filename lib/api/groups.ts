@@ -98,45 +98,29 @@ export async function joinGroup(groupId: string): Promise<{ error: string | null
 }
 
 // ─── Task 74: leaveGroup ──────────────────────────────────────────────────────
+// Atomic via DB RPC: deletes group_members row + auto-transfers ownership
+// to oldest remaining member if leaver was the creator.
+// Replaces previous JS implementation which silently failed on the
+// ownership-transfer UPDATE due to RLS WITH CHECK.
 
 export async function leaveGroup(groupId: string): Promise<{ error: string | null }> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: 'Not authenticated' }
+  const { error } = await supabase.rpc('leave_group', { p_group_id: groupId })
+  return { error: error?.message ?? null }
+}
 
-  const { data: group } = await supabase
-    .from('groups')
-    .select('created_by')
-    .eq('id', groupId)
-    .single()
+// ─── transferGroupOwnership ───────────────────────────────────────────────────
+// Explicit ownership transfer by current creator to another member.
+// New owner must already be a member of the group.
 
-  const { error } = await supabase
-    .from('group_members')
-    .delete()
-    .eq('group_id', groupId)
-    .eq('user_id', user.id)
-
-  if (error) return { error: error.message }
-
-  // If the creator is leaving, transfer ownership to the longest-standing remaining member
-  if (group?.created_by === user.id) {
-    const { data: nextMember } = await supabase
-      .from('group_members')
-      .select('user_id')
-      .eq('group_id', groupId)
-      .order('joined_at', { ascending: true })
-      .limit(1)
-      .maybeSingle()
-
-    await supabase
-      .from('groups')
-      .update({ created_by: nextMember?.user_id ?? null })
-      .eq('id', groupId)
-  }
-
-  // members_count 由 DB trigger on_group_member_delete 自动维护
-  return { error: null }
+export async function transferGroupOwnership(
+  groupId: string,
+  newOwnerId: string
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('transfer_group_ownership', {
+    p_group_id: groupId,
+    p_new_owner_id: newOwnerId,
+  })
+  return { error: error?.message ?? null }
 }
 
 // ─── Task 75: searchGroups ────────────────────────────────────────────────────

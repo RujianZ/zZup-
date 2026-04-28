@@ -130,6 +130,71 @@ export async function getFeed(options?: {
   return { data, error: null }
 }
 
+// ─── TD-11: getPost ───────────────────────────────────────────────────────────
+// 按 postId 查单条帖子。可见性由 RLS 自动过滤：无权限时返回 null。
+// 作者被双向拉黑时同样返回 null，保持与 getFeed / getUserPosts 一致。
+
+export async function getPost(
+  postId: string
+): Promise<{ data: Post | null; error: string | null }> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { data: null, error: 'Not authenticated' }
+
+  const { data: post, error } = await supabase
+    .from('posts')
+    .select(
+      `id, user_id, identity_mode, content, image_url, visibility,
+       likes_count, comments_count, created_at, edited_at,
+       profiles!posts_user_id_fkey (
+         real_name, pet_name, avatar_url, pet_avatar_url
+       )`
+    )
+    .eq('id', postId)
+    .maybeSingle()
+
+  if (error) return { data: null, error: error.message }
+  if (!post) return { data: null, error: null }
+
+  // TD-3: 作者被双向拉黑 → 视作不可见
+  const blockedIds = await getBlockedIds(user.id)
+  if (post.user_id && blockedIds.has(post.user_id)) {
+    return { data: null, error: null }
+  }
+
+  const { data: myLike } = await supabase
+    .from('likes')
+    .select('id')
+    .eq('post_id', postId)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  const profile = (post as any).profiles
+  const isReal = post.identity_mode === 'real'
+  const data: Post = {
+    id: post.id,
+    user_id: post.user_id,
+    identity_mode: post.identity_mode,
+    content: post.content,
+    image_url: post.image_url,
+    visibility: post.visibility,
+    likes_count: post.likes_count,
+    comments_count: post.comments_count,
+    created_at: post.created_at,
+    edited_at: post.edited_at,
+    author_name: profile ? (isReal ? profile.real_name : profile.pet_name) : null,
+    author_avatar_url: profile
+      ? isReal
+        ? profile.avatar_url
+        : profile.pet_avatar_url
+      : null,
+    liked_by_me: !!myLike,
+  }
+
+  return { data, error: null }
+}
+
 // ─── Task 87: createPost ──────────────────────────────────────────────────────
 // 发帖，imageUrl 由调用方上传到 post-images bucket 后传入
 
