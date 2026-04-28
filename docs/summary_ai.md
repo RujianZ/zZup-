@@ -1,6 +1,12 @@
 # SUDO App — AI Technical Reference
-> For AI assistants working on this codebase | Updated April 2026
+> For AI assistants working on this codebase | Updated April 2026 (v9)
 > Base path: `D:\sudo-app\`
+
+> **v9 (2026-04-17) major refactor**: 14 migrations rewritten with column-level
+> security hardening, 15 SECURITY DEFINER RPCs introduced to centralize
+> sensitive writes, and 4 latent BUGs fixed. See [TECH_DEBT.md](TECH_DEBT.md)
+> for current TD list and [修复清单_2026-04-17.md](修复清单_2026-04-17.md) for
+> per-issue change log.
 
 ---
 
@@ -13,33 +19,38 @@ D:\sudo-app\
 │   └── api/
 │       ├── _xp.ts           # XP constants + addXP helper (shared across API files)
 │       ├── auth.ts          # Auth + profile functions (6 functions)
-│       ├── posts.ts         # Posts, likes, comments (12 functions)
-│       ├── groups.ts        # Groups + DMs (7 functions)
+│       ├── posts.ts         # Posts, likes, comments (13 functions)
+│       ├── groups.ts        # Groups + DMs (8 functions, +transferGroupOwnership in v9)
 │       ├── messages.ts      # Messaging (4 functions)
 │       ├── location.ts      # Location, landmarks, exploration (11 functions)
 │       └── friends.ts       # Friends, blocks, search (13 functions)
-├── supabase/migrations/     # 15 SQL migration files (all executed in Supabase)
-│   ├── 25_user_profile_table.sql
-│   ├── 26_friendships_table.sql
-│   ├── 27_groups_table.sql
-│   ├── 28_posts_table.sql
-│   ├── 29_offer_verifications.sql
+├── supabase/migrations/     # 14 SQL migration files (all executed in Supabase)
+│   ├── 25_user_profile_table.sql   # v9: profiles + 9 RPCs (merged 54, 55)
+│   ├── 26_friendships_table.sql    # v9: column-level UPDATE on status only
+│   ├── 27_groups_table.sql         # v9: leave_group / transfer_group_ownership RPCs
+│   ├── 28_posts_table.sql          # v9: is_post_viewer RPC, block filter in RLS
+│   ├── 29_offer_verifications.sql  # v9: column-level INSERT
 │   ├── 30_realtime_config.sql
 │   ├── 35_storage_policies.sql
-│   ├── 40_user_locations.sql
-│   ├── 41_landmarks.sql
-│   ├── 42_explorations.sql
-│   ├── 44_explored_paths.sql
-│   ├── 45_weekly_rankings.sql
+│   ├── 40_user_locations.sql       # v9: added 'mode' column
+│   ├── 41_landmarks.sql            # v9: added (lat, lng) index
+│   ├── 42_explorations.sql         # v9: discover_landmark / set_active_title RPCs (writes locked)
+│   ├── 44_explored_paths.sql       # v9: bbox columns + auto-compute trigger
+│   ├── 45_weekly_rankings.sql      # v9: removed pet_avatar_url leak
 │   ├── 46_landmark_cache_zones.sql
-│   ├── 53_handle_new_user.sql
-│   └── 54_profile_visibility.sql
+│   └── 53_handle_new_user.sql
 ├── docs/
-│   ├── summary_human.md     # Plain-language doc for Ethan
-│   └── summary_ai.md        # This file
+│   ├── TECH_DEBT.md          # Authoritative TD list (single source of truth)
+│   ├── 修复清单_2026-04-17.md # Per-issue log of v9 refactor
+│   ├── summary_human.md      # Plain-language doc for Ethan
+│   └── summary_ai.md         # This file
 ├── App.tsx
 └── app.json
 ```
+
+**Removed in v9:**
+- `54_profile_visibility.sql` — merged into 25
+- `55_protect_profile_columns.sql` — merged into 25 (was a v9-stage patch)
 
 **Missing files (planned, not yet created):**
 - `lib/api/verification.ts` — Offer verification API (Module 7)
@@ -95,15 +106,45 @@ UNIQUE(latitude, longitude)
 
 ### Database Functions & Triggers (PostgreSQL)
 
-| Function | Security | Trigger / Call | Purpose |
-|----------|----------|----------------|---------|
-| `handle_new_user()` | DEFINER | AFTER INSERT ON auth.users | Auto-create profile row on registration |
-| `reassign_group_owner()` | DEFINER | BEFORE DELETE ON profiles | Transfer group ownership when user deletes account |
-| `add_xp(p_user_id, p_xp)` | DEFINER | RPC via supabase.rpc() | Atomic XP increment + level recalculation. No race condition. Formula: `pet_xp = pet_xp + p_xp, pet_level = floor((pet_xp + p_xp) / 100) + 1` |
-| `get_weekly_rankings(p_university)` | DEFINER | RPC via supabase.rpc() | Aggregate weekly rankings, validates caller is edu_verified + same university |
-| `update_likes_count()` | — | AFTER INSERT OR DELETE ON likes | Auto-update `posts.likes_count` |
-| `update_comments_count()` | — | AFTER INSERT OR DELETE ON comments | Auto-update `posts.comments_count` |
-| `update_members_count()` | DEFINER | AFTER INSERT ON group_members (on_group_member_insert) + AFTER DELETE ON group_members (on_group_member_delete) | Auto-update `groups.members_count` (+1 on INSERT, `greatest(0, count-1)` on DELETE) |
+**v9 design principle**: anything that touches a column the user is forbidden
+from writing directly (e.g. `edu_verified`, `pet_xp`, `titles_earned`,
+`weekly_time_spent`) goes through a SECURITY DEFINER RPC. Direct table writes
+from authenticated clients are tightly scoped via column-level GRANT/REVOKE.
+
+#### Privacy / Profile RPCs (v9)
+
+| Function | Security | Purpose |
+|----------|----------|---------|
+| `get_my_profile()` | DEFINER | Returns full profile JSON for `auth.uid()` (all 28 fields including private ones). Replaces direct `select * from profiles` which would now fail due to revoked column-level SELECT. Used by `auth.ts getProfile(undefined)` and `location.ts updateMyLocation`. |
+| `get_other_profile(target_id uuid)` | DEFINER | Returns target's profile JSON with privacy filter applied server-side: hides email/region/preferences entirely; respects target's `profile_visibility` (real_only/pet_only/real_with_pet) and `show_*` toggles for date_of_birth/nationality/qr_code. Used by `auth.ts getProfile(otherUserId)`. |
+| `is_post_viewer(p_post_id uuid)` | DEFINER | Returns boolean. Bypasses `post_viewers` RLS for the `specific_friends` visibility check inside posts SELECT policy (without it, invitees could not view posts due to RLS recursion). |
+
+#### Group ownership RPCs (v9)
+
+| Function | Security | Purpose |
+|----------|----------|---------|
+| `leave_group(p_group_id uuid)` | DEFINER | Atomic: deletes caller's `group_members` row + auto-transfers `groups.created_by` to oldest remaining member if leaver was creator. Replaces JS `leaveGroup` which silently failed on the transfer UPDATE due to RLS WITH CHECK. |
+| `transfer_group_ownership(p_group_id, p_new_owner_id uuid)` | DEFINER | Explicit transfer by current creator. Validates: caller is current creator, new owner is a member, not transferring to self. |
+
+#### Exploration / XP RPCs (v9)
+
+| Function | Security | Purpose |
+|----------|----------|---------|
+| `set_active_title(p_title text)` | DEFINER | Equip/unequip title with server-side validation that it's in `titles_earned`. Maintains "one active_title per user" invariant. Direct UPDATE on explorations is REVOKE'd, so this RPC is the only path. |
+| `discover_landmark(p_landmark_id, p_lat, p_lng, p_minutes_spent)` | DEFINER | Atomic visit recording with anti-cheat: validates coord is within `landmark.radius_meters`, applies `clampMinutesSpent` (8h hard cap + elapsed-time check), optimistic lock, awards XP on first visit, unlocks junior (7 visits) / senior (30 visits) titles. Returns DiscoverResult JSON. |
+| `add_xp(p_user_id uuid, p_xp integer)` | DEFINER | Atomic XP increment + level recalculation. Formula: `pet_xp = pet_xp + p_xp, pet_level = floor((pet_xp + p_xp) / 100) + 1` |
+| `get_weekly_rankings(p_university text)` | DEFINER | Aggregate weekly rankings per place_type. Validates caller is edu_verified + same university. v9: removed `pet_avatar_url` from return (was leaking pet identity even when ranking_identity_mode='real'). |
+
+#### Trigger functions (v9 unchanged from v7 except for being re-installed)
+
+| Function | Trigger | Purpose |
+|----------|---------|---------|
+| `handle_new_user()` | AFTER INSERT ON auth.users | Auto-create profile row on registration |
+| `reassign_group_owner()` | BEFORE DELETE ON profiles | Transfer group ownership when user is hard-deleted |
+| `update_likes_count()` | AFTER INSERT OR DELETE ON likes | Maintain `posts.likes_count` |
+| `update_comments_count()` | AFTER INSERT OR DELETE ON comments | Maintain `posts.comments_count` |
+| `update_members_count()` | AFTER INSERT/DELETE ON group_members | Maintain `groups.members_count` |
+| `compute_explored_path_bbox()` | BEFORE INSERT ON explored_paths | Auto-compute (min/max)\_(lat/lng) from `coordinates` JSONB array |
 
 ### Realtime Tables
 `messages`, `posts`, `likes`, `comments`, `user_locations`
@@ -112,17 +153,20 @@ UNIQUE(latitude, longitude)
 
 ## lib/api/_xp.ts
 
-Centralizes all XP constants and the shared `addXP` helper. Imported by `posts.ts`, `messages.ts`, and `location.ts`.
+Centralizes XP constants and the shared `addXP` helper. Imported by `posts.ts`, `messages.ts`, and `location.ts`.
 
 ### Constants
 ```typescript
-POST_XP = 5                    // XP awarded per post created
-COMMENT_XP = 3                 // XP awarded per comment created
+POST_XP = 5                    // XP per post created (subject to daily cap)
+COMMENT_XP = 3                 // XP per comment created (subject to daily cap)
 POST_COMMENT_DAILY_CAP = 20    // Max XP/day from posts + comments combined
 MESSAGE_THRESHOLD = 20         // Messages/day needed to earn message XP
-MESSAGE_XP = 10                // XP awarded once per day when MESSAGE_THRESHOLD is crossed
-FOREGROUND_XP_PER_HOUR = 5    // XP per hour the app is in foreground
+MESSAGE_XP = 10                // Granted once/day when MESSAGE_THRESHOLD is crossed
+FOREGROUND_XP_PER_HOUR = 5     // XP per hour app is in foreground (no daily cap by design)
 
+// EXPLORATION_XP — reference values, NOT imported anywhere in JS post-v9.
+// The actual XP grant happens inside discover_landmark RPC (migration 42),
+// which hardcodes these same numbers. If you change here, also update SQL.
 EXPLORATION_XP: Record<place_type, number> = {
   library:     15,
   gym:         15,
@@ -197,44 +241,41 @@ Calls `supabase.auth.signOut()`.
 
 #### `getProfile(userId?) → Profile | null`
 
+**v9 implementation: delegates to SECURITY DEFINER RPCs.** All privacy
+filtering and active_title lookup is server-side, eliminating ~50 lines of
+JS-layer logic and closing the bypass where direct SELECT could read other
+users' private fields.
+
 **Logic:**
-1. `getUser()` — must be logged in
-2. `targetId = userId ?? user.id`
-3. `isSelf = targetId === user.id`
-4. `SELECT * FROM profiles WHERE id = targetId`
-5. `SELECT active_title FROM explorations WHERE user_id = targetId AND active_title IS NOT NULL LIMIT 1` — `.maybeSingle()`
-6. If self → return `{ ...data, active_title }` (no filtering)
-7. If other → apply privacy filter (see below)
-
-**Privacy filter for other users:**
+```typescript
+if (!userId || userId === auth.uid()) {
+  return supabase.rpc('get_my_profile')      // Returns full profile JSON
+}
+const data = await supabase.rpc('get_other_profile', { target_id: userId })
+// RPC omits never-shared fields (email/region/preferences). Fill with null/false
+// to match Profile shape:
+return { ...data, personal_email: null, ..., show_date_of_birth: false, ... }
 ```
-Always null: personal_email, personal_email_verified, edu_email, region,
-             location_sharing, ranking_opt_in, ranking_identity_mode
-Always false: show_date_of_birth, show_nationality, show_qr_code
-  (TD-5: viewer should not see the target's privacy toggle states)
-Conditional:
-  date_of_birth  → only if show_date_of_birth === true
-  nationality    → only if show_nationality === true
-  qr_code_url    → only if show_qr_code === true
 
-profile_visibility switch:
-  'real_only':
-    null: pet_name, pet_avatar_url, pet_bio, pet_level, pet_xp
+**Privacy rules** (now enforced by `get_other_profile()` RPC, not JS):
+- **Never returned to others**: `personal_email`, `edu_email`, `personal_email_verified`, `region`, `location_sharing`, `ranking_opt_in`, `ranking_identity_mode`, `show_date_of_birth`, `show_nationality`, `show_qr_code`
+- **Conditional**: `date_of_birth` only if `show_date_of_birth=true` AND not `pet_only`; same pattern for `nationality` and `qr_code_url`
+- **`profile_visibility = 'pet_only'`**: also nulls `real_name, bio, avatar_url, university` — pet-only user's real identity must remain inferrable
+- **`profile_visibility = 'real_only'`**: nulls all `pet_*` fields
+- **`real_with_pet`**: only the email/region/etc. blacklist applies; both identities visible
+- `active_title` always returned (queried from explorations server-side)
 
-  'pet_only':
-    null: real_name, avatar_url, bio, university,
-          date_of_birth, nationality, qr_code_url
-    (TD-4: pet_only hides all real-identity fields;
-     university also hidden — a pet-only user's university
-     should not be inferrable on public posts)
-
-  'real_with_pet': no additional filtering
-```
+**Why RPC instead of direct SELECT**: column-level SELECT GRANTs in migration
+25 revoke `personal_email`, `edu_email`, `date_of_birth`, etc. from
+`authenticated`. Even self cannot `SELECT *` from profiles directly — must go
+through `get_my_profile()`. This makes the privacy contract enforceable at the
+database layer, not just at the JS helper.
 
 **Branches:**
-- Not logged in → return null
-- Self → return full Profile (including active_title)
-- Other → return filtered Profile (active_title always included regardless of visibility mode)
+- Not logged in → null
+- Self (no arg or arg = auth.uid()) → calls `get_my_profile`
+- Other user → calls `get_other_profile`
+- RPC error or no data → null
 
 ---
 
@@ -251,9 +292,18 @@ Flattens all arrays, deduplicates via Set.
 
 `UPDATE profiles SET ...fields WHERE id = auth.uid()`
 
-**Updatable fields:** `real_name`, `bio`, `avatar_url`, `date_of_birth`, `nationality`, `region`, `university`, `personal_email`, `edu_email`, `pet_name`, `pet_avatar_url`, `pet_bio`, `identity_mode`, `location_sharing`, `ranking_opt_in`, `ranking_identity_mode`, `profile_visibility`, `show_date_of_birth`, `show_nationality`, `show_qr_code`
+**v9 enforcement is at DB column-level GRANT (migration 25), not at TS type:**
 
-**Not updatable via this function:** `id`, `sudo_id`, `edu_verified`, `personal_email_verified`, `pet_level`, `pet_xp`, `qr_code_url`, `created_at` — system-managed.
+**Updatable (column-level GRANT exists)**: `real_name`, `bio`, `avatar_url`, `qr_code_url`, `date_of_birth`, `nationality`, `region`, `university`, `personal_email`, `edu_email`, `pet_name`, `pet_avatar_url`, `pet_bio`, `identity_mode`, `location_sharing`, `ranking_opt_in`, `ranking_identity_mode`, `profile_visibility`, `show_date_of_birth`, `show_nationality`, `show_qr_code` (21 columns)
+
+**Protected (no GRANT — UPDATE will fail with permission error)**:
+- `edu_verified`, `university` (set by verify-offer Edge Function — TD-13 will trigger reset on university change)
+- `personal_email_verified` (future email verification flow)
+- `pet_xp`, `pet_level` (only `add_xp()` RPC writes these)
+- `sudo_id`, `id`, `created_at` (immutable)
+
+`ProfileUpdate` TypeScript type lists only the 21 updatable fields. If a malicious
+client passes a protected column, the DB rejects with `permission denied for column X`.
 
 ---
 
@@ -492,13 +542,44 @@ DB trigger fires → `members_count + 1`
 
 #### `leaveGroup(groupId) → { error }`
 
-1. `SELECT created_by FROM groups WHERE id = groupId`
-2. `DELETE FROM group_members WHERE group_id = groupId AND user_id = auth.uid()`
-3. DB trigger fires → `members_count - 1`
-4. If leaver was `created_by`:
-   - `SELECT user_id FROM group_members WHERE group_id = groupId ORDER BY joined_at ASC LIMIT 1` (`.maybeSingle()`)
-   - `UPDATE groups SET created_by = nextMember?.user_id ?? null`
-5. If no members remain → group is preserved as empty (design: retained for admin content review)
+**v9: thin wrapper over `leave_group(p_group_id)` RPC.** All work happens in
+the SECURITY DEFINER function (migration 27).
+
+```typescript
+const { error } = await supabase.rpc('leave_group', { p_group_id: groupId })
+return { error: error?.message ?? null }
+```
+
+**RPC logic:**
+1. Determine if caller is the group's creator
+2. `DELETE FROM group_members WHERE group_id = p_group_id AND user_id = auth.uid()`
+3. DB trigger `on_group_member_delete` decrements `members_count`
+4. If caller was creator → find oldest remaining member by `joined_at` → `UPDATE groups SET created_by = nextMember.user_id` (or `NULL` if no one remains)
+
+**Why RPC**: pre-v9 the JS-layer ownership transfer silently failed because the
+groups UPDATE policy's WITH CHECK (defaulted from USING) required new
+`created_by = auth.uid()`, which was always false during transfer. Caller never
+saw the error because `await` discarded it. The RPC bypasses RLS as postgres,
+so the transfer actually completes.
+
+---
+
+#### `transferGroupOwnership(groupId, newOwnerId) → { error }` *(new in v9)*
+
+```typescript
+const { error } = await supabase.rpc('transfer_group_ownership', {
+  p_group_id: groupId,
+  p_new_owner_id: newOwnerId,
+})
+return { error: error?.message ?? null }
+```
+
+**RPC validates**:
+- Caller is current creator (raises `'Only the current group creator can transfer ownership'`)
+- New owner is a member of the group (raises `'New owner must be a member of the group'`)
+- Not transferring to self (raises `'Cannot transfer ownership to yourself'`)
+
+On success, `groups.created_by = p_new_owner_id`. Caller remains a regular member.
 
 ---
 
@@ -630,48 +711,79 @@ RLS: owner only. `identity_mode` is immutable.
 
 ### Internal Helpers
 - `applyFuzzyOffset(coord)` — rounds to nearest 0.005° grid (~555m cells). Uses `Math.round(val / 0.005) * 5 / 1000` to avoid floating point precision issues.
-- `getWeekStart()` — returns most recent Monday 00:00 PT as UTC Date object. Same PT timezone as `getTodayStart()`.
-- `clampMinutesSpent(claimed, prevWeekly, lastVisitedAt, isNewWeek)` — anti-cheat
 - `getPlaceRadius(types)` — Google types → radius_meters
 - `getPlaceType(types)` — Google types → SUDO place_type (`'coffee_shop'` for cafe/bakery, not `'cafe'`)
+
+**v9 removed**: `getWeekStart()`, `clampMinutesSpent()`, `MAX_MINUTES_PER_CALL`,
+`TIMESTAMP_TOLERANCE`, `TITLES` table — all moved into the `discover_landmark`
+RPC (migration 42) where they cannot be bypassed by a client that skips the
+helper. The constants are referenced in SQL comments but no longer in JS.
 
 ### Constants
 ```typescript
 CACHE_RADIUS_METERS = 500        // Google Places search radius
 CACHE_EXPIRY_DAYS = 30           // landmark cache TTL
-MAX_MINUTES_PER_CALL = 480       // anti-cheat hard cap (8 hours)
-TIMESTAMP_TOLERANCE = 10         // anti-cheat grace minutes
 ```
 
 ---
 
 #### `updateMyLocation(coord) → void`
 
-1. `SELECT location_sharing FROM profiles WHERE id = auth.uid()`
-2. `'off'` → `DELETE FROM user_locations WHERE user_id = auth.uid()`
-3. `'fuzzy'` → `coord = applyFuzzyOffset(coord)` → `UPSERT user_locations`
-4. `'precise'` → `UPSERT user_locations` with raw coord
+**v9: reads own `location_sharing` via `getProfile()`** (which calls
+`get_my_profile()` RPC) because direct SELECT on `profiles.location_sharing`
+is REVOKE'd from authenticated. **Writes the resolved mode into
+`user_locations.mode`** so friends can render correctly without needing
+access to the user's preference column.
+
+```typescript
+const profile = await getProfile()                 // RPC
+const mode = profile?.location_sharing ?? 'fuzzy'  // 'precise' | 'fuzzy' | 'off'
+if (mode === 'off') {
+  await supabase.from('user_locations').delete().eq('user_id', user.id)
+  return
+}
+const stored = mode === 'fuzzy' ? applyFuzzyOffset(coord) : coord
+await supabase.from('user_locations').upsert({
+  user_id: user.id, latitude: stored.latitude, longitude: stored.longitude,
+  mode,                                            // ← v9: persists mode here
+  updated_at: new Date().toISOString(),
+})
+```
+
+**Design rule (v9)**: row exists in `user_locations` ↔ user is currently sharing.
+`off` → no row. Friends never see off-mode users (RLS enforces).
 
 ---
 
 #### `getFriendLocations() → FriendLocation[]`
 
-1. SELECT friendships WHERE status='accepted' AND (requester_id=uid OR addressee_id=uid)
+**v9 changes**: drops `location_sharing` from the profiles JOIN (column
+REVOKE'd from authenticated); reads `mode` directly from `user_locations`;
+no `location_sharing !== 'off'` filter needed (off-mode users have no row).
+
+1. `SELECT * FROM friendships WHERE status='accepted' AND (requester_id=uid OR addressee_id=uid)`
 2. Derive `friendIds`
-3. SELECT user_locations.* + `profiles!inner(real_name, pet_name, avatar_url, pet_avatar_url, identity_mode, location_sharing)` WHERE user_id IN (friendIds)
-4. Filter: `location_sharing !== 'off'`
-5. Map: `display_name = identity_mode==='pet' ? pet_name ?? real_name : real_name ?? pet_name`
+3. `SELECT user_locations.user_id, latitude, longitude, mode, updated_at, profiles!inner(real_name, pet_name, avatar_url, pet_avatar_url, identity_mode) WHERE user_id IN (friendIds)`
+4. Map: `display_name = identity_mode==='pet' ? pet_name ?? real_name : real_name ?? pet_name`
+
+**`FriendLocation` v9 shape** includes `mode: 'precise' | 'fuzzy'` so the
+frontend renders precise (small marker) vs fuzzy (large area circle, ~500m).
 
 ---
 
 #### `subscribeToFriendLocations(friendIds, onUpdate) → Promise<() => void>`
 
-1. Batch fetch profiles for all `friendIds` → build `profileCache` (Map<userId, profile>)
+**v9 changes**: profileCache no longer fetches `location_sharing` (REVOKE'd);
+reads `mode` from the realtime payload's `user_locations` row. Off-mode users
+have no row → no realtime event for them.
+
+1. Batch fetch `profiles (id, real_name, pet_name, avatar_url, pet_avatar_url, identity_mode)` for all `friendIds` → build `profileCache`
 2. Subscribe to `postgres_changes` on `user_locations`, filter: `user_id=in.(friendIds)`
-3. On event: lookup profile from cache, skip if `location_sharing='off'`, call `onUpdate()`
+3. On event: lookup profile from cache, call `onUpdate({ ..., mode: payload.new.mode, ... })`
 4. Return `() => supabase.removeChannel(channel)`
 
-**Tech Debt:** `profileCache` built once at subscribe time; profile changes (identity_mode, location_sharing) during subscription require re-subscribe to take effect.
+**Known tech debt (TD-8)**: `profileCache` built once at subscribe time;
+identity_mode change during subscription requires re-subscribe to reflect.
 
 ---
 
@@ -697,40 +809,22 @@ TIMESTAMP_TOLERANCE = 10         // anti-cheat grace minutes
 
 #### `discoverLandmark(coord, minutesSpent) → Promise<DiscoverResult | null>`
 
+**v9: thin wrapper over `discover_landmark` RPC.** ~110 lines of JS-layer
+anti-cheat logic moved into the SECURITY DEFINER function (migration 42).
+
 **Flow:**
-1. `cacheNearbyPlaces(coord)` → get nearby landmarks
-2. Find landmark where Euclidean distance (with latitude cosine correction) ≤ `radius_meters`
-3. `SELECT * FROM explorations WHERE user_id=uid AND landmark_id=landmark.id` (`.maybeSingle()`)
-4. `weekStart = getWeekStart()`
-5. `needsReset = !existing || new Date(existing.week_start_date) < weekStart`
+1. `cacheNearbyPlaces(coord)` → get nearby landmarks (still client-side, calls Google Places)
+2. Find candidate landmark where Euclidean distance (with latitude cosine correction) ≤ `radius_meters`
+3. Call RPC: `supabase.rpc('discover_landmark', { p_landmark_id: landmark.id, p_lat: coord.latitude, p_lng: coord.longitude, p_minutes_spent: minutesSpent })`
+4. RPC returns DiscoverResult JSON or null
 
-**Branch A — No existing record (first ever visit):**
-```
-safeMinutes = clampMinutesSpent(minutesSpent, 0, null, false)
-isFirstVisit = true
-xpEarned = EXPLORATION_XP[placeType]   // library/gym=15, coffee_shop/dining=10, other=8
-INSERT explorations (visit_count=1, ...)
-addXP(uid, xpEarned)
-```
+**RPC server-side logic** (cannot be bypassed):
+- Re-verify coord within `landmark.radius_meters` (anti-spoof, partial — true GPS spoofing still requires TD-1 device attestation)
+- First visit: clamp `minutesSpent` to [0, 480], INSERT, award `EXPLORATION_XP[place_type]` via `add_xp()`
+- Return visit: clamp by both 480 cap AND elapsed-time tolerance (`elapsed + 10 min`); UPDATE with optimistic lock on `last_visited_at`; unlock junior/senior titles at visit_count thresholds 7/30
+- All XP/title mutations atomic in single transaction
 
-**Branch B — Existing record (return visit):**
-```
-prevWeeklyTime = needsReset ? 0 : existing.weekly_time_spent
-safeMinutes = clampMinutesSpent(minutesSpent, prevWeeklyTime, existing.last_visited_at, needsReset)
-newWeeklyTime = safeMinutes
-newVisitCount = existing.visit_count + 1
-xpEarned = 0  (XP only on first visit)
-
-Title unlock:
-  if newVisitCount >= 7  && !titles.includes(junior) → unlock junior title
-  if newVisitCount >= 30 && !titles.includes(senior) → unlock senior title
-
-UPDATE explorations SET ...
-  WHERE id=existing.id AND last_visited_at=existing.last_visited_at  ← optimistic lock
-  (if 0 rows updated → concurrent conflict → return null)
-```
-
-**Title table:**
+**Title table** (hardcoded in RPC, mirror of removed JS const):
 ```
 library:     { junior: 'Bookworm',      senior: 'Library King'     }
 dining:      { junior: 'Big Eater',     senior: 'Dining Hall King' }
@@ -739,30 +833,27 @@ coffee_shop: { junior: 'Coffee Lover',  senior: 'Coffee Addict'    }
 other:       { junior: 'Explorer',      senior: 'Master Explorer'  }
 ```
 
-**clampMinutesSpent anti-cheat:**
-```
-If !lastVisitedAt || isNewWeek → min(max(0, claimed), 480)
-Else:
-  delta = claimed - prevWeeklyTime
-  elapsedMinutes = (now - lastVisitedAt) / 60000
-  safeDelta = min(delta, 480, elapsedMinutes + 10)
-  return prevWeeklyTime + safeDelta
-```
-
-**Null returns:** not logged in, no nearby landmark, coord not within any landmark's radius, optimistic lock conflict.
+**Null returns**: not logged in, no nearby landmark from `cacheNearbyPlaces`,
+coord not within any landmark's radius, RPC error (e.g. landmark not found,
+optimistic lock conflict, coord rejected by server-side check).
 
 ---
 
 #### `setActiveTitle(title: string | null) → Promise<void>`
 
-**Note:** function signature is `(title)` only — no `explorationId` parameter. The function finds the correct exploration internally.
+**v9: thin wrapper over `set_active_title(p_title)` RPC.** Direct UPDATE on
+explorations is REVOKE'd from authenticated, so this RPC is the only path.
 
-1. `UPDATE explorations SET active_title = null WHERE user_id = auth.uid()` — clear all active titles first
-2. If `title === null` → done (unequip)
-3. `SELECT id, titles_earned FROM explorations WHERE user_id = auth.uid()`
-4. Find exploration where `titles_earned.includes(title)`
-5. If not found → silent return (security: cannot equip unearned title)
-6. `UPDATE explorations SET active_title = title WHERE id = exploration.id AND user_id = auth.uid()`
+```typescript
+await supabase.rpc('set_active_title', { p_title: title })
+```
+
+**RPC logic** (migration 42):
+1. Clear all active_title for this user (one-active-at-a-time invariant)
+2. If `p_title IS NULL` → done (unequip)
+3. Find an exploration whose `titles_earned` array contains `p_title`
+4. Not found → silent return (anti-cheat: cannot equip unearned title)
+5. Set that exploration's `active_title = p_title`
 
 ---
 
@@ -789,6 +880,12 @@ DB function validates: caller must have `edu_verified=true AND university=p_univ
 Filters: `place_type IN ('library', 'coffee_shop', 'gym', 'dining')` — `'other'` excluded from rankings.
 
 Groups rows by `place_type` into `WeeklyRankings` object (top 3 per type).
+
+**v9 changes**:
+- `RankingEntry` interface dropped `pet_avatar_url` field — was leaking pet
+  identity even when ranking_identity_mode='real' or profile_visibility='real_only'
+- `active_title` aggregation by `(user, place_type)` is **by design**: a Bookworm
+  title earned at library shows only in library ranking, not in gym/cafe/dining
 
 ---
 
@@ -941,20 +1038,16 @@ JOIN `blocked:profiles!blocked_users_blocked_id_fkey (sudo_id, real_name, avatar
 
 ## Known Technical Debt
 
-| ID | Severity | Location | Issue | Status |
-|----|----------|----------|-------|--------|
-| TD-1 | HIGH | `location.ts:discoverLandmark` | Client-supplied GPS coords trusted; cheat by sending fake coords to earn XP/titles | Open |
-| TD-11 | LOW | `location.ts:addForegroundXP` | Frontend controls call frequency; malicious client can call more than once/hour | Open (intentional — no cap by design) |
-| TD-6 | MED | `location.ts:cacheNearbyPlaces` | `EXPO_PUBLIC_GOOGLE_MAPS_API_KEY` exposed client-side | Open |
-| TD-2 | MED | `posts.ts` | `likes_count`/`comments_count` read-then-write race condition | RESOLVED — DB triggers `on_like_change`/`on_comment_change` |
-| TD-3 | MED | App layer | Blocked users not filtered in feed/comments | RESOLVED — `getBlockedIds()` helper used in `getFeed`, `getComments`, `getUserPosts` |
-| TD-4 | MED | `auth.ts:getProfile` | `pet_only` + `show_date_of_birth=true` still returned `date_of_birth` | RESOLVED — `pet_only` now nulls `date_of_birth`, `nationality`, `qr_code_url`, `university` |
-| TD-5 | MED | `auth.ts:getProfile` | Privacy meta-fields (`show_*`) exposed via `...p` spread to third parties | RESOLVED — `show_*` set to `false` when returning other users' profiles |
-| TD-7 | LOW | `groups.ts:createDirectMessage` | N+1 loop checking for existing DM conversation | RESOLVED — 2 parallel queries + JS set intersection |
-| TD-8 | MED | `groups.ts` | `members_count` read-then-write race condition via `syncMembersCount()` | RESOLVED — DB triggers `on_group_member_insert`/`on_group_member_delete` |
-| TD-9 | LOW | `location.ts:cacheNearbyPlaces` | Unlimited INSERT per user into `landmark_cache_zones` | RESOLVED — UNIQUE(latitude, longitude) + UPSERT |
-| TD-10 | LOW | `user_locations RLS` | `location_sharing='off'` only filtered JS-side | RESOLVED — RLS `friends_can_read` now requires `location_sharing IN ('precise', 'fuzzy')` |
-| TD-12 | MED | `_xp.ts:addXP` | Read-then-write race condition in XP increment | RESOLVED — atomic RPC `add_xp()` |
+**Authoritative list: [TECH_DEBT.md](TECH_DEBT.md).** The file below is no
+longer maintained — refer to TECH_DEBT.md for all TD entries (TD-1 through
+TD-24), including severity, status, fix approach, and trigger timing.
+
+Quick orientation (as of 2026-04-17 / v9):
+- **Closed in v7 or earlier**: TD-2, TD-4, TD-5, TD-7
+- **Closed in v9**: TD-3 (partial; group chat is design-decision), TD-10, TD-11
+- **Module 10 prerequisites**: TD-1 (GPS attestation), TD-6 + TD-9 + TD-22 (Edge Function migration), TD-13 (university reset trigger), TD-15 (Storage mime/size), TD-24 (DM race)
+- **Open / pre-launch evaluate**: TD-21 (`.or()` injection), TD-23 (XP race)
+- **Frontend / long-term**: TD-8 (subscription cache), TD-12 (landmarkTimers), TD-14 (friend-tier profile fields), TD-17–20 (path optimization)
 
 ---
 
@@ -986,22 +1079,28 @@ Includes `on_comment_change` trigger (AFTER INSERT OR DELETE ON comments → `UP
 
 ---
 
-## RLS Policy Summary
+## RLS Policy Summary (v9)
 
-| Table | SELECT | INSERT | UPDATE | DELETE |
-|-------|--------|--------|--------|--------|
-| `profiles` | Any logged-in user | Own row only | Own row only | Own row only |
-| `friendships` | Participants only | Requester = auth.uid() | Addressee only (accept) | Either participant |
-| `blocked_users` | blocker OR blocked | blocker = auth.uid() | — | blocker = auth.uid() |
-| `groups` | Members only (via group_members) | Authenticated | Members only | Owner only |
-| `group_members` | Members of the group | Authenticated | — | Own row or group owner |
-| `messages` | Group members | Group members | Own row | — (no delete) |
-| `posts` | Visibility-based (complex) | Authenticated | Own row | Own row |
-| `post_viewers` | Post owner | Post owner | — | Post owner |
-| `likes` | Authenticated | Authenticated (own) | — | Own row |
-| `comments` | Authenticated | Group/post members | Own row | Own row |
-| `user_locations` | Self or accepted friends with sharing enabled | Own row | Own row | Own row |
-| `explorations` | Own rows | Authenticated (own) | Own row | — |
-| `explored_paths` | Own rows | Authenticated (own) | — | — |
-| `landmarks` | Authenticated | Authenticated | Authenticated | — |
-| `landmark_cache_zones` | Authenticated | Authenticated | Authenticated | — |
+In addition to row-level RLS policies, **column-level GRANT/REVOKE** is now
+applied throughout. The "Column-level UPDATE" column shows which columns
+authenticated may modify directly. Where the entire table is locked from
+client writes, mutations go through SECURITY DEFINER RPCs.
+
+| Table | SELECT (RLS) | INSERT (RLS) | UPDATE (RLS) | DELETE (RLS) | Column-level UPDATE | Notes |
+|-------|--------|--------|--------|--------|--------|--------|
+| `profiles` | Any logged-in (limited cols) | Own row | Own row | Own row | 21 cols (no edu_verified, pet_xp, sudo_id, etc) | Full read via `get_my_profile` / `get_other_profile` RPCs |
+| `friendships` | Participants | Requester = uid | Addressee only | Either party | `status` only | Bidirectional unique index prevents A→B + B→A |
+| `blocked_users` | blocker OR blocked | blocker = uid | — | blocker = uid | — | |
+| `groups` | Members (via gm) or searchable | Authenticated | Creator only | Creator only | `name, description, avatar_url, is_searchable` | `created_by` writes via `leave_group` / `transfer_group_ownership` RPCs |
+| `group_members` | Members of group | Authenticated (uid) | — | Own row OR creator (kick) | — | |
+| `messages` | Group members | Group members + uid | Own row | — (no DELETE policy) | `content, edited_at` | Block filter NOT applied (group context, design decision) |
+| `posts` | Visibility-based + double-block filter | Authenticated (uid) | Own row | Own row | `content, image_url, edited_at` | `is_post_viewer` RPC fixes specific_friends recursion |
+| `post_viewers` | Post owner | Post owner | — | Post owner | — | |
+| `likes` | Visible iff post visible + liker not blocked | Authenticated (uid) | — | Own row | — | |
+| `comments` | Visible iff post visible + author not blocked | Authenticated (uid) | Own row | Own row | `content, edited_at` | Block filter applies |
+| `user_locations` | Self or accepted friends | Own row | Own row | Own row | `latitude, longitude, mode, updated_at` | `mode` column added in v9 |
+| `explorations` | Own rows | — (no policy) | — (no policy) | — (no policy) | — | All writes via `discover_landmark` / `set_active_title` RPCs |
+| `explored_paths` | Own rows | Own (uid) | — | Own row | — | `compute_explored_path_bbox` trigger auto-fills bbox cols |
+| `landmarks` | Authenticated | Authenticated | — | — | — | Shared cache; client-write to be migrated to Edge Function (TD-6) |
+| `landmark_cache_zones` | Authenticated | Authenticated | Authenticated | — | full table-level | Same caveat as landmarks (TD-9) |
+| `offer_verifications` | Own rows | Own (uid) | — | — | — | `(user_id, screenshot_url)` only at INSERT; rest written by verify-offer Edge Function (Module 7) |
