@@ -1,6 +1,6 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Text } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 
 // Auth screens
@@ -9,9 +9,17 @@ import RegisterScreen from '../screens/auth/RegisterScreen';
 
 // Placeholder screens（后续任务会替换）
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
-import MapScreen from '../map/MapScreen';
 
 const Stack = createNativeStackNavigator();
+
+// 登录后的主界面占位（旧 Map/地图功能已随树外系统移除，前端开发时替换）
+function HomePlaceholder() {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <Text>zZuP!</Text>
+    </View>
+  );
+}
 
 function AuthStack() {
   return (
@@ -25,7 +33,7 @@ function AuthStack() {
 function AppStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Map" component={MapScreen} />
+      <Stack.Screen name="Home" component={HomePlaceholder} />
     </Stack.Navigator>
   );
 }
