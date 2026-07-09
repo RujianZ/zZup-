@@ -1,28 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { getProfile } from '../../lib/api/auth';
+import { getProfile, Profile } from '../../lib/api/auth';
 import type { Session } from '@supabase/supabase-js';
 
-// Profile 类型，映射 profiles 表
-export interface Profile {
-  id: string;
-  sudo_id?: number;
-  real_name?: string;
-  bio?: string;
-  avatar_url?: string;
-  pet_name?: string;
-  pet_avatar_url?: string;
-  pet_bio?: string;
-  pet_level?: number;
-  pet_xp?: number;
-  identity_mode?: 'real' | 'pet';
-  location_sharing?: 'precise' | 'fuzzy' | 'off';
-  university?: string;
-  edu_verified?: boolean;
-  ranking_opt_in?: boolean;
-  ranking_identity_mode?: 'real' | 'pet';
-  created_at?: string;
-}
+export type { Profile };
 
 interface AuthContextValue {
   session: Session | null;
@@ -46,7 +27,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshProfile = async () => {
     try {
       const data = await getProfile();
-      setProfile(data);
+      if (!data) {
+        // 如果获取不到用户资料（例如数据库重置，云端用户已不存在），
+        // 自动调用登出清除本地残留的 invalid session，强制用户重新登录/注册。
+        await supabase.auth.signOut();
+        setSession(null);
+        setProfile(null);
+      } else {
+        setProfile(data);
+      }
     } catch {
       setProfile(null);
     }

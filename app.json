@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "SUDO",
-    "slug": "sudo-app",
+    "name": "zZuP!",
+    "slug": "zzup-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,13 +13,13 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.sudo.app",
+      "bundleIdentifier": "com.zzup.app",
       "config": {
         "googleMapsApiKey": "AIzaSyDuo6iYFQZNM9CV2ksTXqASflkERw4uEHM"
       }
     },
     "android": {
-      "package": "com.sudo.app",
+      "package": "com.zzup.app",
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyDuo6iYFQZNM9CV2ksTXqASflkERw4uEHM"
@@ -47,8 +47,8 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "SUDO uses your location in the background to build your personal Discovery map and show friend locations.",
-          "locationWhenInUsePermission": "SUDO needs access to your location to show friend locations and explore the map.",
+          "locationAlwaysAndWhenInUsePermission": "zZuP! uses your location to show friend locations.",
+          "locationWhenInUsePermission": "zZuP! needs access to your location to show friend locations.",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true
         }

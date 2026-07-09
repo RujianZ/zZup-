@@ -25,6 +25,7 @@ export interface Profile {
   pet_name: string | null
   pet_avatar_url: string | null
   pet_bio: string | null
+  pet_breed: string | null
   pet_level: number | null
   pet_xp: number | null
   pet_stage: 'child' | 'youth' | 'adult' | null
@@ -162,3 +163,12 @@ export async function updateProfile(
   const { error } = await supabase.from('profiles').update(fields).eq('id', user.id)
   return { error: error?.message ?? null }
 }
+
+export async function deleteAccount(): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('delete_my_account')
+  if (error) return { error: error.message }
+
+  const signOutRes = await signOut()
+  return { error: signOutRes.error }
+}
+

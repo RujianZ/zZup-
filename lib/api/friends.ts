@@ -1,4 +1,79 @@
-import { supabase } from '../supabase'
+import { supabase, USE_MOCK } from '../supabase'
+
+const MOCK_RECENT_SEARCHES: UserSearchResult[] = [
+  {
+    id: 'user-monica',
+    zzup_id: 'monica_xu',
+    real_name: 'Monica Xu',
+    pet_name: 'Coco',
+    avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120',
+    pet_avatar_url: null,
+    profile_visibility: 'real_with_pet',
+    university: 'zZuP University',
+    edu_verified: true
+  },
+  {
+    id: 'user-hci',
+    zzup_id: 'hci_group',
+    real_name: 'HCI Group',
+    pet_name: null,
+    avatar_url: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=120',
+    pet_avatar_url: null,
+    profile_visibility: 'real_only',
+    university: 'zZuP University',
+    edu_verified: true
+  },
+  {
+    id: 'user-jazz',
+    zzup_id: 'jazz_group',
+    real_name: 'Jazz Group💃',
+    pet_name: null,
+    avatar_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=120',
+    pet_avatar_url: null,
+    profile_visibility: 'real_only',
+    university: 'zZuP University',
+    edu_verified: false
+  }
+];
+
+const MOCK_ALEX_GAN: UserSearchResult = {
+  id: 'user-alex',
+  zzup_id: 'alex_gan',
+  real_name: 'Alex_Gan',
+  pet_name: 'Mochi',
+  avatar_url: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=120',
+  pet_avatar_url: null,
+  profile_visibility: 'real_with_pet',
+  university: 'zZuP University',
+  edu_verified: true
+};
+
+const MOCK_TYPING_RESULTS: UserSearchResult[] = [
+  {
+    id: 'user-alice',
+    zzup_id: 'aliceeeeee',
+    real_name: 'Aliceeeeee',
+    pet_name: 'Bunny',
+    avatar_url: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=120',
+    pet_avatar_url: null,
+    profile_visibility: 'real_with_pet',
+    university: 'zZuP University',
+    edu_verified: true
+  },
+  MOCK_ALEX_GAN,
+  {
+    id: 'user-alan',
+    zzup_id: 'alan0106',
+    real_name: 'Alan0106',
+    pet_name: 'Sparky',
+    avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120',
+    pet_avatar_url: null,
+    profile_visibility: 'real_with_pet',
+    university: 'zZuP University',
+    edu_verified: false
+  }
+];
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 // friendships 为真人↔真人。列表/搜索结果都按对方 S_A 过滤（见 26 的读取 RPC）。
@@ -65,6 +140,14 @@ export async function sendFriendRequest(
   addresseeId: string,
   source?: FriendSource
 ): Promise<{ error: string | null }> {
+  if (USE_MOCK) {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        resolve({ error: null });
+      }, 500);
+    });
+  }
+
   const { error } = await supabase.rpc('send_friend_request', {
     p_addressee_id: addresseeId,
     p_source: source ?? null,
@@ -151,6 +234,36 @@ export async function getFriendshipStatus(targetId: string): Promise<FriendshipS
 }
 
 export async function searchUsers(keyword: string): Promise<UserSearchResult[]> {
+  if (USE_MOCK) {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        const kw = keyword.trim().toLowerCase();
+        if (!kw) {
+          resolve(MOCK_RECENT_SEARCHES);
+        } else if (kw === 'alex_gan' || kw === 'alex') {
+          resolve([MOCK_ALEX_GAN]);
+        } else if (kw.includes('al')) {
+          resolve(MOCK_TYPING_RESULTS);
+        } else {
+          // Fallback, return a dynamic mock user so any search returns something testable
+          resolve([
+            {
+              id: `user-${kw}`,
+              zzup_id: kw,
+              real_name: keyword,
+              pet_name: 'Companion',
+              avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120',
+              pet_avatar_url: null,
+              profile_visibility: 'real_with_pet',
+              university: 'zZuP University',
+              edu_verified: false
+            }
+          ]);
+        }
+      }, 300);
+    });
+  }
+
   const { data } = await supabase.rpc('search_users', { p_keyword: keyword })
   return (data ?? []) as UserSearchResult[]
 }

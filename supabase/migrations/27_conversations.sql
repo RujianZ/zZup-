@@ -145,11 +145,9 @@ create policy "creator update conversation" on public.conversations for update
 create policy "creator delete conversation" on public.conversations for delete
   using (auth.uid() = created_by);
 
--- conversation_members:同会话成员可见(注:会暴露 account_id,匿名由读取 RPC 处理)
-create policy "view members of my conversations" on public.conversation_members for select using (
-  exists (select 1 from public.conversation_members m2
-          where m2.conversation_id = conversation_members.conversation_id
-            and m2.account_id = auth.uid())
+-- conversation_members: 仅允许用户查看自己的成员记录（防无限递归，且符合隐私隔离设计，其他成员由 security definer RPC 读取）
+create policy "view own conversation membership" on public.conversation_members for select using (
+  auth.uid() = account_id
 );
 
 -- messages:成员可读可发;仅可编辑自己的

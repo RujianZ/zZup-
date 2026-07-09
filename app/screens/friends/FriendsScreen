@@ -1,0 +1,159 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, SafeAreaView, FlatList,
+  TouchableOpacity, Image, ActivityIndicator, RefreshControl,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { getFriends, FriendProfile } from '../../../lib/api/friends';
+
+function FriendItem({ friend, onPress }: { friend: FriendProfile; onPress: () => void }) {
+  const isPet = friend.identity_mode === 'pet';
+  const imageUrl = isPet ? friend.pet_avatar_url : friend.avatar_url;
+  const displayName = isPet ? (friend.pet_name ?? friend.real_name) : friend.real_name;
+
+  return (
+    <TouchableOpacity style={styles.friendItem} onPress={onPress} activeOpacity={0.7}>
+      <View style={styles.avatarWrap}>
+        {imageUrl ? (
+          <Image source={{ uri: imageUrl }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatarFallback, { backgroundColor: isPet ? '#E24A4A' : '#4A90E2' }]}>
+            <Ionicons name={isPet ? 'paw' : 'person'} size={18} color="#fff" />
+          </View>
+        )}
+        <View style={[styles.identityDot, { backgroundColor: isPet ? '#E24A4A' : '#4A90E2' }]} />
+      </View>
+
+      <View style={styles.friendInfo}>
+        <Text style={styles.friendName}>{displayName ?? '未设置'}</Text>
+        <Text style={styles.friendMeta}>
+          SUDO {friend.sudo_id}
+          {friend.university ? `  ·  ${friend.university}` : ''}
+        </Text>
+      </View>
+
+      <Ionicons name="chevron-forward" size={16} color="#555" />
+    </TouchableOpacity>
+  );
+}
+
+export default function FriendsScreen() {
+  const navigation = useNavigation<any>();
+  const [friends, setFriends]     = useState<FriendProfile[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
+    const data = await getFriends();
+    setFriends(data);
+    setLoading(false);
+    setRefreshing(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const onRefresh = () => { setRefreshing(true); load(); };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Ionicons name="chevron-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>好友</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('UserSearch')} style={styles.headerBtn}>
+            <Ionicons name="person-add-outline" size={22} color="#4A90E2" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.center}><ActivityIndicator color="#4A90E2" /></View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Ionicons name="chevron-back" size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>好友 {friends.length > 0 ? `(${friends.length})` : ''}</Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => navigation.navigate('FriendRequests')} style={styles.headerBtn}>
+            <Ionicons name="notifications-outline" size={22} color="#4A90E2" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('UserSearch')} style={styles.headerBtn}>
+            <Ionicons name="person-add-outline" size={22} color="#4A90E2" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <FlatList
+        data={friends}
+        keyExtractor={(item) => item.friendship_id}
+        contentContainerStyle={styles.list}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4A90E2" />}
+        renderItem={({ item }) => (
+          <FriendItem
+            friend={item}
+            onPress={() => navigation.navigate('OtherProfile', { userId: item.id })}
+          />
+        )}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ListEmptyComponent={
+          <View style={styles.center}>
+            <Ionicons name="people-outline" size={48} color="#333" />
+            <Text style={styles.emptyText}>还没有好友</Text>
+            <TouchableOpacity
+              style={styles.addBtn}
+              onPress={() => navigation.navigate('UserSearch')}
+            >
+              <Text style={styles.addBtnText}>搜索用户</Text>
+            </TouchableOpacity>
+          </View>
+        }
+      />
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#0f0f0f' },
+  header: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 12,
+    borderBottomWidth: 0.5, borderBottomColor: '#2a2a2a',
+  },
+  backBtn: { padding: 4, marginRight: 8 },
+  headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', color: '#fff' },
+  headerActions: { flexDirection: 'row', gap: 12 },
+  headerBtn: { padding: 4 },
+  list: { paddingVertical: 8, paddingHorizontal: 16 },
+  friendItem: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 12, gap: 12,
+  },
+  avatarWrap: { position: 'relative' },
+  avatar: { width: 48, height: 48, borderRadius: 24 },
+  avatarFallback: {
+    width: 48, height: 48, borderRadius: 24,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  identityDot: {
+    position: 'absolute', bottom: 0, right: 0,
+    width: 12, height: 12, borderRadius: 6,
+    borderWidth: 2, borderColor: '#0f0f0f',
+  },
+  friendInfo: { flex: 1 },
+  friendName: { fontSize: 15, fontWeight: '600', color: '#fff', marginBottom: 3 },
+  friendMeta: { fontSize: 12, color: '#555' },
+  separator: { height: 0.5, backgroundColor: '#1a1a1a' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingTop: 60 },
+  emptyText: { fontSize: 15, color: '#555' },
+  addBtn: {
+    backgroundColor: '#4A90E2', paddingHorizontal: 24,
+    paddingVertical: 10, borderRadius: 20, marginTop: 4,
+  },
+  addBtnText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+});

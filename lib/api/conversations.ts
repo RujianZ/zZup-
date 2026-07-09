@@ -1,4 +1,4 @@
-import { supabase } from '../supabase'
+import { supabase, USE_MOCK } from '../supabase'
 import type { IdentityType } from './friends'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -169,4 +169,14 @@ export async function getConversationMembers(
       display_avatar: m.profile ? (isPet ? m.profile.pet_avatar_url : m.profile.avatar_url) : null,
     }
   })
+}
+
+export async function removeMember(
+  conversationId: string,
+  accountId: string
+): Promise<{ error: string | null }> {
+  if (USE_MOCK) {
+    return { error: null }
+  }
+  return { error: 'Removing members is not implemented on backend yet.' }
 }

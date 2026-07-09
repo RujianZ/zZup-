@@ -1,25 +1,42 @@
 import React from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { ActivityIndicator, View, Text } from 'react-native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 
-// Auth screens
+// Auth
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
-
-// Placeholder screens（后续任务会替换）
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
 
-const Stack = createNativeStackNavigator();
+// Tabs
+import InboxScreen from '../screens/chat/InboxScreen';
+import ProfileScreen from '../screens/tabs/ProfileScreen';
 
-// 登录后的主界面占位（旧 Map/地图功能已随树外系统移除，前端开发时替换）
-function HomePlaceholder() {
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Text>zZuP!</Text>
-    </View>
-  );
-}
+// Friends
+import FriendsScreen from '../screens/friends/FriendsScreen';
+import FriendRequestsScreen from '../screens/friends/FriendRequestsScreen';
+import UserSearchScreen from '../screens/friends/UserSearchScreen';
+import OtherProfileScreen from '../screens/friends/OtherProfileScreen';
+import BlockedUsersScreen from '../screens/friends/BlockedUsersScreen';
+
+// Chat
+import ChatScreen from '../screens/chat/ChatScreen';
+import GroupListScreen from '../screens/chat/GroupListScreen';
+import CreateGroupScreen from '../screens/chat/CreateGroupScreen';
+import GroupMembersScreen from '../screens/chat/GroupMembersScreen';
+import PetChatScreen from '../screens/chat/PetChatScreen';
+
+// Travel Mode
+import TravelModeScreen from '../screens/travel/TravelModeScreen';
+import FreeTravelScreen from '../screens/travel/FreeTravelScreen';
+import TravelDetailScreen from '../screens/travel/TravelDetailScreen';
+import NearbyTravelScreen from '../screens/travel/NearbyTravelScreen';
+import AgentChatScreen from '../screens/chat/AgentChatScreen';
+
+const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
 
 function AuthStack() {
   return (
@@ -30,10 +47,61 @@ function AuthStack() {
   );
 }
 
+function MainTabs() {
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: '#FFFFFF',
+          borderTopColor: '#E4E4E7',
+          borderTopWidth: 0.5,
+          height: 60,
+          paddingBottom: 8,
+        },
+        tabBarActiveTintColor: '#7C3AED',
+        tabBarInactiveTintColor: '#71717A',
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarIcon: ({ color, size }) => {
+          const icons: Record<string, keyof typeof Ionicons.glyphMap> = {
+            Lounge: 'chatbubbles-outline',
+            TravelMode: 'airplane-outline',
+            Profile: 'person-outline',
+          };
+          return <Ionicons name={icons[route.name]} size={size} color={color} />;
+        },
+      })}
+    >
+      <Tab.Screen name="Lounge" component={InboxScreen} options={{ tabBarLabel: 'Lounge' }} />
+      <Tab.Screen name="TravelMode" component={TravelModeScreen} options={{ tabBarLabel: 'Travel Mode' }} />
+      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profile' }} />
+    </Tab.Navigator>
+  );
+}
+
 function AppStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Home" component={HomePlaceholder} />
+      <Stack.Screen name="Main"             component={MainTabs}               />
+      {/* Friends */}
+      <Stack.Screen name="Friends"          component={FriendsScreen}          />
+      <Stack.Screen name="FriendRequests"   component={FriendRequestsScreen}   />
+      <Stack.Screen name="UserSearch"       component={UserSearchScreen}       />
+      <Stack.Screen name="OtherProfile"     component={OtherProfileScreen}     />
+      <Stack.Screen name="BlockedUsers"     component={BlockedUsersScreen}     />
+
+      {/* Chat */}
+      <Stack.Screen name="Chat"             component={ChatScreen}             />
+      <Stack.Screen name="GroupList"        component={GroupListScreen}        />
+      <Stack.Screen name="CreateGroup"      component={CreateGroupScreen}      />
+      <Stack.Screen name="GroupMembers"     component={GroupMembersScreen}     />
+      <Stack.Screen name="PetChat"          component={PetChatScreen}          />
+
+      {/* Travel Mode */}
+      <Stack.Screen name="FreeTravel"        component={FreeTravelScreen}        />
+      <Stack.Screen name="TravelDetail"      component={TravelDetailScreen}      />
+      <Stack.Screen name="NearbyTravel"      component={NearbyTravelScreen}      />
+      <Stack.Screen name="AgentChat"         component={AgentChatScreen}         />
     </Stack.Navigator>
   );
 }
@@ -41,21 +109,16 @@ function AppStack() {
 export default function RootNavigator() {
   const { session, profile, loading } = useAuth();
 
-  // 启动时等待 session 加载完成
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#4A90E2" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
+        <ActivityIndicator size="large" color="#7C3AED" />
       </View>
     );
   }
 
-  // 未登录 → AuthStack
-  if (!session) {
-    return <AuthStack />;
-  }
+  if (!session) return <AuthStack />;
 
-  // 已登录但未完成 Onboarding（real_name 为空）→ OnboardingScreen
   if (!profile?.real_name) {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -64,6 +127,5 @@ export default function RootNavigator() {
     );
   }
 
-  // 已登录且已完成 Onboarding → AppStack
   return <AppStack />;
 }

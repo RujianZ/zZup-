@@ -9,14 +9,18 @@ export const MESSAGE_XP = 10        // XP for hitting the daily message threshol
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 export function getTodayStart(): string {
-  // Use PT (America/Los_Angeles) so the daily cap resets at midnight PT
-  const now = new Date()
-  const ptNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }))
-  ptNow.setHours(0, 0, 0, 0)
-  const y = ptNow.getFullYear()
-  const m = String(ptNow.getMonth() + 1).padStart(2, '0')
-  const d = String(ptNow.getDate()).padStart(2, '0')
-  return new Date(`${y}-${m}-${d}T00:00:00.000Z`).toISOString()
+  // 使用 Intl.DateTimeFormat 安全提取洛杉矶时区的年、月、日，避免 Hermes 引擎下 Date 字符串解析的兼容性 bug
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const parts = formatter.formatToParts(new Date());
+  const year = parts.find(p => p.type === 'year')?.value || '1970';
+  const month = parts.find(p => p.type === 'month')?.value || '01';
+  const day = parts.find(p => p.type === 'day')?.value || '01';
+  return `${year}-${month}-${day}T00:00:00.000Z`;
 }
 
 export async function addXP(userId: string, xp: number): Promise<void> {
