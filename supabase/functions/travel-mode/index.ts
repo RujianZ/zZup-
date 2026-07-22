@@ -53,7 +53,7 @@ export default {
 
       // 5. Execute Action 'create'
       if (action === "create") {
-        const { content, image_url, audio_url } = body;
+        const { content, image_url, audio_url, duration_hours } = body;
         if (!content || typeof content !== "string" || content.trim().length === 0) {
           return new Response(JSON.stringify({ error: "Missing or empty content field" }), {
             status: 400,
@@ -61,16 +61,44 @@ export default {
           });
         }
 
-        // Generate embedding vector for the post content
+        const duration = (duration_hours === 24) ? 24 : 6;
+        let textToEmbed = content.trim();
+
+        // If image_url is provided, call GPT-4o-mini Vision to extract multimodal image features
+        if (image_url && typeof image_url === "string" && image_url.startsWith("http")) {
+          try {
+            const visionResp = await openai.chat.completions.create({
+              model: "gpt-4o-mini",
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    { type: "text", text: "Describe the key visual elements, mood, and objects in 2 short sentences." },
+                    { type: "image_url", image_url: { url: image_url } }
+                  ]
+                }
+              ],
+              max_tokens: 60,
+            });
+            const imageDesc = visionResp.choices[0]?.message?.content?.trim() || "";
+            if (imageDesc) {
+              textToEmbed += ` | Image Scene: ${imageDesc}`;
+            }
+          } catch (vErr) {
+            console.warn("Vision processing error (fallback to text):", vErr);
+          }
+        }
+
+        // Generate embedding vector for the combined post content + image description
         const embeddingResp = await openai.embeddings.create({
           model: "text-embedding-3-small",
-          input: content.trim(),
+          input: textToEmbed,
         });
         const [{ embedding }] = embeddingResp.data;
 
-        // Calculate started_at and ends_at (6 hours later)
+        // Calculate started_at and ends_at (6 or 24 hours later)
         const startedAt = new Date();
-        const endsAt = new Date(startedAt.getTime() + 6 * 60 * 60 * 1000); // + 6 hours
+        const endsAt = new Date(startedAt.getTime() + duration * 60 * 60 * 1000);
 
         // Check if pet is already traveling (to avoid multiple active travels)
         const { data: activeTravel } = await ctx.supabaseAdmin
@@ -98,6 +126,7 @@ export default {
             audio_url: audio_url || null,
             started_at: startedAt.toISOString(),
             ends_at: endsAt.toISOString(),
+            duration_hours: duration,
             embedding: embedding,
             status: "traveling",
           })

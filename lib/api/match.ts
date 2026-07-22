@@ -11,10 +11,10 @@ export interface MatchQueueStatus {
 /**
  * 发起同频匹配 (加入等待队列)
  */
-export async function startMatching(): Promise<{ status: 'waiting' | 'matched'; groupId?: string; error: string | null }> {
+export async function startMatching(preMatchIntent?: string): Promise<{ status: 'waiting' | 'matched'; groupId?: string; error: string | null }> {
   try {
     const { data, error } = await supabase.functions.invoke('agent-chat', {
-      body: { action: 'join_match' },
+      body: { action: 'join_match', pre_match_intent: preMatchIntent || '' },
     });
 
     if (error) return { status: 'waiting', error: error.message || 'Failed to start matching' };

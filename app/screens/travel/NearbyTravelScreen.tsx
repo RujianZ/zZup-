@@ -71,6 +71,13 @@ export default function NearbyTravelScreen() {
     return PET_BREEDS[key] || 'zZuPer';
   };
 
+  const handleCardPress = (post: TravelPost) => {
+    import('../../../lib/api/travel').then(({ recordTravelPostView }) => {
+      recordTravelPostView(post.id);
+    });
+    navigation.navigate('TravelDetail', { post });
+  };
+
   const renderCard = (post: TravelPost) => {
     const breedName = getBreedName(post.author_profile?.pet_breed);
 
@@ -79,7 +86,7 @@ export default function NearbyTravelScreen() {
         key={post.id}
         style={styles.card}
         activeOpacity={0.9}
-        onPress={() => navigation.navigate('TravelDetail', { post })}
+        onPress={() => handleCardPress(post)}
       >
         {/* Post Image Cover if exists */}
         {post.image_url ? (

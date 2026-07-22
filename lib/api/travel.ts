@@ -8,6 +8,8 @@ export interface TravelPost {
   audio_url: string | null;
   started_at: string;
   ends_at: string;
+  duration_hours?: number;
+  remaining_seconds?: number;
   view_count: number;
   status: 'traveling' | 'returned';
   similarity?: number;
@@ -38,7 +40,8 @@ export interface TravelComment {
 export async function createTravelPost(
   content: string,
   imageUrl?: string,
-  audioUrl?: string
+  audioUrl?: string,
+  durationHours: number = 6
 ): Promise<{ post: TravelPost | null; error: string | null }> {
   try {
     const { data, error } = await supabase.functions.invoke('travel-mode', {
@@ -47,6 +50,7 @@ export async function createTravelPost(
         content,
         image_url: imageUrl,
         audio_url: audioUrl,
+        duration_hours: durationHours
       },
     });
 
@@ -58,6 +62,55 @@ export async function createTravelPost(
     return { post: null, error: err.message || 'Network error starting travel' };
   }
 }
+
+/**
+ * 提前召回宠物回家
+ */
+export async function recallTravelPet(postId: string): Promise<{ remainingSeconds: number; error: string | null }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { remainingSeconds: 0, error: 'Not authenticated' };
+
+  const { data, error } = await supabase.rpc('recall_travel_pet', {
+    p_post_id: postId,
+    p_user_id: user.id
+  });
+
+  if (error) return { remainingSeconds: 0, error: error.message };
+  return { remainingSeconds: data?.remaining_seconds || 0, error: null };
+}
+
+/**
+ * 带着老帖重发/一键续期漫游
+ */
+export async function renewTravelPost(postId: string, durationHours: number = 6): Promise<{ error: string | null }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not authenticated' };
+
+  const { data, error } = await supabase.rpc('renew_travel_post', {
+    p_post_id: postId,
+    p_user_id: user.id,
+    p_duration_hours: durationHours
+  });
+
+  if (error) return { error: error.message };
+  return { error: data?.error || null };
+}
+
+/**
+ * 记录已看曝光 (阅后即避去重)
+ */
+export async function recordTravelPostView(postId: string): Promise<{ error: string | null }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not authenticated' };
+
+  const { error } = await supabase.rpc('record_travel_post_view', {
+    p_post_id: postId,
+    p_user_id: user.id
+  });
+
+  return { error: error ? error.message : null };
+}
+
 
 /**
  * 匹配附近正在旅行的其他宠物 (同校优先 -> 向量相似排序)

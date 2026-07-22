@@ -31,6 +31,7 @@ export default function FreeTravelScreen() {
   const [content, setContent] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [postMethod, setPostMethod] = useState<'text' | 'image' | 'voice'>('text');
+  const [durationHours, setDurationHours] = useState<6 | 24>(6);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedSecs, setRecordedSecs] = useState(0);
 
@@ -130,7 +131,9 @@ export default function FreeTravelScreen() {
     try {
       const { post, error } = await createTravelPost(
         content.trim(),
-        imageUrl.trim() || undefined
+        imageUrl.trim() || undefined,
+        undefined,
+        durationHours
       );
 
       if (error) {
@@ -140,7 +143,45 @@ export default function FreeTravelScreen() {
         setContent('');
         setImageUrl('');
         startCountdown(post.ends_at);
-        Alert.alert('出发成功！', `${profile?.pet_name || '宠物'} 已经背着小行囊出发旅行啦！`);
+        Alert.alert('出发成功！', `${profile?.pet_name || '宠物'} 已经背着小行囊出发漫游 ${durationHours} 小时啦！`);
+      }
+    } catch (err: any) {
+      Alert.alert('错误', err.message || '出错了');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRecallPet = async () => {
+    if (!activePost) return;
+    setSubmitting(true);
+    try {
+      const { recallTravelPet } = await import('../../../lib/api/travel');
+      const { remainingSeconds, error } = await recallTravelPet(activePost.id);
+      if (error) {
+        Alert.alert('召回失败', error);
+      } else {
+        await loadActiveTravel();
+        Alert.alert('宠儿召回成功！', `宠物已乖乖回到家里！剩余了 ${Math.floor(remainingSeconds / 60)} 分钟时长。查看留言后可随时重新出游！`);
+      }
+    } catch (err: any) {
+      Alert.alert('错误', err.message || '出错了');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRenewPost = async () => {
+    if (!activePost) return;
+    setSubmitting(true);
+    try {
+      const { renewTravelPost } = await import('../../../lib/api/travel');
+      const { error } = await renewTravelPost(activePost.id, durationHours);
+      if (error) {
+        Alert.alert('续期失败', error);
+      } else {
+        await loadActiveTravel();
+        Alert.alert('老帖重发成功！', `已带上之前的历史留言重新进入新鲜漫游池，仅推荐给未看过的新路人！`);
       }
     } catch (err: any) {
       Alert.alert('错误', err.message || '出错了');

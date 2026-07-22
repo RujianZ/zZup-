@@ -130,7 +130,7 @@ begin
 end;
 $$;
 
--- Trigger function to invoke the Deno Edge Function webhook for AI turns
+-- Trigger function to invoke the Deno Edge Function webhook for AI turns (Scheme C Rule)
 CREATE OR REPLACE FUNCTION public.trigger_agent_chat_reply()
 RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER
@@ -140,7 +140,10 @@ declare
   v_user_a_id uuid;
   v_user_b_id uuid;
   v_next_sender_id uuid;
+  v_prev_sender_id uuid;
   v_next_sender_taken_over boolean;
+  v_prev_sender_taken_over boolean;
+  v_buffer_sent_count integer;
   v_ai_count integer;
   v_internal_url text;
 begin
@@ -167,24 +170,49 @@ begin
     return new;
   end if;
 
-  -- 3. Determine whose turn it is next
+  -- 3. Determine sender roles
+  v_prev_sender_id := new.sender_id;
   if new.sender_id = v_user_a_id then
     v_next_sender_id := v_user_b_id;
   else
     v_next_sender_id := v_user_a_id;
   end if;
 
-  -- 4. Check if the next sender has already taken over (sent a 'real' message)
+  -- 4. Check Scheme C Takeover Rules
   select exists(
     select 1 from public.messages
     where conversation_id = new.conversation_id and sender_id = v_next_sender_id and identity_mode = 'real'
   ) into v_next_sender_taken_over;
 
+  -- If next sender has already taken over personally, AI must NOT generate any message
   if v_next_sender_taken_over is true then
     return new;
   end if;
 
-  -- 5. Check AI message limit for the next sender
+  select exists(
+    select 1 from public.messages
+    where conversation_id = new.conversation_id and sender_id = v_prev_sender_id and identity_mode = 'real'
+  ) into v_prev_sender_taken_over;
+
+  -- Scheme C: If previous sender just took over with a real message, allow NEXT sender's AI to send EXACTLY 1 buffer message
+  if v_prev_sender_taken_over is true then
+    select count(*) into v_buffer_sent_count
+    from public.messages
+    where conversation_id = new.conversation_id 
+      and sender_id = v_next_sender_id 
+      and identity_mode = 'pet'
+      and created_at > (
+        select max(created_at) from public.messages 
+        where conversation_id = new.conversation_id and sender_id = v_prev_sender_id and identity_mode = 'real'
+      );
+
+    -- If buffer message has already been sent after takeover, STOP AI completely
+    if v_buffer_sent_count >= 1 then
+      return new;
+    end if;
+  end if;
+
+  -- 5. Check total AI message limit (15 max per pet)
   select count(*) into v_ai_count
   from public.messages
   where conversation_id = new.conversation_id and sender_id = v_next_sender_id and identity_mode = 'pet';
@@ -203,7 +231,8 @@ begin
     body := jsonb_build_object(
       'action', 'generate_reply',
       'group_id', new.conversation_id,
-      'next_sender_id', v_next_sender_id
+      'next_sender_id', v_next_sender_id,
+      'is_buffer_turn', v_prev_sender_taken_over
     )
   );
 
@@ -213,6 +242,7 @@ exception when others then
   return new;
 end;
 $$;
+
 
 -- Create message trigger
 CREATE OR REPLACE TRIGGER trigger_agent_chat_reply_trigger

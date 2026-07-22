@@ -99,6 +99,7 @@ export default {
           });
         }
         const userId = user.id;
+        const preMatchIntent = body.pre_match_intent || "";
 
         // Fetch user profile
         const { data: profile, error: profErr } = await ctx.supabaseAdmin
@@ -114,8 +115,8 @@ export default {
           });
         }
 
-        // Generate Interest Embedding Vector from user bio + pet bio
-        const textToEmbed = `Name: ${profile.real_name || "Anonymous"}. University: ${profile.university || "UCL"}. Bio: ${profile.bio || ""}. Pet Name: ${profile.pet_name || ""}. Pet Character: ${profile.pet_bio || ""}`.trim();
+        // Generate Interest Embedding Vector from pre_match_intent + bio
+        const textToEmbed = `Match Intent: ${preMatchIntent}. Name: ${profile.real_name || "Anonymous"}. University: ${profile.university || "UCL"}. Bio: ${profile.bio || ""}. Pet Name: ${profile.pet_name || ""}. Pet Character: ${profile.pet_bio || ""}`.trim();
         const embeddingResp = await openai.embeddings.create({
           model: "text-embedding-3-small",
           input: textToEmbed,
@@ -161,8 +162,8 @@ export default {
               .eq("id", matchedPartnerId)
               .single();
 
-            // Ask OpenAI to analyze a common interest topic based on bios
-            const topicPrompt = `User A Bio: "${partnerProfile?.bio || ""}" (Pet Bio: "${partnerProfile?.pet_bio || ""}").\nUser B Bio: "${profile.bio || ""}" (Pet Bio: "${profile.pet_bio || ""}").\nFind a single common topic of interest between these two users (e.g. studying, play tennis, play games, drink coffee, cats). Output only a single short phrase in Chinese (e.g. "打网球" or "喝咖啡" or "期末备战"), no other words.`;
+            // Ask OpenAI to analyze a common interest topic based on intents & bios
+            const topicPrompt = `User A Bio/Intent: "${partnerProfile?.bio || ""}" (Pet Bio: "${partnerProfile?.pet_bio || ""}").\nUser B Bio/Intent: "${preMatchIntent} ${profile.bio || ""}" (Pet Bio: "${profile.pet_bio || ""}").\nFind a single common topic of interest between these two users (e.g. play tennis, drink coffee, food). Output only a single short phrase in Chinese (e.g. "打网球" or "喝咖啡" or "期末备战"), no other words.`;
             const topicResp = await openai.chat.completions.create({
               model: "gpt-4o-mini",
               messages: [{ role: "user", content: topicPrompt }],
@@ -176,16 +177,26 @@ export default {
               .update({ description: commonInterest })
               .eq("id", matchedGroupId);
 
-            // Generate first AI opening message from Pet B (our pet, since B triggered the match completion)
+            // Fetch User B's 1v1 pet memories for RAG synergy
+            const { data: petMemories } = await ctx.supabaseAdmin
+              .from("pet_memories")
+              .select("memory_text")
+              .eq("user_id", userId)
+              .order("created_at", { ascending: false })
+              .limit(3);
+
+            const memorySnippet = petMemories?.map((m: any) => m.memory_text).join("; ") || "";
+
+            // Generate first AI opening message from Pet B
             const breedKey = (profile.pet_breed || "golden_retriever").toLowerCase().trim();
             const breedConfig = PET_BREEDS[breedKey] || PET_BREEDS["golden_retriever"];
             
-            const firstMsgPrompt = `You are a pet dog/cat starting a friendly conversation with another pet.
+            const firstMsgPrompt = `You are a pet starting a friendly conversation with another pet.
 Your name is "${profile.pet_name || "毛孩子"}", breed is "${breedConfig.breedName}", character: "${breedConfig.personality}".
-Your owner's name is "${profile.real_name || "Owner"}".
+Your owner's name is "${profile.real_name || "Owner"}". Known facts about your owner: "${memorySnippet}".
 The opposite pet's name is "${partnerProfile?.pet_name || "小伙伴"}" (owner: "${partnerProfile?.real_name || "对面校友"}").
 Your owners both share a common interest: "${commonInterest}".
-Write a short, cute, warm first opening message introducing yourself, mentioning the common interest, and greeting the opposite pet. Keep it brief (under 50 words). Write in English (as owners are college students). Include actions in asterisks like *wags tail*.`;
+Write a short, cute, warm first opening message introducing yourself, mentioning the common interest, and greeting the opposite pet. Keep it brief (under 40 words). Include actions in asterisks like *wags tail*.`;
 
             const firstMsgResp = await openai.chat.completions.create({
               model: "gpt-4o-mini",
@@ -235,7 +246,7 @@ Write a short, cute, warm first opening message introducing yourself, mentioning
 
       // ─── ACTION 3: generate_reply (Webhook Trigger) ───
       if (action === "generate_reply") {
-        const { group_id, next_sender_id } = body;
+        const { group_id, next_sender_id, is_buffer_turn } = body;
         if (!group_id || !next_sender_id) {
           return new Response(JSON.stringify({ error: "Missing parameters" }), {
             status: 400,
@@ -260,14 +271,16 @@ Write a short, cute, warm first opening message introducing yourself, mentioning
 
         if (!receiverId) return new Response("Ok (no receiver)", { status: 200 });
 
-        // Retrieve both profiles
-        const [senderResult, receiverResult] = await Promise.all([
+        // Retrieve both profiles & sender's 1v1 memories
+        const [senderResult, receiverResult, petMemoriesResult] = await Promise.all([
           ctx.supabaseAdmin.from("profiles").select("*").eq("id", senderId).single(),
           ctx.supabaseAdmin.from("profiles").select("*").eq("id", receiverId).single(),
+          ctx.supabaseAdmin.from("pet_memories").select("memory_text").eq("user_id", senderId).order("created_at", { ascending: false }).limit(3),
         ]);
 
         const sender = senderResult.data;
         const receiver = receiverResult.data;
+        const memoriesSnippet = petMemoriesResult.data?.map((m: any) => m.memory_text).join("; ") || "";
 
         if (!sender || !receiver) return new Response("Ok (profiles not found)", { status: 200 });
 
@@ -297,19 +310,25 @@ Write a short, cute, warm first opening message introducing yourself, mentioning
             })
           : [];
 
-        // Construct System Prompt
-        const systemPrompt = `You are a loving pet companion engaged in a direct chat with another user's pet.
+        // Construct System Prompt (Scheme C Buffer Turn aware)
+        let systemPrompt = "";
+        if (is_buffer_turn) {
+          systemPrompt = `You are a cute pet (${sender.pet_name}, ${senderBreedConfig.breedName}).
+The opposite owner (${receiver.real_name}) just sent a real human message to take over!
+Generate a single short, friendly buffer reply telling them that your owner (${sender.real_name}) saw the message and is coming right now! Keep it brief (under 25 words). Include actions in asterisks like *happy bark*.`;
+        } else {
+          systemPrompt = `You are a loving pet companion engaged in a direct chat with another user's pet.
 Your name is "${sender.pet_name || "毛孩子"}", you are a "${senderBreedConfig.breedName}", personality: "${senderBreedConfig.personality}".
-Your owner's name is "${sender.real_name || "Owner"}".
+Your owner's name is "${sender.real_name || "Owner"}". Known memories of your owner: "${memoriesSnippet}".
 The opposite pet's name is "${receiver.pet_name || "小伙伴"}" (owner: "${receiver.real_name || "对面校友"}").
 Your owners both share a common interest: "${matchedInterest}".
 
 Guidelines:
 1. Speak in your pet persona. Address the opposite pet friendly.
-2. Keep your answers brief, cute, and conversational (excellent for chat screens, 1-2 short sentences maximum).
-3. If the opposite owner is in "Owner" mode, it means the human has taken over. Be polite, cute and respect the human!
-4. Use English since your owner is an American college student. Include pet actions in asterisks (e.g. *happy bark*, *twitches tail*).
-5. Do not include your name prefix in the actual reply text (just write the dialogue).`;
+2. Keep your answers brief, cute, and conversational (1-2 short sentences maximum).
+3. Use English since your owner is an American college student. Include pet actions in asterisks (e.g. *happy bark*, *twitches tail*).
+4. Do not include your name prefix in the actual reply text.`;
+        }
 
         const messages = [
           { role: "system" as const, content: systemPrompt },
@@ -326,7 +345,7 @@ Guidelines:
         const replyText = openaiResp.choices[0]?.message?.content?.trim() || "";
 
         if (replyText) {
-          // Insert AI reply into the database (this will trigger next webhook call if receiver is still in AI mode!)
+          // Insert AI reply into the database
           await ctx.supabaseAdmin.from("messages").insert({
             conversation_id: group_id,
             sender_id: senderId,
