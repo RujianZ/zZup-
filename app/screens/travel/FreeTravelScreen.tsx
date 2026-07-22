@@ -394,10 +394,32 @@ export default function FreeTravelScreen() {
               </View>
             )}
 
+            {/* Duration Selector Pill */}
+            <View style={styles.cardBox}>
+              <Text style={styles.cardBoxTitle}>Select Roam Duration</Text>
+              <View style={styles.durationRow}>
+                <TouchableOpacity
+                  style={[styles.durationChip, durationHours === 6 && styles.durationChipActive]}
+                  onPress={() => setDurationHours(6)}
+                >
+                  <Ionicons name="flash-outline" size={16} color={durationHours === 6 ? '#fff' : '#7C3AED'} style={{ marginRight: 6 }} />
+                  <Text style={[styles.durationText, durationHours === 6 && styles.durationTextActive]}>6 Hours (Short)</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.durationChip, durationHours === 24 && styles.durationChipActive]}
+                  onPress={() => setDurationHours(24)}
+                >
+                  <Ionicons name="time-outline" size={16} color={durationHours === 24 ? '#fff' : '#7C3AED'} style={{ marginRight: 6 }} />
+                  <Text style={[styles.durationText, durationHours === 24 && styles.durationTextActive]}>24 Hours (Long)</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
             <View style={styles.tipCard}>
               <Ionicons name="information-circle-outline" size={20} color="#7C3AED" style={styles.tipIcon} />
               <Text style={styles.tipText}>
-                Roaming lasts for 6 hours. Your zZuPer will match and pass through maps of like-minded fellows who can view and leave notes. All notes will be brought back safely!
+                Roaming lasts for {durationHours} hours. Your zZuPer will match and pass through maps of like-minded fellows who can view and leave notes. All notes will be brought back safely!
               </Text>
             </View>
 
@@ -411,7 +433,7 @@ export default function FreeTravelScreen() {
               ) : (
                 <>
                   <Ionicons name="paper-plane" size={20} color="#fff" style={{ marginRight: 8 }} />
-                  <Text style={styles.primaryButtonText}>Send to Roam (6 Hours)</Text>
+                  <Text style={styles.primaryButtonText}>Start zZuPer Roam ({durationHours} Hours)</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -470,10 +492,20 @@ export default function FreeTravelScreen() {
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
-                <Text style={styles.statVal}>Roaming</Text>
-                <Text style={styles.statLabel}>Status</Text>
+                <Text style={styles.statVal}>{activePost.duration_hours || 6}h</Text>
+                <Text style={styles.statLabel}>Duration</Text>
               </View>
             </View>
+
+            {/* Recall Pet Button */}
+            <TouchableOpacity
+              style={[styles.recallButton, submitting && styles.disabledButton]}
+              onPress={handleRecallPet}
+              disabled={submitting}
+            >
+              <Ionicons name="home-outline" size={20} color="#7C3AED" style={{ marginRight: 8 }} />
+              <Text style={styles.recallButtonText}>Recall Pet Home Early</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.secondaryButton, { width: SCREEN_WIDTH - 40 }]}
@@ -946,6 +978,52 @@ const styles = StyleSheet.create({
   },
   methodBtnTextActive: {
     color: '#7C3AED',
+  },
+  durationRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+  },
+  durationChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E4E4E7',
+    backgroundColor: '#FAFAFA',
+  },
+  durationChipActive: {
+    borderColor: '#7C3AED',
+    backgroundColor: '#7C3AED',
+  },
+  durationText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#7C3AED',
+  },
+  durationTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  recallButton: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF1F2',
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+    marginTop: 12,
+    width: SCREEN_WIDTH - 40,
+  },
+  recallButtonText: {
+    color: '#E11D48',
+    fontSize: 15,
+    fontWeight: '700',
   },
   voiceRecordCard: {
     backgroundColor: '#FFFFFF',
