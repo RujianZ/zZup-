@@ -223,7 +223,15 @@ export default function ProfileScreen() {
             {isHostTab ? (
               <>
                 <Text style={styles.mainName}>{profile?.real_name ?? 'Not Configured'}</Text>
-                <Text style={styles.sudoId}>zZuP ID: {profile?.zzup_id ?? '—'}</Text>
+                <Text style={styles.sudoId}>zZuPer ID: #{profile?.zzup_id ?? '00001'}</Text>
+                
+                {profile?.edu_verified && (
+                  <View style={[styles.badgeRow, { backgroundColor: '#F5F3FF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginTop: 4 }]}>
+                    <Ionicons name="school" size={14} color="#7C3AED" />
+                    <Text style={[styles.badgeText, { color: '#7C3AED', fontWeight: '700' }]}>🎓 .edu Verified Student</Text>
+                  </View>
+                )}
+
                 {profile?.university && (
                   <View style={styles.badgeRow}>
                     <Ionicons name="school-outline" size={14} color="#71717A" />
