@@ -138,7 +138,6 @@ export default function OnboardingScreen() {
       nationality: nationality.trim() || undefined,
       avatar_url: customAvatarUri || selectedHumanAvatar,
       pet_name: petName.trim(),
-      pet_bio: petBio.trim() || undefined,
       pet_breed: selectedBreed,
       pet_avatar_url: petAvatarUrl || undefined,
       profile_visibility: profileVisibility,
@@ -325,17 +324,6 @@ export default function OnboardingScreen() {
             placeholderTextColor="#A1A1AA"
             value={petName}
             onChangeText={setPetName}
-          />
-
-          <Text style={styles.inputLabel}>Pet Bio (Optional)</Text>
-          <TextInput
-            style={[styles.input, styles.multiline]}
-            placeholder="A quick note about your pet's quirks..."
-            placeholderTextColor="#A1A1AA"
-            value={petBio}
-            onChangeText={setPetBio}
-            multiline
-            numberOfLines={3}
           />
 
           <TouchableOpacity style={styles.button} onPress={handleStep2}>
