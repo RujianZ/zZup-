@@ -10,6 +10,7 @@ import { updateProfile } from '../../../lib/api/auth';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import { PetSvgAvatar } from '../../../assets/pets';
 
 // 10 Official Pet Breed Personas
 const OFFICIAL_PET_BREEDS = [
@@ -270,7 +271,7 @@ export default function OnboardingScreen() {
                 style={[styles.breedCard, selectedBreed === b.key && styles.breedCardActive]}
                 onPress={() => setSelectedBreed(b.key)}
               >
-                <Text style={styles.breedIcon}>{b.icon}</Text>
+                <PetSvgAvatar breed={b.key} stage="child" size={44} />
                 <Text style={[styles.breedName, selectedBreed === b.key && styles.breedNameActive]}>{b.name}</Text>
                 <Text style={styles.breedMbti}>{b.mbti}</Text>
               </TouchableOpacity>
