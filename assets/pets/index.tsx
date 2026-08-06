@@ -59,9 +59,9 @@ export const PET_BREEDS_INFO: Record<string, { icon: string; name: string; mbti:
 };
 
 export const PET_STAGES_INFO: Record<string, { label: string; sizeMultiplier: number }> = {
-  child: { label: '幼年体', sizeMultiplier: 0.8 },
-  youth: { label: '青年体', sizeMultiplier: 1.0 },
-  adult: { label: '完全体', sizeMultiplier: 1.2 },
+  child: { label: 'Child Form', sizeMultiplier: 0.8 },
+  youth: { label: 'Youth Form', sizeMultiplier: 1.0 },
+  adult: { label: 'Ultimate Form', sizeMultiplier: 1.2 },
 };
 
 // 30 Pet SVG Component Map

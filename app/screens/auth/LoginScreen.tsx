@@ -5,15 +5,16 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
   ActivityIndicator
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
 import { AntDesign } from '@expo/vector-icons';
 import { signIn } from '../../../lib/api/auth';
+import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 
 export default function LoginScreen() {
   const navigation = useNavigation<any>();
@@ -21,30 +22,43 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading]   = useState(false);
 
+  // Custom Dark Alert Modal State
+  const [alertConfig, setAlertConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type?: 'error' | 'info' | 'success';
+  }>({ visible: false, title: '', message: '', type: 'error' });
+
+  const showAlert = (title: string, message: string, type: 'error' | 'info' | 'success' = 'error') => {
+    setAlertConfig({ visible: true, title, message, type });
+  };
+
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in both email and password.');
+      showAlert('Error', 'Please fill in both email and password.', 'error');
       return;
     }
     setLoading(true);
     const { error } = await signIn(email.trim(), password);
     setLoading(false);
     if (error) {
-      Alert.alert('Login Failed', error);
+      showAlert('Login Failed', error, 'error');
       return;
     }
   };
 
   const handleGoogleLogin = () => {
-    Alert.alert('Info', 'Google Login is being integrated by Joe in the backend. Please use email login for now.');
+    showAlert('Notice', 'Google Login is being integrated by Joe in the backend. Please use email login for now.', 'info');
   };
 
   const handleForgotPassword = () => {
-    Alert.alert('Forgot Password', 'Password recovery will be available once the backend mail service is configured.');
+    showAlert('Forgot Password', 'Password recovery will be available once the backend mail service is configured.', 'info');
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="light" />
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -59,7 +73,7 @@ export default function LoginScreen() {
             <TextInput
               style={styles.input}
               placeholder="m@example.com"
-              placeholderTextColor="#A1A1AA"
+              placeholderTextColor="#71717A"
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -78,6 +92,7 @@ export default function LoginScreen() {
             <TextInput
               style={styles.input}
               placeholder=""
+              placeholderTextColor="#71717A"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -105,7 +120,7 @@ export default function LoginScreen() {
             onPress={handleGoogleLogin}
             activeOpacity={0.8}
           >
-            <AntDesign name="google" size={16} color="#09090B" style={styles.googleIcon} />
+            <AntDesign name="google" size={16} color="#F3E8FF" style={styles.googleIcon} />
             <Text style={styles.googleButtonText}>Login with Google</Text>
           </TouchableOpacity>
 
@@ -118,6 +133,15 @@ export default function LoginScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Reusable Dark Luxury Alert Modal */}
+      <LuxuryAlertModal
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 }
@@ -125,41 +149,39 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0B0713',
     width: '100%',
   },
   container: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0B0713',
     paddingHorizontal: 20,
   },
   card: {
     width: '100%',
     maxWidth: 400,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E4E4E7',
+    backgroundColor: '#161024',
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: '#261E38',
     padding: 24,
-    // Shadow for iOS
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    // Shadow for Android
-    elevation: 2,
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
   },
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#09090B',
+    color: '#F3E8FF',
     marginBottom: 6,
   },
   subtitle: {
     fontSize: 14,
-    color: '#71717A',
+    color: '#A1A1AA',
     marginBottom: 28,
     lineHeight: 20,
   },
@@ -175,50 +197,50 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#09090B',
+    fontWeight: '600',
+    color: '#F3E8FF',
     marginBottom: 8,
   },
   forgotPassword: {
-    fontSize: 14,
-    color: '#71717A',
+    fontSize: 13,
+    color: '#C084FC',
   },
   input: {
     width: '100%',
-    height: 44,
-    borderWidth: 1,
-    borderColor: '#E4E4E7',
-    borderRadius: 8,
+    height: 46,
+    borderWidth: 1.5,
+    borderColor: '#261E38',
+    borderRadius: 12,
     paddingHorizontal: 14,
     fontSize: 14,
-    color: '#09090B',
-    backgroundColor: '#FFFFFF',
+    color: '#FFFFFF',
+    backgroundColor: '#0B0713',
   },
   loginButton: {
     width: '100%',
-    height: 44,
-    backgroundColor: '#7C3AED', // Premium violet
-    borderRadius: 8,
+    height: 46,
+    backgroundColor: '#8B5CF6',
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
     marginBottom: 12,
   },
   loginButtonDisabled: {
-    backgroundColor: '#C084FC',
+    opacity: 0.4,
   },
   loginButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
   },
   googleButton: {
     width: '100%',
-    height: 44,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E4E4E7',
-    borderRadius: 8,
+    height: 46,
+    backgroundColor: '#261E38',
+    borderWidth: 1.5,
+    borderColor: '#3F2A60',
+    borderRadius: 12,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -228,9 +250,9 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   googleButtonText: {
-    color: '#09090B',
+    color: '#F3E8FF',
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   footer: {
     flexDirection: 'row',
@@ -239,12 +261,12 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 14,
-    color: '#71717A',
+    color: '#A1A1AA',
   },
   signUpLink: {
     fontSize: 14,
-    color: '#09090B',
-    fontWeight: '500',
+    color: '#C084FC',
+    fontWeight: '700',
     textDecorationLine: 'underline',
   },
 });

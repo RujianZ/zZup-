@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, SafeAreaView, TextInput,
   TouchableOpacity, ScrollView, ActivityIndicator, Alert, Switch,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { createGroup } from '../../../lib/api/conversations';
@@ -46,16 +47,17 @@ export default function CreateGroupScreen() {
   };
 
   const GROUP_TYPES: { key: GroupType; label: string; desc: string }[] = [
-    { key: 'open', label: '🌐 Open Pack', desc: 'Anyone can search and join' },
-    { key: 'edu_verified', label: '🎓 Campus Pack', desc: 'Only visible to verified members from the same school' },
-    { key: 'official', label: '⭐ Official Pack', desc: 'Officially verified group chat' },
+    { key: 'open', label: 'Open Pack', desc: 'Anyone can search and join' },
+    { key: 'edu_verified', label: 'Campus Pack', desc: 'Only visible to verified members from the same school' },
+    { key: 'official', label: 'Official Pack', desc: 'Officially verified group chat' },
   ];
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar style="light" />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color="#09090B" />
+          <Ionicons name="chevron-back" size={24} color="#C084FC" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Create Pack Chat</Text>
         <TouchableOpacity
@@ -77,7 +79,7 @@ export default function CreateGroupScreen() {
           <TextInput
             style={styles.input}
             placeholder="Enter Pack Chat name..."
-            placeholderTextColor="#A1A1AA"
+            placeholderTextColor="#71717A"
             value={name}
             onChangeText={setName}
             maxLength={30}
@@ -90,7 +92,7 @@ export default function CreateGroupScreen() {
           <TextInput
             style={[styles.input, styles.inputMulti]}
             placeholder="Introduce this Pack Chat..."
-            placeholderTextColor="#A1A1AA"
+            placeholderTextColor="#71717A"
             value={description}
             onChangeText={setDesc}
             multiline
@@ -112,7 +114,7 @@ export default function CreateGroupScreen() {
                 <Text style={styles.typeDesc}>{t.desc}</Text>
               </View>
               {groupType === t.key && (
-                <Ionicons name="checkmark-circle" size={20} color="#7C3AED" />
+                <Ionicons name="checkmark-circle" size={20} color="#C084FC" />
               )}
             </TouchableOpacity>
           ))}
@@ -128,7 +130,7 @@ export default function CreateGroupScreen() {
             <Switch
               value={isSearchable}
               onValueChange={setSearchable}
-              trackColor={{ false: '#E4E4E7', true: '#7C3AED' }}
+              trackColor={{ false: '#261E38', true: '#8B5CF6' }}
               thumbColor="#fff"
             />
           </View>
@@ -139,40 +141,40 @@ export default function CreateGroupScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: '#0B0713' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#F4F4F5',
-    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1, borderBottomColor: '#261E38',
+    backgroundColor: '#13101E',
   },
   backBtn: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#09090B' },
-  createBtn: { backgroundColor: '#7C3AED', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16 },
-  createBtnDisabled: { opacity: 0.5 },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#F3E8FF' },
+  createBtn: { backgroundColor: '#8B5CF6', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16 },
+  createBtnDisabled: { opacity: 0.4 },
   createBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   scroll: { padding: 20, gap: 24 },
   section: { gap: 10 },
-  sectionLabel: { fontSize: 13, color: '#71717A', fontWeight: '600' },
+  sectionLabel: { fontSize: 12, color: '#C084FC', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   input: {
-    backgroundColor: '#F9FAFB', borderRadius: 12, padding: 14,
-    color: '#09090B', fontSize: 15, borderWidth: 1, borderColor: '#F4F4F5',
+    backgroundColor: '#161024', borderRadius: 12, padding: 14,
+    color: '#FFFFFF', fontSize: 15, borderWidth: 1.5, borderColor: '#261E38',
   },
   inputMulti: { height: 80, textAlignVertical: 'top' },
   typeOption: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF', borderRadius: 12, padding: 14,
-    borderWidth: 1, borderColor: '#F4F4F5',
+    backgroundColor: '#161024', borderRadius: 14, padding: 16,
+    borderWidth: 1.5, borderColor: '#261E38',
   },
-  typeOptionActive: { borderColor: '#7C3AED', backgroundColor: 'rgba(124, 58, 237, 0.05)' },
+  typeOptionActive: { borderColor: '#8B5CF6', backgroundColor: '#24153B' },
   typeLeft: { gap: 3 },
-  typeLabel: { fontSize: 14, color: '#09090B', fontWeight: '600' },
-  typeDesc:  { fontSize: 12, color: '#71717A' },
+  typeLabel: { fontSize: 14, color: '#F3E8FF', fontWeight: '600' },
+  typeDesc:  { fontSize: 12, color: '#A1A1AA' },
   switchRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF', borderRadius: 12, padding: 14,
-    borderWidth: 1, borderColor: '#F4F4F5',
+    backgroundColor: '#161024', borderRadius: 14, padding: 16,
+    borderWidth: 1.5, borderColor: '#261E38',
   },
-  switchLabel: { fontSize: 14, color: '#09090B', fontWeight: '500' },
-  switchDesc:  { fontSize: 12, color: '#71717A', marginTop: 2 },
+  switchLabel: { fontSize: 14, color: '#F3E8FF', fontWeight: '600' },
+  switchDesc:  { fontSize: 12, color: '#A1A1AA', marginTop: 2 },
 });

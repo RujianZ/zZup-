@@ -4,6 +4,7 @@ import {
   TouchableOpacity, Image, ActivityIndicator, TextInput,
   KeyboardAvoidingView, Platform, Alert, Animated,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import LottieView from 'lottie-react-native';
@@ -215,7 +216,7 @@ export default function PetChatScreen() {
           profile?.pet_avatar_url ? (
             <Image source={{ uri: profile.pet_avatar_url }} style={styles.msgAvatar} />
           ) : (
-            <View style={[styles.msgAvatarFallback, { backgroundColor: '#7C3AED' }]}>
+            <View style={[styles.msgAvatarFallback, { backgroundColor: '#8B5CF6' }]}>
               <Ionicons name="paw" size={14} color="#fff" />
             </View>
           )
@@ -239,14 +240,16 @@ export default function PetChatScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar style="light" />
+
       {/* Upper Glassmorphic Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color="#09090B" />
+          <Ionicons name="chevron-back" size={24} color="#F3E8FF" />
         </TouchableOpacity>
         
         <View style={styles.petMeta}>
-          <Text style={styles.headerTitle}>Cozy Chat</Text>
+          <Text style={styles.headerTitle}>zZuPer Talk</Text>
           <Text style={styles.petSubText} numberOfLines={1}>with {petName}</Text>
         </View>
 
@@ -262,41 +265,31 @@ export default function PetChatScreen() {
             <Image source={{ uri: profile.pet_avatar_url }} style={styles.petImage} />
           ) : (
             <View style={styles.petImageFallback}>
-              <Ionicons name="paw" size={48} color="#7C3AED" />
+              <Ionicons name="paw" size={36} color="#8B5CF6" />
             </View>
           )}
         </Animated.View>
 
-        {/* Dynamic Lottie Animation matching petEmotion */}
-        <LottieView
-          source={
-            petEmotion === 'thinking' ? require('../../../assets/favicon.png') :
-            petEmotion === 'happy' ? require('../../../assets/favicon.png') :
-            require('../../../assets/favicon.png')
-          }
-          style={styles.lottieAnim}
-          autoPlay
-          loop
-        />
-        
         <Text style={styles.emotionStatus}>
-          {petEmotion === 'thinking' ? '*thinking...*' :
-           petEmotion === 'happy' ? '*happily wags tail!*' :
-           petEmotion === 'sleeping' ? '*zzz...*' :
-           '*looking at you affectionately*'}
+          {petEmotion === 'happy' && `${petName} is happy and listening!`}
+          {petEmotion === 'thinking' && `${petName} is typing a response...`}
+          {petEmotion === 'sleeping' && `${petName} is taking a little nap...`}
+          {petEmotion === 'idle' && `${petName} is online & ready to chat`}
         </Text>
       </View>
 
-      {/* Message list container */}
+      {/* Message Chat List */}
       {loading ? (
-        <View style={styles.center}><ActivityIndicator color="#7C3AED" /></View>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#8B5CF6" />
+        </View>
       ) : (
         <FlatList
           ref={flatListRef}
           data={messages}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.messageList}
+          keyExtractor={item => item.id}
           inverted
+          contentContainerStyle={styles.messageList}
           renderItem={renderMessage}
           onContentSizeChange={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true })}
         />
@@ -308,13 +301,13 @@ export default function PetChatScreen() {
           <View style={styles.inputRow}>
             {/* Voice Input Button */}
             <TouchableOpacity style={styles.voiceBtn} onPress={() => Alert.alert('Voice Feature', 'Recording is coming soon!')}>
-              <Ionicons name="mic-outline" size={20} color="#7C3AED" />
+              <Ionicons name="mic-outline" size={20} color="#C084FC" />
             </TouchableOpacity>
 
             <TextInput
               style={styles.textInput}
               placeholder={`Send message to ${petName}...`}
-              placeholderTextColor="#A1A1AA"
+              placeholderTextColor="#71717A"
               value={input}
               onChangeText={setInput}
               multiline
@@ -340,41 +333,40 @@ export default function PetChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: '#0B0713' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#F4F4F5',
-    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1, borderBottomColor: '#261E38',
+    backgroundColor: '#13101E',
   },
   backBtn: { padding: 4, minWidth: 32 },
   petMeta: { flex: 1, alignItems: 'center', marginHorizontal: 8 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#09090B' },
-  petSubText: { fontSize: 11, color: '#71717A', marginTop: 2 },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: '#F3E8FF' },
+  petSubText: { fontSize: 11, color: '#A1A1AA', marginTop: 2 },
   levelBadge: {
     paddingHorizontal: 8, paddingVertical: 4,
-    borderRadius: 12, backgroundColor: '#7C3AED',
+    borderRadius: 12, backgroundColor: '#8B5CF6',
     minWidth: 44, alignItems: 'center',
   },
   levelText: { fontSize: 10, fontWeight: '700', color: '#fff' },
   
   petShowcase: {
     alignItems: 'center', paddingVertical: 20, gap: 10,
-    borderBottomWidth: 1, borderBottomColor: '#F4F4F5',
-    backgroundColor: '#F9FAFB',
+    borderBottomWidth: 1, borderBottomColor: '#261E38',
+    backgroundColor: '#161024',
   },
   avatarPulse: {
     width: 80, height: 80, borderRadius: 40,
-    padding: 2, backgroundColor: 'rgba(124, 58, 237, 0.15)',
+    padding: 2, backgroundColor: 'rgba(139, 92, 246, 0.25)',
     justifyContent: 'center', alignItems: 'center',
   },
   petImage: { width: 76, height: 76, borderRadius: 38 },
   petImageFallback: {
     width: 76, height: 76, borderRadius: 38,
-    backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#261E38', alignItems: 'center', justifyContent: 'center',
   },
-  lottieAnim: { width: 10, height: 10, display: 'none' }, // Placeholders for future JSONs
-  emotionStatus: { fontSize: 11, color: '#71717A', fontStyle: 'italic' },
+  emotionStatus: { fontSize: 11, color: '#A1A1AA', fontStyle: 'italic' },
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   messageList: { paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
@@ -388,42 +380,42 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   msgBubble: {
-    maxWidth: '100%', backgroundColor: '#F4F4F5',
+    maxWidth: '100%', backgroundColor: '#161024',
     borderRadius: 16, borderBottomLeftRadius: 4,
     paddingHorizontal: 12, paddingVertical: 8, gap: 4,
-    borderWidth: 1, borderColor: '#F4F4F5',
+    borderWidth: 1, borderColor: '#261E38',
   },
   msgBubbleMe: {
-    backgroundColor: '#7C3AED',
+    backgroundColor: '#8B5CF6',
     borderBottomLeftRadius: 16, borderBottomRightRadius: 4,
-    borderColor: '#7C3AED',
+    borderColor: '#8B5CF6',
   },
-  msgAuthor: { fontSize: 11, fontWeight: '600', color: '#7C3AED' },
-  msgContent: { fontSize: 14, color: '#1F2937', lineHeight: 20 },
+  msgAuthor: { fontSize: 11, fontWeight: '600', color: '#C084FC' },
+  msgContent: { fontSize: 14, color: '#F3E8FF', lineHeight: 20 },
   msgContentMe: { color: '#FFFFFF' },
-  msgTime: { fontSize: 10, color: '#71717A', alignSelf: 'flex-end' },
+  msgTime: { fontSize: 10, color: '#A1A1AA', alignSelf: 'flex-end' },
   msgTimeMe: { color: '#E9D5FF' },
 
   inputArea: {
-    borderTopWidth: 1, borderTopColor: '#F4F4F5',
+    borderTopWidth: 1, borderTopColor: '#261E38',
     paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#13101E',
   },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   voiceBtn: {
     width: 38, height: 38, borderRadius: 19,
-    backgroundColor: '#F9FAFB', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: '#F4F4F5',
+    backgroundColor: '#161024', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#261E38',
   },
   textInput: {
-    flex: 1, backgroundColor: '#F9FAFB', borderRadius: 20,
+    flex: 1, backgroundColor: '#161024', borderRadius: 20,
     paddingHorizontal: 16, paddingVertical: 8,
-    color: '#09090B', fontSize: 14, maxHeight: 80,
-    borderWidth: 1, borderColor: '#F4F4F5',
+    color: '#FFFFFF', fontSize: 14, maxHeight: 80,
+    borderWidth: 1, borderColor: '#261E38',
   },
   sendBtn: {
     width: 38, height: 38, borderRadius: 19,
-    backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#8B5CF6', alignItems: 'center', justifyContent: 'center',
   },
-  sendBtnDisabled: { opacity: 0.5 },
+  sendBtnDisabled: { opacity: 0.4 },
 });

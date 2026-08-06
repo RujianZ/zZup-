@@ -10,9 +10,10 @@ import {
   ActivityIndicator,
   TextInput,
   Modal,
-  Animated
+  Alert
 } from 'react-native';
-import { Ionicons, AntDesign } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { searchUsers, sendFriendRequest, UserSearchResult } from '../../../lib/api/friends';
 
@@ -36,7 +37,7 @@ export default function UserSearchScreen() {
       const data = await searchUsers(keyword);
       setResults(data);
       setLoading(false);
-    }, 150); // small debounce for typing
+    }, 150);
 
     return () => clearTimeout(delayDebounce);
   }, [keyword]);
@@ -76,8 +77,8 @@ export default function UserSearchScreen() {
     const isPetOnly = item.profile_visibility === 'pet_only';
     const imageUrl = isPetOnly ? item.pet_avatar_url : item.avatar_url;
     const displayName = isPetOnly ? (item.pet_name ?? item.real_name) : item.real_name;
-    const fallbackBg = isPetOnly ? '#FEE2E2' : '#F4F4F5';
-    const fallbackColor = isPetOnly ? '#EF4444' : '#71717A';
+    const fallbackBg = isPetOnly ? '#3B1866' : '#261E38';
+    const fallbackColor = isPetOnly ? '#E9D5FF' : '#C084FC';
 
     return (
       <View style={styles.userItem}>
@@ -90,7 +91,7 @@ export default function UserSearchScreen() {
         )}
         <View style={styles.userInfo}>
           <Text style={styles.userName}>{displayName ?? 'No Name'}</Text>
-          <Text style={{ fontSize: 12, color: '#71717A', marginTop: 2 }}>zZuP ID: {item.zzup_id}</Text>
+          <Text style={{ fontSize: 12, color: '#C084FC', marginTop: 2 }}>zZuP ID: {item.zzup_id}</Text>
         </View>
         
         {/* Plus action icon on the right */}
@@ -99,7 +100,7 @@ export default function UserSearchScreen() {
           onPress={() => handleAddPress(item)}
           activeOpacity={0.7}
         >
-          <Ionicons name="add" size={20} color="#09090B" />
+          <Ionicons name="person-add-outline" size={18} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
     );
@@ -107,6 +108,7 @@ export default function UserSearchScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="light" />
       {/* Header with back button and input box */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -114,7 +116,7 @@ export default function UserSearchScreen() {
           style={styles.backBtn}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={24} color="#09090B" />
+          <Ionicons name="arrow-back" size={24} color="#C084FC" />
         </TouchableOpacity>
         
         <View style={[
@@ -123,8 +125,8 @@ export default function UserSearchScreen() {
         ]}>
           <TextInput
             style={styles.searchInput}
-            placeholder="Search users or groups..."
-            placeholderTextColor="#A1A1AA"
+            placeholder="Enter zZuP ID (e.g. monica_xu)"
+            placeholderTextColor="#71717A"
             value={keyword}
             onChangeText={setKeyword}
             autoCapitalize="none"
@@ -134,7 +136,7 @@ export default function UserSearchScreen() {
           />
           {keyword.length > 0 && (
             <TouchableOpacity onPress={() => setKeyword('')} activeOpacity={0.7}>
-              <Ionicons name="close-circle" size={18} color="#A1A1AA" />
+              <Ionicons name="close-circle" size={18} color="#71717A" />
             </TouchableOpacity>
           )}
         </View>
@@ -242,7 +244,7 @@ export default function UserSearchScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0B0713',
   },
   header: {
     flexDirection: 'row',
@@ -250,7 +252,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F4F4F5',
+    borderBottomColor: '#261E38',
+    backgroundColor: '#13101E',
   },
   backBtn: {
     width: 40,
@@ -263,47 +266,58 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    height: 40,
-    borderWidth: 1,
-    borderColor: '#E4E4E7',
-    borderRadius: 8,
+    height: 42,
+    borderWidth: 1.5,
+    borderColor: '#261E38',
+    borderRadius: 12,
     paddingHorizontal: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#161024',
   },
   searchBoxFocused: {
-    borderColor: '#C084FC', // Violet focus color
+    borderColor: '#8B5CF6',
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: '#09090B',
-    padding: 0, // resets default padding in android
+    color: '#FFFFFF',
+    padding: 0,
   },
   sectionHeading: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#71717A',
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#A1A1AA',
     paddingHorizontal: 16,
     paddingTop: 20,
     paddingBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   list: {
     paddingHorizontal: 16,
+    paddingTop: 4,
   },
   userItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    backgroundColor: '#161024',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#261E38',
+    marginVertical: 4,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 1,
+    borderColor: '#261E38',
   },
   avatarFallback: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -314,20 +328,18 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#09090B',
+    color: '#F3E8FF',
   },
   addButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#E4E4E7',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#8B5CF6',
     justifyContent: 'center',
     alignItems: 'center',
   },
   separator: {
-    height: 1,
-    backgroundColor: '#F4F4F5',
+    height: 6,
   },
   center: {
     paddingTop: 60,
@@ -335,38 +347,37 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: '#71717A',
+    color: '#A1A1AA',
   },
   // Modal Overlays
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)', // transparent backdrop
+    backgroundColor: 'rgba(9, 8, 14, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
   },
   modalCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E4E4E7',
+    backgroundColor: '#161024',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#261E38',
     padding: 24,
     width: '100%',
     maxWidth: 320,
     alignItems: 'center',
-    // shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
   },
   modalTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#09090B',
+    fontWeight: '700',
+    color: '#F3E8FF',
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 24,
     marginBottom: 24,
   },
   modalButtons: {
@@ -376,30 +387,30 @@ const styles = StyleSheet.create({
   },
   modalCancelBtn: {
     flex: 1,
-    height: 38,
-    borderRadius: 8,
+    height: 40,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E4E4E7',
+    borderColor: '#3F3F46',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#261E38',
   },
   modalCancelText: {
     fontSize: 13,
-    color: '#09090B',
-    fontWeight: '500',
+    color: '#E4E4E7',
+    fontWeight: '600',
   },
   modalActionBtn: {
     flex: 1,
-    height: 38,
-    borderRadius: 8,
-    backgroundColor: '#7C3AED', // Figma violet purple
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#8B5CF6',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalActionText: {
     fontSize: 13,
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

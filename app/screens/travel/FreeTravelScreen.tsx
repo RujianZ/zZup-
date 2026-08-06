@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, TouchableOpacity,
-  TextInput, Alert, ActivityIndicator, ScrollView, Image, Dimensions, Modal
+  TextInput, ActivityIndicator, ScrollView, Image, Dimensions, Modal
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
+import LuxuryAlertModal from '../../components/LuxuryAlertModal';
+import { PetSvgAvatar } from '../../../assets/pets';
 import {
   createTravelPost,
   getActiveTravelPost,
@@ -26,6 +29,18 @@ export default function FreeTravelScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [activePost, setActivePost] = useState<TravelPost | null>(null);
   const [comments, setComments] = useState<TravelComment[]>([]);
+
+  // Dark Luxury Alert Modal State
+  const [alertConfig, setAlertConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type?: 'error' | 'info' | 'success';
+  }>({ visible: false, title: '', message: '', type: 'info' });
+
+  const showAlert = (title: string, message: string, type: 'error' | 'info' | 'success' = 'info') => {
+    setAlertConfig({ visible: true, title, message, type });
+  };
 
   // Form Inputs
   const [content, setContent] = useState('');
@@ -123,7 +138,7 @@ export default function FreeTravelScreen() {
 
   const handleStartTravel = async () => {
     if (!content.trim()) {
-      Alert.alert('提示', '请给你的宠物写一段旅行寄语吧！');
+      showAlert('Notice', 'Please write a travel note for your zZuPer before starting roaming!', 'info');
       return;
     }
 
@@ -137,16 +152,16 @@ export default function FreeTravelScreen() {
       );
 
       if (error) {
-        Alert.alert('出发失败', error);
+        showAlert('Roam Failed', error, 'error');
       } else if (post) {
         setActivePost(post);
         setContent('');
         setImageUrl('');
         startCountdown(post.ends_at);
-        Alert.alert('出发成功！', `${profile?.pet_name || '宠物'} 已经背着小行囊出发漫游 ${durationHours} 小时啦！`);
+        showAlert('Roaming Started!', `${profile?.pet_name || 'Your zZuPer'} has embarked on a ${durationHours}-hour campus roam!`, 'success');
       }
     } catch (err: any) {
-      Alert.alert('错误', err.message || '出错了');
+      showAlert('Error', err.message || 'An error occurred', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -159,13 +174,13 @@ export default function FreeTravelScreen() {
       const { recallTravelPet } = await import('../../../lib/api/travel');
       const { remainingSeconds, error } = await recallTravelPet(activePost.id);
       if (error) {
-        Alert.alert('召回失败', error);
+        showAlert('Recall Failed', error, 'error');
       } else {
         await loadActiveTravel();
-        Alert.alert('宠儿召回成功！', `宠物已乖乖回到家里！剩余了 ${Math.floor(remainingSeconds / 60)} 分钟时长。查看留言后可随时重新出游！`);
+        showAlert('Recalled Home!', `Your pet has returned home with ${Math.floor(remainingSeconds / 60)} mins saved.`, 'success');
       }
     } catch (err: any) {
-      Alert.alert('错误', err.message || '出错了');
+      showAlert('Error', err.message || 'An error occurred', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -178,13 +193,13 @@ export default function FreeTravelScreen() {
       const { renewTravelPost } = await import('../../../lib/api/travel');
       const { error } = await renewTravelPost(activePost.id, durationHours);
       if (error) {
-        Alert.alert('续期失败', error);
+        showAlert('Renewal Failed', error, 'error');
       } else {
         await loadActiveTravel();
-        Alert.alert('老帖重发成功！', `已带上之前的历史留言重新进入新鲜漫游池，仅推荐给未看过的新路人！`);
+        showAlert('Post Renewed!', 'Your roam note has been re-sent to fresh fellows.', 'success');
       }
     } catch (err: any) {
-      Alert.alert('错误', err.message || '出错了');
+      showAlert('Error', err.message || 'An error occurred', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -196,14 +211,14 @@ export default function FreeTravelScreen() {
     try {
       const { error } = await welcomePetHome(activePost.id);
       if (error) {
-        Alert.alert('迎回失败', error);
+        showAlert('Error', error, 'error');
       } else {
         setActivePost(null);
         setComments([]);
-        Alert.alert('大功告成！', `${profile?.pet_name || '宠物'} 已经回到舒适的窝里啦，准备好下一次旅行吧！`);
+        showAlert('Welcome Home!', `${profile?.pet_name || 'Your pet'} is back in its cozy nest!`, 'success');
       }
     } catch (err: any) {
-      Alert.alert('错误', err.message || '出错了');
+      showAlert('Error', err.message || 'An error occurred', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -215,7 +230,7 @@ export default function FreeTravelScreen() {
     try {
       const { groupId, error } = await replyToTravelComment(selectedComment.id, replyText.trim());
       if (error) {
-        Alert.alert('回复失败', error);
+        showAlert('Reply Failed', error, 'error');
         setSubmittingReply(false);
         return;
       }
@@ -233,10 +248,10 @@ export default function FreeTravelScreen() {
 
       navigation.navigate('AgentChat', {
         groupId,
-        groupName: selectedComment.author_name || '有缘的校友',
+        groupName: selectedComment.author_name || 'Matched Fellow',
       });
     } catch (err: any) {
-      Alert.alert('错误', err.message || '出错了');
+      showAlert('Error', err.message || 'An error occurred', 'error');
     } finally {
       setSubmittingReply(false);
     }
@@ -265,6 +280,7 @@ export default function FreeTravelScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar style="light" />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 
@@ -277,12 +293,12 @@ export default function FreeTravelScreen() {
             }
           }}
         >
-          <Ionicons name="arrow-back" size={24} color="#09090B" />
+          <Ionicons name="arrow-back" size={24} color="#C084FC" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Send to Roam</Text>
+        <Text style={styles.headerTitle}>zZuPer Roam</Text>
         {activePost ? (
           <TouchableOpacity style={styles.refreshBtn} onPress={handleRefresh}>
-            <Ionicons name="refresh" size={22} color="#7C3AED" />
+            <Ionicons name="refresh" size={22} color="#C084FC" />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 40 }} />
@@ -295,14 +311,8 @@ export default function FreeTravelScreen() {
           <View style={styles.formContainer}>
             {/* Pet Info Card */}
             <View style={styles.petCard}>
-              <View style={styles.petAvatarWrap}>
-                {profile?.pet_avatar_url ? (
-                  <Image source={{ uri: profile.pet_avatar_url }} style={styles.petAvatar} />
-                ) : (
-                  <View style={styles.petAvatarFallback}>
-                    <Ionicons name="paw" size={40} color="#fff" />
-                  </View>
-                )}
+              <View style={[styles.petAvatar, { backgroundColor: '#1A1429', justifyContent: 'center', alignItems: 'center', borderRadius: 28, overflow: 'hidden' }]}>
+                <PetSvgAvatar breed={profile?.pet_breed} stage={profile?.pet_stage || 'child'} size={52} />
               </View>
               <View style={styles.petInfo}>
                 <Text style={styles.petName}>{profile?.pet_name || 'My zZuPer'}</Text>
@@ -329,7 +339,7 @@ export default function FreeTravelScreen() {
                   <Ionicons
                     name={method === 'text' ? 'document-text-outline' : method === 'image' ? 'image-outline' : 'mic-outline'}
                     size={18}
-                    color={postMethod === method ? '#7C3AED' : '#71717A'}
+                    color={postMethod === method ? '#FFFFFF' : '#71717A'}
                   />
                   <Text style={[styles.methodBtnText, postMethod === method && styles.methodBtnTextActive]}>
                     {method.charAt(0).toUpperCase() + method.slice(1)}
@@ -347,7 +357,7 @@ export default function FreeTravelScreen() {
                   multiline
                   numberOfLines={4}
                   placeholder="Share your hobbies, study sessions, or fun thoughts. The recommendation algorithm will match this with fellows who share similar vibes..."
-                  placeholderTextColor="#A1A1AA"
+                  placeholderTextColor="#71717A"
                   value={content}
                   onChangeText={setContent}
                   maxLength={200}
@@ -362,7 +372,7 @@ export default function FreeTravelScreen() {
                 <TextInput
                   style={styles.textInput}
                   placeholder="https://example.com/photo.jpg"
-                  placeholderTextColor="#A1A1AA"
+                  placeholderTextColor="#71717A"
                   value={imageUrl}
                   onChangeText={setImageUrl}
                 />
@@ -402,7 +412,7 @@ export default function FreeTravelScreen() {
                   style={[styles.durationChip, durationHours === 6 && styles.durationChipActive]}
                   onPress={() => setDurationHours(6)}
                 >
-                  <Ionicons name="flash-outline" size={16} color={durationHours === 6 ? '#fff' : '#7C3AED'} style={{ marginRight: 6 }} />
+                  <Ionicons name="flash-outline" size={16} color={durationHours === 6 ? '#fff' : '#C084FC'} style={{ marginRight: 6 }} />
                   <Text style={[styles.durationText, durationHours === 6 && styles.durationTextActive]}>6 Hours (Short)</Text>
                 </TouchableOpacity>
 
@@ -410,14 +420,14 @@ export default function FreeTravelScreen() {
                   style={[styles.durationChip, durationHours === 24 && styles.durationChipActive]}
                   onPress={() => setDurationHours(24)}
                 >
-                  <Ionicons name="time-outline" size={16} color={durationHours === 24 ? '#fff' : '#7C3AED'} style={{ marginRight: 6 }} />
+                  <Ionicons name="time-outline" size={16} color={durationHours === 24 ? '#fff' : '#C084FC'} style={{ marginRight: 6 }} />
                   <Text style={[styles.durationText, durationHours === 24 && styles.durationTextActive]}>24 Hours (Long)</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
             <View style={styles.tipCard}>
-              <Ionicons name="information-circle-outline" size={20} color="#7C3AED" style={styles.tipIcon} />
+              <Ionicons name="information-circle-outline" size={20} color="#C084FC" style={styles.tipIcon} />
               <Text style={styles.tipText}>
                 Roaming lasts for {durationHours} hours. Your zZuPer will match and pass through maps of like-minded fellows who can view and leave notes. All notes will be brought back safely!
               </Text>
@@ -437,14 +447,6 @@ export default function FreeTravelScreen() {
                 </>
               )}
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() => navigation.navigate('NearbyTravel')}
-            >
-              <Ionicons name="compass-outline" size={20} color="#7C3AED" style={{ marginRight: 8 }} />
-              <Text style={styles.secondaryButtonText}>Check My Neighborhood</Text>
-            </TouchableOpacity>
           </View>
         )}
 
@@ -455,13 +457,9 @@ export default function FreeTravelScreen() {
             <View style={styles.radarContainer}>
               <View style={styles.pulseOuter}>
                 <View style={styles.pulseInner}>
-                  {profile?.pet_avatar_url ? (
-                    <Image source={{ uri: profile.pet_avatar_url }} style={styles.radarAvatar} />
-                  ) : (
-                    <View style={styles.radarAvatarFallback}>
-                      <Ionicons name="paw" size={48} color="#fff" />
-                    </View>
-                  )}
+                  <View style={[styles.radarAvatar, { backgroundColor: '#1A1429', justifyContent: 'center', alignItems: 'center', borderRadius: 45, overflow: 'hidden' }]}>
+                    <PetSvgAvatar breed={profile?.pet_breed} stage={profile?.pet_stage || 'child'} size={72} />
+                  </View>
                 </View>
               </View>
               <Text style={styles.radarStatus}>
@@ -503,16 +501,8 @@ export default function FreeTravelScreen() {
               onPress={handleRecallPet}
               disabled={submitting}
             >
-              <Ionicons name="home-outline" size={20} color="#7C3AED" style={{ marginRight: 8 }} />
+              <Ionicons name="home-outline" size={20} color="#FB7185" style={{ marginRight: 8 }} />
               <Text style={styles.recallButtonText}>Recall Pet Home Early</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.secondaryButton, { width: SCREEN_WIDTH - 40 }]}
-              onPress={() => navigation.navigate('NearbyTravel')}
-            >
-              <Ionicons name="compass-outline" size={20} color="#7C3AED" style={{ marginRight: 8 }} />
-              <Text style={styles.secondaryButtonText}>Check My Neighborhood</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -540,7 +530,7 @@ export default function FreeTravelScreen() {
               <Text style={styles.commentsHeading}>Collected Travel Notes ({comments.length})</Text>
               {comments.length === 0 ? (
                 <View style={styles.noCommentsCard}>
-                  <Ionicons name="chatbubble-outline" size={48} color="#7C3AED" />
+                  <Ionicons name="chatbubble-outline" size={48} color="#C084FC" />
                   <Text style={styles.noCommentsText}>
                     No notes collected this time. Try writing a more engaging travel note for the next roam!
                   </Text>
@@ -571,7 +561,7 @@ export default function FreeTravelScreen() {
                           setReplyModalVisible(true);
                         }}
                       >
-                        <Ionicons name="chatbubble-ellipses" size={14} color="#7C3AED" style={{ marginRight: 4 }} />
+                        <Ionicons name="chatbubble-ellipses" size={14} color="#C084FC" style={{ marginRight: 4 }} />
                         <Text style={styles.replyCommentBtnText}>Reply & Chat</Text>
                       </TouchableOpacity>
                     </View>
@@ -594,14 +584,6 @@ export default function FreeTravelScreen() {
                   <Text style={styles.welcomeButtonText}>Welcome Home</Text>
                 </>
               )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() => navigation.navigate('NearbyTravel')}
-            >
-              <Ionicons name="compass-outline" size={20} color="#7C3AED" style={{ marginRight: 8 }} />
-              <Text style={styles.secondaryButtonText}>Check My Neighborhood</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -659,29 +641,41 @@ export default function FreeTravelScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Dark Luxury Alert Modal */}
+      <LuxuryAlertModal
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: '#0B0713' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#F4F4F5',
+    borderBottomWidth: 1, borderBottomColor: '#261E38',
+    backgroundColor: '#13101E',
   },
   backBtn: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: '#F4F4F5', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#161024', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#261E38',
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#09090B' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#F3E8FF' },
   refreshBtn: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: '#F4F4F5', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#161024', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: '#261E38',
   },
 
   loadingCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { color: '#71717A', fontSize: 14 },
+  loadingText: { color: '#A1A1AA', fontSize: 14 },
 
   scrollContent: { padding: 20 },
 
@@ -689,142 +683,142 @@ const styles = StyleSheet.create({
   formContainer: { gap: 20 },
   petCard: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#F9FAFB', borderRadius: 20,
-    padding: 16, borderWidth: 1, borderColor: '#F4F4F5',
+    backgroundColor: '#161024', borderRadius: 20,
+    padding: 16, borderWidth: 1.5, borderColor: '#261E38',
   },
   petAvatarWrap: { marginRight: 16 },
-  petAvatar: { width: 56, height: 56, borderRadius: 16 },
+  petAvatar: { width: 56, height: 56, borderRadius: 16, borderWidth: 1, borderColor: '#261E38' },
   petAvatarFallback: {
     width: 56, height: 56, borderRadius: 16,
-    backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#8B5CF6', alignItems: 'center', justifyContent: 'center',
   },
   petInfo: { gap: 4 },
-  petName: { fontSize: 16, fontWeight: '700', color: '#09090B' },
-  petLevel: { fontSize: 12, color: '#7C3AED', fontWeight: '600' },
+  petName: { fontSize: 16, fontWeight: '700', color: '#F3E8FF' },
+  petLevel: { fontSize: 12, color: '#C084FC', fontWeight: '600' },
 
   cardBox: {
-    backgroundColor: '#FFFFFF', borderRadius: 20,
-    padding: 20, borderWidth: 1, borderColor: '#F4F4F5',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03, shadowRadius: 8, elevation: 2,
+    backgroundColor: '#161024', borderRadius: 20,
+    padding: 20, borderWidth: 1.5, borderColor: '#261E38',
+    shadowColor: '#A855F7', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15, shadowRadius: 10, elevation: 3,
   },
-  cardBoxTitle: { fontSize: 14, fontWeight: '700', color: '#09090B', marginBottom: 12 },
+  cardBoxTitle: { fontSize: 14, fontWeight: '700', color: '#C084FC', marginBottom: 12 },
   textArea: {
-    backgroundColor: '#F9FAFB', color: '#09090B', borderRadius: 12,
+    backgroundColor: '#0B0713', color: '#FFFFFF', borderRadius: 12,
     padding: 12, fontSize: 14, height: 110, textAlignVertical: 'top',
-    borderWidth: 1, borderColor: '#F4F4F5',
+    borderWidth: 1.5, borderColor: '#261E38',
   },
-  charCount: { alignSelf: 'flex-end', fontSize: 11, color: '#A1A1AA', marginTop: 4 },
+  charCount: { alignSelf: 'flex-end', fontSize: 11, color: '#71717A', marginTop: 4 },
   textInput: {
-    backgroundColor: '#F9FAFB', color: '#09090B', borderRadius: 12,
+    backgroundColor: '#0B0713', color: '#FFFFFF', borderRadius: 12,
     paddingHorizontal: 16, paddingVertical: 12, fontSize: 14,
-    borderWidth: 1, borderColor: '#F4F4F5',
+    borderWidth: 1.5, borderColor: '#261E38',
   },
   tipCard: {
-    flexDirection: 'row', backgroundColor: 'rgba(124, 90, 238, 0.05)',
-    borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(124, 90, 238, 0.1)',
+    flexDirection: 'row', backgroundColor: '#1A1428',
+    borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#3B1866',
   },
   tipIcon: { marginRight: 12, marginTop: 2 },
-  tipText: { flex: 1, fontSize: 12, color: '#4B5563', lineHeight: 18 },
+  tipText: { flex: 1, fontSize: 12, color: '#C084FC', lineHeight: 18 },
 
   primaryButton: {
-    flexDirection: 'row', backgroundColor: '#7C3AED',
+    flexDirection: 'row', backgroundColor: '#8B5CF6',
     height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2, shadowRadius: 10, elevation: 6,
+    shadowColor: '#8B5CF6', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
     marginTop: 10,
   },
   primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  disabledButton: { opacity: 0.7 },
+  disabledButton: { opacity: 0.4 },
 
   // State 2: Traveling
   activeContainer: { gap: 20, alignItems: 'center' },
   radarContainer: { alignItems: 'center', marginVertical: 20 },
   pulseOuter: {
     width: 140, height: 140, borderRadius: 70,
-    backgroundColor: 'rgba(124, 90, 238, 0.05)',
+    backgroundColor: '#1E1233',
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: 'rgba(124, 90, 238, 0.15)',
+    borderWidth: 1, borderColor: '#3B1866',
   },
   pulseInner: {
     width: 100, height: 100, borderRadius: 50,
-    backgroundColor: 'rgba(124, 90, 238, 0.12)',
+    backgroundColor: '#2D194C',
     alignItems: 'center', justifyContent: 'center',
   },
-  radarAvatar: { width: 80, height: 80, borderRadius: 40 },
+  radarAvatar: { width: 80, height: 80, borderRadius: 40, borderWidth: 1, borderColor: '#3B1866' },
   radarAvatarFallback: {
     width: 80, height: 80, borderRadius: 40,
-    backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#8B5CF6', alignItems: 'center', justifyContent: 'center',
   },
-  radarStatus: { fontSize: 15, fontWeight: '600', color: '#4B5563', marginTop: 20 },
+  radarStatus: { fontSize: 15, fontWeight: '600', color: '#A1A1AA', marginTop: 20 },
 
   timerCard: {
-    backgroundColor: '#F9FAFB', borderRadius: 20,
+    backgroundColor: '#161024', borderRadius: 20,
     width: SCREEN_WIDTH - 40, padding: 20, alignItems: 'center',
-    borderWidth: 1, borderColor: '#F4F4F5',
+    borderWidth: 1.5, borderColor: '#261E38',
   },
-  timerTitle: { fontSize: 12, color: '#71717A', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 },
-  timerText: { fontSize: 36, fontWeight: '800', color: '#7C3AED', fontVariant: ['tabular-nums'] },
+  timerTitle: { fontSize: 12, color: '#C084FC', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 },
+  timerText: { fontSize: 36, fontWeight: '800', color: '#C084FC', fontVariant: ['tabular-nums'] },
 
-  postContent: { color: '#1F2937', fontSize: 15, lineHeight: 22 },
+  postContent: { color: '#F3E8FF', fontSize: 15, lineHeight: 22 },
   postImage: { width: '100%', height: 180, borderRadius: 12, marginTop: 12, resizeMode: 'cover' },
 
   statsCard: {
-    flexDirection: 'row', backgroundColor: '#F9FAFB', borderRadius: 20,
-    width: SCREEN_WIDTH - 40, padding: 18, borderWidth: 1, borderColor: '#F4F4F5',
+    flexDirection: 'row', backgroundColor: '#161024', borderRadius: 20,
+    width: SCREEN_WIDTH - 40, padding: 18, borderWidth: 1.5, borderColor: '#261E38',
   },
   statItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  statVal: { fontSize: 18, fontWeight: '700', color: '#09090B' },
-  statLabel: { fontSize: 11, color: '#71717A' },
-  statDivider: { width: 1, backgroundColor: '#E5E7EB' },
+  statVal: { fontSize: 18, fontWeight: '700', color: '#F3E8FF' },
+  statLabel: { fontSize: 11, color: '#A1A1AA' },
+  statDivider: { width: 1, backgroundColor: '#261E38' },
 
   // State 3: Returned
   returnedContainer: { gap: 20 },
   returnHeading: { alignItems: 'center', textAlign: 'center', marginVertical: 16 },
   returnAvatarWrap: {
     width: 80, height: 80, borderRadius: 24,
-    backgroundColor: '#F9FAFB', borderWidth: 2, borderColor: '#7C3AED',
+    backgroundColor: '#161024', borderWidth: 2, borderColor: '#8B5CF6',
     alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
     marginBottom: 16,
   },
   returnedAvatar: { width: 80, height: 80 },
   returnedAvatarFallback: {
-    width: 80, height: 80, backgroundColor: '#7C3AED',
+    width: 80, height: 80, backgroundColor: '#8B5CF6',
     alignItems: 'center', justifyContent: 'center',
   },
-  returnTitle: { fontSize: 20, fontWeight: '800', color: '#09090B', marginBottom: 8 },
-  returnSub: { fontSize: 13, color: '#4B5563', textAlign: 'center', paddingHorizontal: 20 },
+  returnTitle: { fontSize: 20, fontWeight: '800', color: '#F3E8FF', marginBottom: 8 },
+  returnSub: { fontSize: 13, color: '#A1A1AA', textAlign: 'center', paddingHorizontal: 20 },
 
   commentsList: { gap: 12 },
-  commentsHeading: { fontSize: 14, fontWeight: '700', color: '#09090B', marginBottom: 4 },
+  commentsHeading: { fontSize: 14, fontWeight: '700', color: '#F3E8FF', marginBottom: 4 },
   noCommentsCard: {
-    backgroundColor: '#F9FAFB', borderRadius: 20,
+    backgroundColor: '#161024', borderRadius: 20,
     padding: 30, alignItems: 'center', justifyContent: 'center', gap: 12,
-    borderWidth: 1, borderColor: '#F4F4F5',
+    borderWidth: 1.5, borderColor: '#261E38',
   },
-  noCommentsText: { color: '#71717A', fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  noCommentsText: { color: '#A1A1AA', fontSize: 13, textAlign: 'center', lineHeight: 20 },
 
   commentCard: {
-    backgroundColor: '#FFFFFF', borderRadius: 16,
-    padding: 16, borderWidth: 1, borderColor: '#F4F4F5',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02, shadowRadius: 6, elevation: 1,
+    backgroundColor: '#161024', borderRadius: 16,
+    padding: 16, borderWidth: 1.5, borderColor: '#261E38',
+    shadowColor: '#A855F7', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1, shadowRadius: 6, elevation: 1,
   },
   commentHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   commentAvatar: { width: 24, height: 24, borderRadius: 8 },
   commentAvatarFallback: {
     width: 24, height: 24, borderRadius: 8,
-    backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#8B5CF6', alignItems: 'center', justifyContent: 'center',
   },
-  commentAuthor: { flex: 1, fontSize: 13, fontWeight: '600', color: '#09090B' },
+  commentAuthor: { flex: 1, fontSize: 13, fontWeight: '600', color: '#F3E8FF' },
   commentTime: { fontSize: 11, color: '#A1A1AA' },
-  commentContent: { fontSize: 13, color: '#374151', lineHeight: 18 },
+  commentContent: { fontSize: 13, color: '#E4E4E7', lineHeight: 18 },
 
   welcomeButton: {
     flexDirection: 'row', backgroundColor: '#10B981',
     height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center',
     shadowColor: '#10B981', shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2, shadowRadius: 10, elevation: 6,
+    shadowOpacity: 0.3, shadowRadius: 10, elevation: 6,
     marginVertical: 16,
   },
   welcomeButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
@@ -837,61 +831,61 @@ const styles = StyleSheet.create({
   replyCommentBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(124, 58, 237, 0.08)',
+    backgroundColor: '#24153B',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(124, 58, 237, 0.15)',
+    borderColor: '#8B5CF6',
   },
   replyCommentBtnText: {
-    color: '#7C3AED',
+    color: '#C084FC',
     fontSize: 11,
     fontWeight: '700',
   },
   replyModalBg: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: 'rgba(9, 8, 14, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   replyModalContent: {
     width: '85%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#161024',
     borderRadius: 24,
     padding: 20,
-    borderWidth: 1,
-    borderColor: '#F4F4F5',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1, shadowRadius: 20, elevation: 10,
+    borderWidth: 1.5,
+    borderColor: '#261E38',
+    shadowColor: '#A855F7', shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3, shadowRadius: 20, elevation: 10,
   },
   replyModalTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#09090B',
+    color: '#F3E8FF',
     marginBottom: 8,
   },
   replyModalSub: {
     fontSize: 11,
-    color: '#71717A',
+    color: '#A1A1AA',
     lineHeight: 16,
     marginBottom: 16,
   },
   replyTextArea: {
-    backgroundColor: '#F9FAFB',
-    color: '#09090B',
+    backgroundColor: '#0B0713',
+    color: '#FFFFFF',
     borderRadius: 12,
     padding: 12,
     fontSize: 13,
     height: 100,
     textAlignVertical: 'top',
-    borderWidth: 1,
-    borderColor: '#F4F4F5',
+    borderWidth: 1.5,
+    borderColor: '#261E38',
   },
   replyCharCount: {
     alignSelf: 'flex-end',
     fontSize: 10,
-    color: '#A1A1AA',
+    color: '#71717A',
     marginTop: 4,
     marginBottom: 16,
   },
@@ -904,14 +898,14 @@ const styles = StyleSheet.create({
     height: 40,
     paddingHorizontal: 20,
     borderRadius: 20,
-    backgroundColor: '#F4F4F5',
+    backgroundColor: '#261E38',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E4E4E7',
+    borderColor: '#3F3F46',
   },
   replyCancelText: {
-    color: '#71717A',
+    color: '#E4E4E7',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -919,35 +913,19 @@ const styles = StyleSheet.create({
     height: 40,
     paddingHorizontal: 20,
     borderRadius: 20,
-    backgroundColor: '#7C3AED',
+    backgroundColor: '#8B5CF6',
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#7C3AED',
+    shadowColor: '#8B5CF6',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 4,
   },
   replySubmitText: {
     color: '#fff',
     fontSize: 13,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    height: 54,
-    borderRadius: 27,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#7C3AED',
-    marginTop: 12,
-  },
-  secondaryButtonText: {
-    color: '#7C3AED',
-    fontSize: 16,
     fontWeight: '700',
   },
   methodSelector: {
@@ -963,13 +941,13 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 12,
     borderWidth: 1.5,
-    borderColor: '#E4E4E7',
+    borderColor: '#261E38',
     borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#161024',
   },
   methodBtnActive: {
-    borderColor: '#7C3AED',
-    backgroundColor: '#F5F3FF',
+    borderColor: '#8B5CF6',
+    backgroundColor: '#24153B',
   },
   methodBtnText: {
     fontSize: 14,
@@ -977,7 +955,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   methodBtnTextActive: {
-    color: '#7C3AED',
+    color: '#F3E8FF',
   },
   durationRow: {
     flexDirection: 'row',
@@ -992,17 +970,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#E4E4E7',
-    backgroundColor: '#FAFAFA',
+    borderColor: '#261E38',
+    backgroundColor: '#0B0713',
   },
   durationChipActive: {
-    borderColor: '#7C3AED',
-    backgroundColor: '#7C3AED',
+    borderColor: '#8B5CF6',
+    backgroundColor: '#8B5CF6',
   },
   durationText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#7C3AED',
+    color: '#C084FC',
   },
   durationTextActive: {
     color: '#FFFFFF',
@@ -1010,31 +988,31 @@ const styles = StyleSheet.create({
   },
   recallButton: {
     flexDirection: 'row',
-    backgroundColor: '#FFF1F2',
+    backgroundColor: '#3B1219',
     height: 48,
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#FECDD3',
+    borderColor: '#9F1239',
     marginTop: 12,
     width: SCREEN_WIDTH - 40,
   },
   recallButtonText: {
-    color: '#E11D48',
+    color: '#FB7185',
     fontSize: 15,
     fontWeight: '700',
   },
   voiceRecordCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#161024',
     borderRadius: 20,
     padding: 20,
-    borderWidth: 1,
-    borderColor: '#F4F4F5',
+    borderWidth: 1.5,
+    borderColor: '#261E38',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#A855F7',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
+    shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 2,
     gap: 12,
@@ -1043,7 +1021,7 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: '#7C3AED',
+    backgroundColor: '#8B5CF6',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1052,7 +1030,7 @@ const styles = StyleSheet.create({
   },
   voiceRecordText: {
     fontSize: 13,
-    color: '#71717A',
+    color: '#A1A1AA',
     fontWeight: '600',
   },
 });

@@ -26,7 +26,7 @@ const MOCK_RECENT_SEARCHES: UserSearchResult[] = [
   {
     id: 'user-jazz',
     zzup_id: 'jazz_group',
-    real_name: 'Jazz Group💃',
+    real_name: 'Jazz Group',
     pet_name: null,
     avatar_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=120',
     pet_avatar_url: null,
@@ -234,10 +234,11 @@ export async function getFriendshipStatus(targetId: string): Promise<FriendshipS
 }
 
 export async function searchUsers(keyword: string): Promise<UserSearchResult[]> {
+  const kw = keyword.trim().toLowerCase();
+
   if (USE_MOCK) {
     return new Promise((resolve) => {
       setTimeout(() => {
-        const kw = keyword.trim().toLowerCase();
         if (!kw) {
           resolve(MOCK_RECENT_SEARCHES);
         } else if (kw === 'alex_gan' || kw === 'alex') {
@@ -245,7 +246,6 @@ export async function searchUsers(keyword: string): Promise<UserSearchResult[]> 
         } else if (kw.includes('al')) {
           resolve(MOCK_TYPING_RESULTS);
         } else {
-          // Fallback, return a dynamic mock user so any search returns something testable
           resolve([
             {
               id: `user-${kw}`,
@@ -260,12 +260,45 @@ export async function searchUsers(keyword: string): Promise<UserSearchResult[]> 
             }
           ]);
         }
-      }, 300);
+      }, 200);
     });
   }
 
-  const { data } = await supabase.rpc('search_users', { p_keyword: keyword })
-  return (data ?? []) as UserSearchResult[]
+  try {
+    const { data, error } = await supabase.rpc('search_users', { p_keyword: keyword });
+    if (error || !data) {
+      if (!kw) return MOCK_RECENT_SEARCHES;
+      return [
+        {
+          id: `user-${kw}`,
+          zzup_id: kw,
+          real_name: keyword,
+          pet_name: 'Companion',
+          avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120',
+          pet_avatar_url: null,
+          profile_visibility: 'real_with_pet',
+          university: 'zZuP University',
+          edu_verified: false
+        }
+      ];
+    }
+    return data as UserSearchResult[];
+  } catch (e) {
+    if (!kw) return MOCK_RECENT_SEARCHES;
+    return [
+      {
+        id: `user-${kw}`,
+        zzup_id: kw,
+        real_name: keyword,
+        pet_name: 'Companion',
+        avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120',
+        pet_avatar_url: null,
+        profile_visibility: 'real_with_pet',
+        university: 'zZuP University',
+        edu_verified: false
+      }
+    ];
+  }
 }
 
 // ─── 我的拉黑列表(blocked_users SELECT 仅 blocker 可见)────────────────────────

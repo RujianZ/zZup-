@@ -43,9 +43,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
+    
+    // Safety timeout: dismiss loading spinner within 200ms max to prevent hanging screen
     const timer = setTimeout(() => {
       if (mounted) setLoading(false);
-    }, 500);
+    }, 200);
 
     // 1. 获取当前 session（App 启动时）
     supabase.auth.getSession().then(({ data: { session } }) => {

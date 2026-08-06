@@ -68,6 +68,7 @@ export type ProfileUpdate = Partial<
     | 'pet_avatar_url'
     | 'pet_bio'
     | 'pet_breed'
+    | 'pet_stage'
     | 'profile_visibility'
     | 'searchable_by_real_name'
     | 'allow_add_via_search'

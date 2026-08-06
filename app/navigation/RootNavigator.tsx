@@ -53,27 +53,28 @@ function MainTabs() {
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: '#E4E4E7',
-          borderTopWidth: 0.5,
+          backgroundColor: '#13101E',
+          borderTopColor: '#261E38',
+          borderTopWidth: 1,
           height: 60,
           paddingBottom: 8,
         },
-        tabBarActiveTintColor: '#7C3AED',
+        tabBarActiveTintColor: '#C084FC',
         tabBarInactiveTintColor: '#71717A',
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
-        tabBarIcon: ({ color, size }) => {
-          const icons: Record<string, keyof typeof Ionicons.glyphMap> = {
-            Lounge: 'chatbubbles-outline',
-            TravelMode: 'airplane-outline',
-            Profile: 'person-outline',
-          };
-          return <Ionicons name={icons[route.name]} size={size} color={color} />;
+        tabBarIcon: ({ focused, color }) => {
+          return (
+            <Ionicons
+              name={focused ? "ellipse" : "ellipse-outline"}
+              size={focused ? 10 : 8}
+              color={color}
+            />
+          );
         },
       })}
     >
       <Tab.Screen name="Lounge" component={InboxScreen} options={{ tabBarLabel: 'Lounge' }} />
-      <Tab.Screen name="TravelMode" component={TravelModeScreen} options={{ tabBarLabel: 'Travel Mode' }} />
+      <Tab.Screen name="TravelMode" component={TravelModeScreen} options={{ tabBarLabel: 'zZuPer Explore' }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profile' }} />
     </Tab.Navigator>
   );
@@ -111,8 +112,8 @@ export default function RootNavigator() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
-        <ActivityIndicator size="large" color="#7C3AED" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0B0713' }}>
+        <ActivityIndicator size="large" color="#8B5CF6" />
       </View>
     );
   }

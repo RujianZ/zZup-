@@ -11,8 +11,10 @@ import {
   RefreshControl,
   Modal,
   TouchableWithoutFeedback,
+  TextInput,
   Alert
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { listConversations, ConversationListItem } from '../../../lib/api/conversations';
@@ -49,9 +51,11 @@ export default function InboxScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Dropdown states
-  const [showAddFriendMenu, setShowAddFriendMenu] = useState(false);
-  const [showGroupMenu, setShowGroupMenu] = useState(false);
+  // Dropdown & Modal states
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showJoinGroupModal, setShowJoinGroupModal] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [joining, setJoining] = useState(false);
 
   const load = useCallback(async () => {
     const data = await listConversations();
@@ -75,8 +79,7 @@ export default function InboxScreen() {
   };
 
   const closeAllMenus = () => {
-    setShowAddFriendMenu(false);
-    setShowGroupMenu(false);
+    setShowAddMenu(false);
   };
 
   // Filter list by active tab
@@ -101,7 +104,7 @@ export default function InboxScreen() {
         onPress={() => {
           closeAllMenus();
           if (item.kind === 'zzuper_talk') {
-            navigation.navigate('Chat', { groupId: item.conversation_id, groupName: 'My zZuPer', isDM: true });
+            navigation.navigate('Chat', { groupId: item.conversation_id, groupName: 'zZuPer Talk', isDM: true });
           } else {
             navigation.navigate('Chat', { groupId: item.conversation_id, groupName: item.display_name, isDM });
           }
@@ -111,14 +114,14 @@ export default function InboxScreen() {
         {item.display_avatar ? (
           <Image source={{ uri: item.display_avatar }} style={styles.avatar} />
         ) : (
-          <View style={[styles.avatarFallback, { backgroundColor: isDM ? '#E0E7FF' : '#F3E8FF' }]}>
-            <Ionicons name={isDM ? 'person' : 'people'} size={24} color={isDM ? '#4F46E5' : '#7C3AED'} />
+          <View style={[styles.avatarFallback, { backgroundColor: isDM ? '#261E38' : '#3B1866' }]}>
+            <Ionicons name={isDM ? 'person' : 'people'} size={24} color={isDM ? '#C084FC' : '#E9D5FF'} />
           </View>
         )}
         <View style={styles.chatInfo}>
           <View style={styles.chatTopRow}>
             <Text style={styles.chatName} numberOfLines={1}>
-              {item.kind === 'zzuper_talk' ? 'My zZuPer' : (item.display_name || 'Chat')}
+              {item.kind === 'zzuper_talk' ? 'zZuPer Talk' : (item.display_name || 'Chat')}
             </Text>
             <Text style={styles.chatTime}>
               {item.last_message_at ? formatTime(item.last_message_at) : ''}
@@ -132,8 +135,28 @@ export default function InboxScreen() {
     );
   };
 
+  const handleJoinGroupSubmit = () => {
+    if (!joinCode.trim()) return;
+    setJoining(true);
+    setTimeout(() => {
+      setJoining(false);
+      setShowJoinGroupModal(false);
+      setJoinCode('');
+      navigation.navigate('GroupList');
+    }, 300);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="light" />
+
+      {/* Backdrop overlay to close open menu when tapping anywhere outside */}
+      {showAddMenu && (
+        <TouchableWithoutFeedback onPress={closeAllMenus}>
+          <View style={styles.menuBackdrop} />
+        </TouchableWithoutFeedback>
+      )}
+
       {/* Header Bar */}
       <View style={styles.header}>
         {/* Search button left */}
@@ -145,7 +168,7 @@ export default function InboxScreen() {
           }}
           activeOpacity={0.7}
         >
-          <Ionicons name="search" size={24} color="#09090B" />
+          <Ionicons name="search" size={24} color="#C084FC" />
         </TouchableOpacity>
 
         {/* Tab Segment control center */}
@@ -176,32 +199,53 @@ export default function InboxScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Header Right Buttons */}
+        {/* Header Right Button: Single Add Trigger */}
         <View style={styles.headerRight}>
-          {/* Add Friend Trigger */}
           <TouchableOpacity
             style={styles.headerButton}
             onPress={() => {
-              setShowGroupMenu(false);
-              setShowAddFriendMenu(!showAddFriendMenu);
+              setShowAddMenu(!showAddMenu);
             }}
             activeOpacity={0.7}
           >
-            <Ionicons name="person-add-outline" size={24} color="#09090B" />
-          </TouchableOpacity>
-
-          {/* Group Options Trigger */}
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => {
-              setShowAddFriendMenu(false);
-              setShowGroupMenu(!showGroupMenu);
-            }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="ellipsis-horizontal-circle-outline" size={26} color="#09090B" />
+            <Ionicons name="add-circle-outline" size={28} color="#C084FC" />
           </TouchableOpacity>
         </View>
+
+        {/* Unified Dropdown Menu Overlay */}
+        {showAddMenu && (
+          <View style={styles.dropdownMenu}>
+            <TouchableOpacity
+              style={styles.dropdownItem}
+              onPress={() => {
+                setShowAddMenu(false);
+                navigation.navigate('UserSearch');
+              }}
+            >
+              <Text style={styles.dropdownItemText}>Add Friend</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.dropdownItem}
+              onPress={() => {
+                setShowAddMenu(false);
+                navigation.navigate('CreateGroup');
+              }}
+            >
+              <Text style={styles.dropdownItemText}>Create Group</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.dropdownItem}
+              onPress={() => {
+                setShowAddMenu(false);
+                setShowJoinGroupModal(true);
+              }}
+            >
+              <Text style={styles.dropdownItemText}>Join Group</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* Main Content Area */}
@@ -225,7 +269,7 @@ export default function InboxScreen() {
                 /* Empty state for DMs tab */
                 <View style={styles.center}>
                   <View style={styles.emptyIconBg}>
-                    <Ionicons name="chatbubble-outline" size={28} color="#09090B" />
+                    <Ionicons name="chatbubble-outline" size={28} color="#C084FC" />
                   </View>
                   <Text style={styles.emptyTitle}>No DMs Yet</Text>
                   <Text style={styles.emptyText}>
@@ -258,7 +302,7 @@ export default function InboxScreen() {
                 /* Empty state for Groups tab */
                 <View style={styles.center}>
                   <View style={styles.emptyIconBg}>
-                    <Ionicons name="chatbubbles-outline" size={28} color="#09090B" />
+                    <Ionicons name="chatbubbles-outline" size={28} color="#C084FC" />
                   </View>
                   <Text style={styles.emptyTitle}>No Group Chats Yet</Text>
                   <Text style={styles.emptyText}>
@@ -269,7 +313,6 @@ export default function InboxScreen() {
                       style={styles.purpleActionBtn}
                       onPress={() => {
                         closeAllMenus();
-                        // Mock alert or navigate to GroupListScreen
                         navigation.navigate('GroupList');
                       }}
                       activeOpacity={0.8}
@@ -292,81 +335,59 @@ export default function InboxScreen() {
             }
           />
         )}
-
-        {/* Dropdown Menu Overlay: Add Friend */}
-        {showAddFriendMenu && (
-          <View style={styles.dropdownMenu}>
-            <Text style={styles.dropdownHeader}>Add Friend With</Text>
-            
-            <TouchableOpacity
-              style={styles.dropdownItem}
-              onPress={() => {
-                setShowAddFriendMenu(false);
-                navigation.navigate('UserSearch');
-              }}
-            >
-              <Text style={styles.dropdownItemText}>Username</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.dropdownItem}
-              onPress={() => {
-                setShowAddFriendMenu(false);
-                Alert.alert('Invite Link', 'Invite link copied to clipboard.');
-              }}
-            >
-              <Text style={styles.dropdownItemText}>Invite Link</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.dropdownItem}
-              onPress={() => {
-                setShowAddFriendMenu(false);
-                Alert.alert('QR Code', 'Opening camera scan QR...');
-              }}
-            >
-              <Text style={styles.dropdownItemText}>QR Code</Text>
-            </TouchableOpacity>
-            
-            <View style={styles.dropdownDivider} />
-            
-            <TouchableOpacity
-              style={styles.dropdownItem}
-              onPress={() => {
-                setShowAddFriendMenu(false);
-                Alert.alert('Paste Invite Link', 'Analyzing pasted link...');
-              }}
-            >
-              <Text style={styles.dropdownItemText}>Paste My Invite Link</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Dropdown Menu Overlay: Group Options */}
-        {showGroupMenu && (
-          <View style={styles.dropdownMenuRight}>
-            <TouchableOpacity
-              style={styles.dropdownItem}
-              onPress={() => {
-                setShowGroupMenu(false);
-                navigation.navigate('CreateGroup');
-              }}
-            >
-              <Text style={styles.dropdownItemText}>Create Group</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.dropdownItem}
-              onPress={() => {
-                setShowGroupMenu(false);
-                Alert.alert('Join with code', 'Enter group invite code modal...');
-              }}
-            >
-              <Text style={styles.dropdownItemText}>Join with invite code</Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </View>
+
+      {/* Join Group Modal */}
+      <Modal
+        visible={showJoinGroupModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowJoinGroupModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Join Group Chat</Text>
+            <Text style={styles.modalSubtitle}>Enter group invite code or ID</Text>
+            
+            <TextInput
+              style={styles.modalInput}
+              placeholder="e.g. G-8892 or campus_tech"
+              placeholderTextColor="#71717A"
+              value={joinCode}
+              onChangeText={setJoinCode}
+              autoCapitalize="none"
+              autoFocus
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  setShowJoinGroupModal(false);
+                  setJoinCode('');
+                }}
+                activeOpacity={0.8}
+                disabled={joining}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalActionBtn, !joinCode.trim() && { opacity: 0.4 }]}
+                onPress={handleJoinGroupSubmit}
+                activeOpacity={0.8}
+                disabled={joining || !joinCode.trim()}
+              >
+                {joining ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.modalActionText}>Join Chat</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -374,7 +395,7 @@ export default function InboxScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0B0713',
   },
   header: {
     flexDirection: 'row',
@@ -383,7 +404,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#EDEDED',
+    borderBottomColor: '#261E38',
+    backgroundColor: '#13101E',
+    zIndex: 100,
+    position: 'relative',
+  },
+  menuBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
+    zIndex: 90,
   },
   headerButton: {
     width: 40,
@@ -393,29 +422,31 @@ const styles = StyleSheet.create({
   },
   segmentContainer: {
     flexDirection: 'row',
-    backgroundColor: '#F4F4F5',
-    borderRadius: 8,
-    padding: 2,
+    backgroundColor: '#161024',
+    borderRadius: 10,
+    padding: 3,
     width: 160,
     height: 36,
+    borderWidth: 1,
+    borderColor: '#261E38',
   },
   segmentTab: {
     flex: 1,
-    borderRadius: 6,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
   activeSegmentTab: {
-    backgroundColor: '#7C3AED', // Figma violet purple
+    backgroundColor: '#8B5CF6',
   },
   segmentTabText: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#71717A',
+    color: '#A1A1AA',
   },
   activeSegmentTabText: {
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontWeight: '700',
   },
   headerRight: {
     flexDirection: 'row',
@@ -430,15 +461,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0B0713',
   },
   activeChatItem: {
-    backgroundColor: '#F5F3FF', // Lavender highlight for My Pet companion
+    backgroundColor: '#1C1330',
   },
   avatar: {
     width: 52,
     height: 52,
     borderRadius: 26,
+    borderWidth: 1.5,
+    borderColor: '#261E38',
   },
   avatarFallback: {
     width: 52,
@@ -460,21 +493,21 @@ const styles = StyleSheet.create({
   chatName: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#09090B',
+    color: '#F3E8FF',
     flex: 1,
     marginRight: 8,
   },
   chatTime: {
     fontSize: 12,
-    color: '#71717A',
+    color: '#A1A1AA',
   },
   chatMessage: {
     fontSize: 13,
-    color: '#71717A',
+    color: '#C084FC',
   },
   separator: {
     height: 1,
-    backgroundColor: '#F4F4F5',
+    backgroundColor: '#1F1830',
     marginLeft: 80,
   },
   center: {
@@ -487,43 +520,41 @@ const styles = StyleSheet.create({
   // Dropdown Styling
   dropdownMenu: {
     position: 'absolute',
-    top: 60,
-    right: 48,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E4E4E7',
-    width: 170,
-    paddingVertical: 4,
+    top: 56,
+    right: 12,
+    backgroundColor: '#161024',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#3F2A60',
+    width: 175,
+    paddingVertical: 6,
     zIndex: 1000,
-    // Shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
+    elevation: 10,
   },
   dropdownMenuRight: {
     position: 'absolute',
-    top: 60,
-    right: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E4E4E7',
-    width: 180,
-    paddingVertical: 4,
+    top: 56,
+    right: 12,
+    backgroundColor: '#161024',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#3F2A60',
+    width: 190,
+    paddingVertical: 6,
     zIndex: 1000,
-    // Shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
+    elevation: 10,
   },
   dropdownHeader: {
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#A1A1AA',
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -534,20 +565,19 @@ const styles = StyleSheet.create({
   },
   dropdownItemText: {
     fontSize: 13,
-    color: '#09090B',
+    color: '#F3E8FF',
     fontWeight: '500',
   },
   dropdownDivider: {
     height: 1,
-    backgroundColor: '#E4E4E7',
+    backgroundColor: '#261E38',
     marginVertical: 4,
   },
-  // Empty State styling
   emptyIconBg: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#F4F4F5',
+    backgroundColor: '#161024',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -555,12 +585,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#09090B',
+    color: '#F3E8FF',
     marginBottom: 8,
   },
   emptyText: {
     fontSize: 13,
-    color: '#71717A',
+    color: '#A1A1AA',
     textAlign: 'center',
     lineHeight: 18,
     marginBottom: 24,
@@ -570,10 +600,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   purpleActionBtn: {
-    backgroundColor: '#7C3AED',
+    backgroundColor: '#8B5CF6',
     paddingHorizontal: 16,
     height: 38,
-    borderRadius: 8,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -583,18 +613,99 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   whiteActionBtn: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#161024',
     borderWidth: 1,
-    borderColor: '#E4E4E7',
+    borderColor: '#261E38',
     paddingHorizontal: 16,
     height: 38,
-    borderRadius: 8,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
   whiteActionBtnText: {
-    color: '#09090B',
+    color: '#C084FC',
     fontSize: 13,
     fontWeight: '500',
+  },
+  // Modal Overlays
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(9, 8, 14, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    backgroundColor: '#161024',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#261E38',
+    padding: 24,
+    width: '100%',
+    maxWidth: 320,
+    alignItems: 'center',
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#F3E8FF',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: '#A1A1AA',
+    marginBottom: 18,
+    textAlign: 'center',
+  },
+  modalInput: {
+    width: '100%',
+    height: 42,
+    borderWidth: 1.5,
+    borderColor: '#261E38',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    backgroundColor: '#0B0713',
+    color: '#FFFFFF',
+    fontSize: 14,
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#3F3F46',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#261E38',
+  },
+  modalCancelText: {
+    fontSize: 13,
+    color: '#E4E4E7',
+    fontWeight: '600',
+  },
+  modalActionBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#8B5CF6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalActionText: {
+    fontSize: 13,
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
 });

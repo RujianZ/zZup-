@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, FlatList,
   TouchableOpacity, Image, ActivityIndicator, TextInput,
   KeyboardAvoidingView, Platform, Alert, Dimensions, Modal
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
@@ -38,30 +39,22 @@ export default function AgentChatScreen() {
   const [me, setMe] = useState<MemberProfile | null>(null);
   const [groupDetails, setGroupDetails] = useState<any>(null);
 
-  // Friendship / Upgrade Status
   const [friendStatus, setFriendStatus] = useState<FriendshipStatus>('none');
   const [friendshipId, setFriendshipId] = useState<string | null>(null);
 
-  // Modal states for friend request
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [sendingRequest, setSendingRequest] = useState(false);
 
-  // Human takeover indicator
   const [iHaveTakenOver, setIHaveTakenOver] = useState(false);
-
-  // Time remaining string
   const [timeLeft, setTimeLeft] = useState('');
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
     loadChatData();
-    // Subscribe to incoming messages
     const unsubscribe = subscribeToMessages(groupId, (newMsg) => {
       setMessages((prev) => [newMsg, ...prev]);
-      
-      // If we see a message sent by us with 'real', update takeover state
       if (newMsg.sender_id === user?.id && newMsg.identity_mode === 'real') {
         setIHaveTakenOver(true);
       }
@@ -76,7 +69,6 @@ export default function AgentChatScreen() {
   const loadChatData = async () => {
     setLoading(true);
     try {
-      // 1. Load Conversation Details (expires_at, is_temporary, description)
       const { data: grp, error: grpErr } = await supabase
         .from('conversations')
         .select('*')
@@ -86,12 +78,10 @@ export default function AgentChatScreen() {
       if (grpErr) throw grpErr;
       setGroupDetails(grp);
 
-      // Start countdown timer if temporary
       if (grp?.is_temporary && grp?.expires_at) {
         startCountdown(grp.expires_at);
       }
 
-      // 2. Fetch Conversation Members & Profiles
       const { data: members, error: memErr } = await supabase
         .from('conversation_members')
         .select('account_id')
@@ -103,7 +93,6 @@ export default function AgentChatScreen() {
       const partnerId = members?.find((m: any) => m.account_id !== myId)?.account_id;
 
       if (partnerId) {
-        // Fetch profiles
         const [meResp, partnerResp] = await Promise.all([
           supabase.from('profiles').select('*').eq('id', myId).single(),
           supabase.from('profiles').select('*').eq('id', partnerId).single(),
@@ -112,16 +101,13 @@ export default function AgentChatScreen() {
         if (meResp.data) setMe(meResp.data as MemberProfile);
         if (partnerResp.data) {
           setPartner(partnerResp.data as MemberProfile);
-          // Check friendship status
           updateFriendship(partnerId);
         }
       }
 
-      // 3. Load message history
       const history = await getMessages(groupId, 40);
       setMessages(history);
 
-      // Check if I have already taken over
       const hasRealMsg = history.some(m => m.sender_id === myId && m.identity_mode === 'real');
       if (hasRealMsg) setIHaveTakenOver(true);
 
@@ -136,7 +122,6 @@ export default function AgentChatScreen() {
     const status = await getFriendshipStatus(partnerId);
     setFriendStatus(status);
 
-    // If pending received, find the friendship ID to accept it
     if (status === 'pending_received') {
       const { data } = await supabase
         .from('friendships')
@@ -157,7 +142,7 @@ export default function AgentChatScreen() {
       if (difference <= 0) {
         setTimeLeft('00:00:00');
         if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
-        Alert.alert('Notice', 'This temporary chat has expired and vaporized.', [
+        Alert.alert('Notice', 'This temporary chat has expired.', [
           { text: 'OK', onPress: () => navigation.goBack() }
         ]);
       } else {
@@ -182,13 +167,12 @@ export default function AgentChatScreen() {
     setInput('');
 
     try {
-      // Send as 'real' (human takeover)
       await sendMessage(groupId, text, 'real');
       
       if (!iHaveTakenOver) {
         setIHaveTakenOver(true);
         if (groupDetails?.is_agent_chat) {
-          Alert.alert('Notice', 'You have taken over this chat. Your zZuPer AI will stop sending messages. 👤');
+          Alert.alert('Notice', 'You have taken over this chat. Your zZuPer AI will stop sending messages.');
         }
       }
     } catch (err: any) {
@@ -197,10 +181,6 @@ export default function AgentChatScreen() {
     } finally {
       setSending(false);
     }
-  };
-
-  const handleAddFriend = () => {
-    setShowConfirmModal(true);
   };
 
   const handleSendFriendRequest = async () => {
@@ -234,7 +214,7 @@ export default function AgentChatScreen() {
         setFriendStatus('accepted');
         setGroupDetails((prev: any) => ({ ...prev, is_temporary: false }));
         if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
-        Alert.alert('Congratulations', 'Added as friend! This conversation is now a permanent Whisper, and the countdown has been removed. 🎉');
+        Alert.alert('Congratulations', 'Added as friend! This conversation is now a permanent Whisper.');
       }
     } catch (e: any) {
       Alert.alert('Error', e.message);
@@ -248,191 +228,137 @@ export default function AgentChatScreen() {
 
     return (
       <View style={[styles.messageRow, isMe ? styles.messageRowMe : styles.messageRowOther]}>
-        {/* Avatar */}
         {!isMe && (
           <View style={styles.avatarContainer}>
-            {isPet ? (
-              profileToShow?.pet_avatar_url ? (
-                <Image source={{ uri: profileToShow.pet_avatar_url }} style={styles.messageAvatar} />
-              ) : (
-                <View style={[styles.messageAvatar, styles.avatarFallbackRed]}>
-                  <Ionicons name="paw" size={16} color="#fff" />
-                </View>
-              )
+            {profileToShow?.avatar_url || profileToShow?.pet_avatar_url ? (
+              <Image
+                source={{ uri: isPet ? (profileToShow.pet_avatar_url || profileToShow.avatar_url!) : (profileToShow.avatar_url || profileToShow.pet_avatar_url!) }}
+                style={styles.messageAvatar}
+              />
             ) : (
-              profileToShow?.avatar_url ? (
-                <Image source={{ uri: profileToShow.avatar_url }} style={styles.messageAvatar} />
-              ) : (
-                <View style={[styles.messageAvatar, styles.avatarFallbackBlue]}>
-                  <Ionicons name="person" size={16} color="#fff" />
-                </View>
-              )
+              <View style={[styles.messageAvatar, isPet ? styles.avatarFallbackRed : styles.avatarFallbackBlue]}>
+                <Ionicons name={isPet ? "paw" : "person"} size={16} color="#fff" />
+              </View>
             )}
           </View>
         )}
 
-        {/* Message Bubble */}
         <View style={styles.bubbleColumn}>
           <View style={[styles.nameHeader, isMe && { justifyContent: 'flex-end' }]}>
             <Text style={styles.messageSenderName}>
-              {isPet ? `🐾 ${profileToShow?.pet_name || 'zZuPer'}` : `👤 ${profileToShow?.real_name || 'Host'}`}
+              {isMe
+                ? (isPet ? (me?.pet_name || 'My zZuPer') : (me?.real_name || 'Me'))
+                : (isPet ? (partner?.pet_name || partner?.real_name || 'Fellow zZuPer') : (partner?.real_name || partner?.pet_name || 'Fellow'))}
             </Text>
             {isPet && (
               <View style={styles.aiBadge}>
-                <Text style={styles.aiBadgeText}>zZuPer AI</Text>
+                <Text style={styles.aiBadgeText}>AI Proxy</Text>
               </View>
             )}
           </View>
+
           <View style={[
             styles.messageBubble,
-            isMe ? styles.bubbleMe : styles.bubbleOther,
-            isPet && isMe ? styles.bubblePetMe : null,
-            isPet && !isMe ? styles.bubblePetOther : null
+            isMe
+              ? (isPet ? styles.bubblePetMe : styles.bubbleMe)
+              : (isPet ? styles.bubblePetOther : styles.bubbleOther)
           ]}>
             <Text style={[styles.messageText, isMe ? styles.textMe : styles.textOther]}>
               {item.content}
             </Text>
           </View>
         </View>
-
-        {/* Avatar for Me */}
-        {isMe && (
-          <View style={styles.avatarContainer}>
-            {isPet ? (
-              profileToShow?.pet_avatar_url ? (
-                <Image source={{ uri: profileToShow.pet_avatar_url }} style={styles.messageAvatar} />
-              ) : (
-                <View style={[styles.messageAvatar, styles.avatarFallbackRed]}>
-                  <Ionicons name="paw" size={16} color="#fff" />
-                </View>
-              )
-            ) : (
-              profileToShow?.avatar_url ? (
-                <Image source={{ uri: profileToShow.avatar_url }} style={styles.messageAvatar} />
-              ) : (
-                <View style={[styles.messageAvatar, styles.avatarFallbackBlue]}>
-                  <Ionicons name="person" size={16} color="#fff" />
-                </View>
-              )
-            )}
-          </View>
-        )}
       </View>
     );
   };
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingCenter}>
-          <ActivityIndicator size="large" color="#7C3AED" />
-          <Text style={styles.loadingText}>Entering telepathy chat...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // Count only dialogue messages (exclude system messages if any)
-  const dialogueCount = messages.filter(m => m.identity_mode === 'real' || m.identity_mode === 'pet').length;
-  const canAddFriend = dialogueCount >= 3 && friendStatus === 'none';
+  const partnerDisplayName = partner?.real_name || partner?.pet_name || groupName || 'zZuPer Post Chat';
+  const partnerHostSub = partner?.university ? `Host: ${partner.university}` : 'Destined Fellow';
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* ── Header ── */}
+      <StatusBar style="light" />
+
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={26} color="#09090B" />
+          <Ionicons name="chevron-back" size={24} color="#F3E8FF" />
         </TouchableOpacity>
+
         <View style={styles.headerInfo}>
-          <Text style={styles.headerTitle}>🐾 {partner?.pet_name || 'Chat Partner'}</Text>
-          <Text style={styles.headerSubtitle}>
-            Host: {partner?.real_name || 'Alumni'} | {partner?.university || 'Alumni'}
-          </Text>
+          <Text style={styles.headerTitle}>{partnerDisplayName}</Text>
+          <Text style={styles.headerSubtitle}>{partnerHostSub}</Text>
         </View>
-        <View style={{ width: 40 }} />
+
+        <TouchableOpacity style={styles.backBtn} onPress={() => {}}>
+          <Ionicons name="settings-outline" size={20} color="#A1A1AA" />
+        </TouchableOpacity>
       </View>
 
-      {/* ── Matched Interest & Expiry Subheader ── */}
       <View style={styles.subHeader}>
         <View style={styles.interestTag}>
-          <Text style={styles.interestText}>🎯 Shared vibe: {groupDetails?.description || 'Chatting'}</Text>
+          <Text style={styles.interestText}>Shared vibe: Matched Fellow</Text>
         </View>
-        {groupDetails?.is_temporary ? (
+
+        {groupDetails?.is_temporary && timeLeft ? (
           <View style={styles.timerBadge}>
             <Ionicons name="time-outline" size={14} color="#EF4444" style={{ marginRight: 4 }} />
             <Text style={styles.timerText}>{timeLeft} left</Text>
           </View>
-        ) : (
-          <View style={[styles.timerBadge, { backgroundColor: 'rgba(16, 185, 129, 0.08)', borderColor: 'rgba(16, 185, 129, 0.15)' }]}>
-            <Ionicons name="shield-checkmark" size={14} color="#10B981" style={{ marginRight: 4 }} />
-            <Text style={[styles.timerText, { color: '#10B981' }]}>Upgraded to permanent Whisper</Text>
-          </View>
-        )}
+        ) : null}
       </View>
 
-      {/* ── Upgrade Banner (If eligible) ── */}
-      {canAddFriend && (
-        <View style={styles.upgradeBanner}>
-          <Text style={styles.upgradeText}>💬 Conversed 3+ times! Send a friend request to chat permanently!</Text>
-          <TouchableOpacity style={styles.upgradeBtn} onPress={handleAddFriend}>
-            <Text style={styles.upgradeBtnText}>Add Friend</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {friendStatus === 'pending_sent' && (
-        <View style={[styles.upgradeBanner, { backgroundColor: '#F9FAFB' }]}>
-          <Text style={[styles.upgradeText, { color: '#71717A' }]}>⏳ Friend request sent, waiting for Host confirmation...</Text>
-        </View>
-      )}
-
       {friendStatus === 'pending_received' && (
-        <View style={[styles.upgradeBanner, { backgroundColor: 'rgba(124, 58, 237, 0.08)' }]}>
-          <Text style={[styles.upgradeText, { color: '#7C3AED' }]}>🤝 Friend request received! Accept to upgrade chat.</Text>
-          <TouchableOpacity style={[styles.upgradeBtn, { backgroundColor: '#7C3AED' }]} onPress={handleAcceptFriend}>
-            <Text style={styles.upgradeBtnText}>Accept</Text>
+        <View style={styles.upgradeBanner}>
+          <Text style={styles.upgradeText}>
+            {partnerDisplayName} sent you a friend request!
+          </Text>
+          <TouchableOpacity style={styles.upgradeBtn} onPress={handleAcceptFriend}>
+            <Text style={styles.upgradeBtnText}>Accept & Make Permanent</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* ── Messages List ── */}
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        renderItem={renderMessageItem}
-        keyExtractor={(item) => item.id}
-        inverted
-        contentContainerStyle={styles.listContent}
-      />
+      {loading ? (
+        <View style={styles.loadingCenter}>
+          <ActivityIndicator color="#8B5CF6" size="large" />
+          <Text style={styles.loadingText}>Connecting to zZuPer Proxy Chat...</Text>
+        </View>
+      ) : (
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          renderItem={renderMessageItem}
+          keyExtractor={(item) => item.id}
+          inverted
+          contentContainerStyle={styles.listContent}
+        />
+      )}
 
-      {/* ── Spectator / Taken Over Status Indicator ── */}
       {groupDetails?.is_agent_chat && (
         <View style={styles.takeoverIndicator}>
           {!iHaveTakenOver ? (
             <Text style={styles.indicatorText}>
-              🤖 Your zZuPer is proxy-chatting... Send a message to Jump In!
+              Your zZuPer is proxy-chatting... Send a message to Jump In!
             </Text>
           ) : (
-            <Text style={[styles.indicatorText, { color: '#7C3AED' }]}>
-              👤 You have Jumped In and taken over
+            <Text style={[styles.indicatorText, { color: '#C084FC' }]}>
+              You have Jumped In and taken over
             </Text>
           )}
         </View>
       )}
 
-      {/* ── Takeover Friend Request Button ── */}
       {groupDetails?.is_agent_chat && friendStatus === 'none' && (
         <TouchableOpacity
           style={styles.takeoverRequestBtn}
           onPress={() => setShowConfirmModal(true)}
           activeOpacity={0.8}
         >
-          <Ionicons name="person-add" size={16} color="#7C3AED" style={{ marginRight: 6 }} />
+          <Ionicons name="person-add" size={16} color="#C084FC" style={{ marginRight: 6 }} />
           <Text style={styles.takeoverRequestBtnText}>Send Friend Request to take over</Text>
         </TouchableOpacity>
       )}
 
-      {/* ── Input Bar ── */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
@@ -445,7 +371,7 @@ export default function AgentChatScreen() {
                 ? "Type a message..."
                 : "Type to Jump In and chat..."
             }
-            placeholderTextColor="#A1A1AA"
+            placeholderTextColor="#71717A"
             value={input}
             onChangeText={setInput}
             onSubmitEditing={handleSend}
@@ -460,7 +386,6 @@ export default function AgentChatScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Modal 1: Friend Request Confirmation Overlay */}
       <Modal
         visible={showConfirmModal}
         transparent
@@ -500,7 +425,6 @@ export default function AgentChatScreen() {
         </View>
       </Modal>
 
-      {/* Modal 2: Success confirmation Overlay */}
       <Modal
         visible={showSuccessModal}
         transparent
@@ -530,43 +454,43 @@ export default function AgentChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  container: { flex: 1, backgroundColor: '#0B0713' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#F4F4F5',
+    backgroundColor: '#13101E', borderBottomWidth: 1, borderBottomColor: '#261E38',
   },
   backBtn: { padding: 4 },
   headerInfo: { alignItems: 'center', gap: 2 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#09090B' },
-  headerSubtitle: { fontSize: 11, color: '#71717A' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: '#F3E8FF' },
+  headerSubtitle: { fontSize: 11, color: '#A1A1AA' },
 
   subHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 10,
-    backgroundColor: '#F9FAFB', borderBottomWidth: 1, borderBottomColor: '#F4F4F5',
+    backgroundColor: '#161024', borderBottomWidth: 1, borderBottomColor: '#261E38',
   },
   interestTag: {
-    backgroundColor: 'rgba(124, 58, 237, 0.08)',
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
-    borderWidth: 1, borderColor: 'rgba(124, 58, 237, 0.15)',
+    borderWidth: 1, borderColor: 'rgba(139, 92, 246, 0.3)',
   },
-  interestText: { color: '#7C3AED', fontSize: 12, fontWeight: '600' },
+  interestText: { color: '#C084FC', fontSize: 12, fontWeight: '600' },
   timerBadge: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12,
-    borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.3)',
   },
   timerText: { color: '#EF4444', fontSize: 11, fontWeight: '700', fontVariant: ['tabular-nums'] },
 
   upgradeBanner: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
     paddingHorizontal: 16, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(16, 185, 129, 0.15)',
+    borderBottomWidth: 1, borderBottomColor: 'rgba(16, 185, 129, 0.25)',
   },
-  upgradeText: { color: '#065F46', fontSize: 12, fontWeight: '500', flex: 1 },
+  upgradeText: { color: '#34D399', fontSize: 12, fontWeight: '500', flex: 1 },
   upgradeBtn: {
     backgroundColor: '#10B981',
     paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14,
@@ -574,7 +498,7 @@ const styles = StyleSheet.create({
   upgradeBtnText: { color: '#fff', fontSize: 11, fontWeight: '700' },
 
   loadingCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { color: '#71717A', fontSize: 14 },
+  loadingText: { color: '#A1A1AA', fontSize: 14 },
 
   listContent: { paddingHorizontal: 16, paddingVertical: 20 },
 
@@ -584,120 +508,122 @@ const styles = StyleSheet.create({
 
   avatarContainer: { alignSelf: 'flex-end' },
   messageAvatar: { width: 34, height: 34, borderRadius: 10 },
-  avatarFallbackRed: { backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center' },
+  avatarFallbackRed: { backgroundColor: '#8B5CF6', alignItems: 'center', justifyContent: 'center' },
   avatarFallbackBlue: { backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center' },
 
   bubbleColumn: { gap: 2 },
   nameHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  messageSenderName: { fontSize: 10, color: '#71717A', fontWeight: '500' },
+  messageSenderName: { fontSize: 10, color: '#A1A1AA', fontWeight: '500' },
   aiBadge: {
-    backgroundColor: 'rgba(124, 58, 237, 0.1)',
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
     paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6,
   },
-  aiBadgeText: { color: '#7C3AED', fontSize: 8, fontWeight: '700' },
+  aiBadgeText: { color: '#C084FC', fontSize: 8, fontWeight: '700' },
 
   messageBubble: {
     paddingHorizontal: 14, paddingVertical: 10,
     borderRadius: 18,
   },
   bubbleMe: {
-    backgroundColor: '#7C3AED',
+    backgroundColor: '#8B5CF6',
     borderBottomRightRadius: 2,
   },
   bubbleOther: {
-    backgroundColor: '#F4F4F5',
+    backgroundColor: '#161024',
+    borderWidth: 1, borderColor: '#261E38',
     borderBottomLeftRadius: 2,
   },
   bubblePetMe: {
-    backgroundColor: '#6D28D9',
+    backgroundColor: '#7C3AED',
   },
   bubblePetOther: {
-    backgroundColor: '#ECECF1',
+    backgroundColor: '#1F192F',
+    borderWidth: 1, borderColor: '#261E38',
   },
   messageText: { fontSize: 14, lineHeight: 20 },
   textMe: { color: '#fff' },
-  textOther: { color: '#1F2937' },
+  textOther: { color: '#F3E8FF' },
 
   takeoverIndicator: {
     paddingVertical: 8,
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0B0713',
   },
-  indicatorText: { fontSize: 11, color: '#71717A', fontWeight: '500' },
+  indicatorText: { fontSize: 11, color: '#A1A1AA', fontWeight: '500' },
 
   inputBar: {
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#13101E',
     borderTopWidth: 1,
-    borderTopColor: '#F4F4F5',
+    borderTopColor: '#261E38',
     alignItems: 'center',
     gap: 12,
   },
   textInput: {
     flex: 1,
     height: 40,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#161024',
     borderRadius: 20,
     paddingHorizontal: 16,
-    color: '#09090B',
+    color: '#FFFFFF',
     fontSize: 14,
     borderWidth: 1,
-    borderColor: '#F4F4F5',
+    borderColor: '#261E38',
   },
   sendButton: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#7C3AED',
+    backgroundColor: '#8B5CF6',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sendButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.4,
   },
   takeoverRequestBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(124, 58, 237, 0.05)',
+    backgroundColor: 'rgba(139, 92, 246, 0.1)',
     paddingVertical: 10,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: 'rgba(124, 58, 237, 0.1)',
+    borderColor: 'rgba(139, 92, 246, 0.2)',
   },
   takeoverRequestBtnText: {
-    color: '#7C3AED',
+    color: '#C084FC',
     fontSize: 12,
     fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(9, 8, 14, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
   },
   modalCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E4E4E7',
+    backgroundColor: '#161024',
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: '#261E38',
     padding: 24,
     width: '100%',
     maxWidth: 320,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
   },
   modalTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#09090B',
+    color: '#F3E8FF',
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,
@@ -709,30 +635,30 @@ const styles = StyleSheet.create({
   },
   modalCancelBtn: {
     flex: 1,
-    height: 38,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E4E4E7',
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#3F2A60',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#261E38',
   },
   modalCancelText: {
     fontSize: 13,
-    color: '#09090B',
-    fontWeight: '500',
+    color: '#F3E8FF',
+    fontWeight: '600',
   },
   modalActionBtn: {
     flex: 1,
-    height: 38,
-    borderRadius: 8,
-    backgroundColor: '#7C3AED',
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#8B5CF6',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalActionText: {
     fontSize: 13,
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });
