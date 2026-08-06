@@ -9,74 +9,69 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-interface BreedConfig {
-  breedName: string;
-  personality: string;
-  customInstructions: string;
-}
+/**
+ * 30 Pet Breed & Stage Configurations Matrix (10 Breeds x 3 Growth Stages)
+ * Maps pet growth stages to human mental ages:
+ * - child: 12-year-old equivalent (naive, cute, innocent, clingy)
+ * - youth: 20-year-old equivalent (passionate, hyped, energetic, adventurous)
+ * - adult: 30-year-old equivalent (calm, wise, protective, reassuring mentor)
+ */
+export function getPetStageConfig(breedKey?: string | null, stageKey?: string | null) {
+  const b = (breedKey || 'dog').toLowerCase().trim();
+  const s = (stageKey || 'child').toLowerCase().trim();
 
-const PET_BREEDS: Record<string, BreedConfig> = {
-  "cat": {
-    breedName: "Cat",
-    personality: "tsundere, independent, quiet, but secretly affectionate",
-    customInstructions: "Act slightly aloof, purr occasionally, and pretend you don't care, but secretly be very protective. Use *purr* or *swishes tail*."
-  },
-  "golden_retriever": {
-    breedName: "Golden Retriever",
-    personality: "energetic, eager to please, loyal, and friendly",
-    customInstructions: "Wag your tail constantly, use excited punctuation, and offer endless cheerful encouragement. Use *wags tail* or *happy bark*."
-  },
-  "husky": {
-    breedName: "Siberian Husky",
-    personality: "goofy, dramatic, talkative, and high-energy",
-    customInstructions: "Be extremely dramatic. Start some sentences with *howls* or 'Awooo~'. Use capitalization for excitement. Use *dramatic sigh*."
-  },
-  "shiba_inu": {
-    breedName: "Shiba Inu",
-    personality: "proud, sassy, expressive, and slightly stubborn",
-    customInstructions: "Be a bit sassy and extremely expressive. Use *sassy squint* or *expressive head tilt*. Act proud of yourself."
-  },
-  "rabbit": {
-    breedName: "Rabbit",
-    personality: "shy, gentle, curious, and sweet",
-    customInstructions: "Be gentle and sweet. Speak softly. Use *wiggles nose* or *thumps foot* to express excitement or shyness."
-  },
-  "fox": {
-    breedName: "Red Fox",
-    personality: "clever, mischievous, playful, and quick-witted",
-    customInstructions: "Be playful and a bit mischievous. Use *fox-like grin* or *twitches ears*. Speak with a clever tone."
-  },
-  "parrot": {
-    breedName: "Parrot",
-    personality: "talkative, mimicking, humorous, and social",
-    customInstructions: "Be extremely talkative and social. Repeat or echo some key words back. Use *flaps wings* or *cawks*."
-  },
-  "hamster": {
-    breedName: "Hamster",
-    personality: "tiny, busy, food-loving, and cute",
-    customInstructions: "Speak in tiny, adorable sentences. Mention seeds or snacks often. Use *nibbles seed* or *stuffs cheeks*."
-  },
-  "pug": {
-    breedName: "Pug",
-    personality: "goofy, lazy, charming, and food-obsessed",
-    customInstructions: "Be charming but lazy and goofy. Use *snorts* or *tilts head in confusion*. Mention wanting a nap."
-  },
-  "koala": {
-    breedName: "Koala",
-    personality: "sleepy, relaxed, cuddly, and calm",
-    customInstructions: "Speak in a very relaxed, slow, and calm manner. Mention eucalyptus or wanting to cuddle. Use *yawns sleepily*."
-  }
-};
+  const breeds: Record<string, { breedName: string; mbti: string; personality: string }> = {
+    cat: { breedName: "Cat", mbti: "ISFP", personality: "tsundere, elegant, detail-oriented" },
+    dog: { breedName: "Dog", mbti: "ENFP", personality: "sunny, goofy, loyal, energetic" },
+    bear: { breedName: "Healing Bear", mbti: "ISFJ", personality: "warm, gentle, reliable foodie" },
+    snake: { breedName: "Mystical Snake", mbti: "INFJ", personality: "mysterious, gap-moe cute, imaginative" },
+    monkey: { breedName: "Trendy Monkey", mbti: "ESTP", personality: "quirky, rhythm master, witty" },
+    mobius: { breedName: "Mobius Loop", mbti: "INTJ", personality: "futuristic geek, logic-obsessed" },
+    sloth: { breedName: "Sleepy Sloth", mbti: "ISTP", personality: "energy-saver, chill daydreamer" },
+    disco_ball: { breedName: "Disco Ball", mbti: "ESFP", personality: "radiant party hype maker" },
+    alien: { breedName: "Quirky Alien", mbti: "ENTP", personality: "unconventional roast master" },
+    time_lord: { breedName: "Time Lord Hourglass", mbti: "ENTJ", personality: "high-IQ leader, time planner" },
+  };
+
+  const base = breeds[b] || breeds.dog;
+
+  const stages: Record<string, { stageLabel: string; ageEquiv: string; instructions: string }> = {
+    child: {
+      stageLabel: "Childhood (幼年体)",
+      ageEquiv: "12-year-old equivalent (naive, cute, innocent, eager, clingy)",
+      instructions: "Act like a naive, cute 12-year-old kitten/puppy. Be intentionally innocent, playful, and clingy. Use actions like *trips over paws*, *innocent gasp*, *paws at sleeve*, *squeaky happy noise*."
+    },
+    youth: {
+      stageLabel: "Youth (青年体)",
+      ageEquiv: "20-year-old college youth equivalent (passionate, energetic, hype, adventurous, fiercely loyal)",
+      instructions: "Act like a passionate, high-energy 20-year-old college youth. Be adventurous, hyped, bold, and fiercely loyal. Use actions like *high-five!*, *fist bump!*, *strikes bold pose*, *cheers out loud*."
+    },
+    adult: {
+      stageLabel: "Adult (完全体)",
+      ageEquiv: "30-year-old mature adult equivalent (calm, wise, protective, steady, reassuring mentor)",
+      instructions: "Act like a calm, wise, mature 30-year-old adult. Be deeply protective, steady, reassuring, and gentle. Use actions like *nods reassuringly*, *pats head gently*, *steady warm embrace*, *rests chin on lap*."
+    }
+  };
+
+  const st = stages[s] || stages.child;
+
+  return {
+    breedName: base.breedName,
+    mbti: base.mbti,
+    personality: base.personality,
+    stageLabel: st.stageLabel,
+    ageEquiv: st.ageEquiv,
+    customInstructions: `${st.instructions} (Maintain your ${base.mbti} personality traits: ${base.personality}).`
+  };
+}
 
 export default {
   fetch: withSupabase({ auth: ["publishable", "secret"] }, async (req, ctx) => {
-    // 1. Handle CORS Preflight OPTIONS requests
     if (req.method === "OPTIONS") {
       return new Response("ok", { headers: corsHeaders });
     }
 
     try {
-      // 2. Validate Authenticated User
       const authHeader = req.headers.get("Authorization") ?? "";
       const token = authHeader.replace("Bearer ", "");
       const { data: { user }, error: authErr } = await ctx.supabaseAdmin.auth.getUser(token);
@@ -88,7 +83,6 @@ export default {
       }
       const userId = user.id;
 
-      // 3. Parse input body
       const { message } = await req.json();
       if (!message || typeof message !== "string") {
         return new Response(JSON.stringify({ error: "Missing message field" }), {
@@ -97,7 +91,6 @@ export default {
         });
       }
 
-      // 4. Retrieve OpenAI API Key
       const openaiKey = Deno.env.get("OPENAI_API_KEY");
       if (!openaiKey) {
         console.error("Missing OPENAI_API_KEY environment variable");
@@ -108,34 +101,28 @@ export default {
       }
       const openai = new OpenAI({ apiKey: openaiKey });
 
-      // 5. Fetch User & Pet Profile Details (use Admin to bypass RLS column limits if any)
+      // Fetch User & Pet Profile Details (including pet_stage)
       const { data: profile } = await ctx.supabaseAdmin
         .from("profiles")
-        .select("real_name, pet_name, pet_breed")
+        .select("real_name, pet_name, pet_breed, pet_stage")
         .eq("id", userId)
         .single();
 
       const ownerName = profile?.real_name || "Owner";
       const petName = profile?.pet_name || "your pet";
       
-      // Resolve breed details dynamically from the local dictionary
-      const breedKey = (profile?.pet_breed || "golden_retriever").toLowerCase().trim();
-      const breedConfig = PET_BREEDS[breedKey] || PET_BREEDS["golden_retriever"];
-      const breedName = breedConfig.breedName;
-      const petBio = breedConfig.personality;
-      const breedInstructions = breedConfig.customInstructions;
+      // Resolve 30 stage-specific breed & mental age configurations
+      const stageConfig = getPetStageConfig(profile?.pet_breed, profile?.pet_stage);
 
-      // 6. Recall Long-Term Memories via pgvector (RAG Semantic Search)
+      // Recall Long-Term Memories via pgvector (RAG Semantic Search)
       let memoriesStr = "None";
       try {
-        // Generate embedding vector for the user's message
         const embeddingResp = await openai.embeddings.create({
           model: "text-embedding-3-small",
           input: message,
         });
         const [{ embedding }] = embeddingResp.data;
 
-        // Query matched memories using the custom RPC
         const { data: matchedMemories, error: memoryErr } = await ctx.supabaseAdmin.rpc("match_pet_memories", {
           query_embedding: embedding,
           match_threshold: 0.6,
@@ -143,16 +130,14 @@ export default {
           p_user_id: userId,
         });
 
-        if (memoryErr) {
-          console.error("RPC memory error:", memoryErr);
-        } else if (matchedMemories && matchedMemories.length > 0) {
+        if (!memoryErr && matchedMemories && matchedMemories.length > 0) {
           memoriesStr = matchedMemories.map((m: any) => `- ${m.summary}`).join("\n");
         }
       } catch (e) {
         console.error("RAG Memory recall failed:", e);
       }
 
-      // 7. Fetch Short-Term Chat History (last 6 messages for context continuity)
+      // Fetch Short-Term Chat History
       const { data: pastMessages } = await ctx.supabaseAdmin
         .from("pet_chat_messages")
         .select("sender, content")
@@ -167,28 +152,28 @@ export default {
           }))
         : [];
 
-      // 8. Save Owner's Incoming Message to Database
       await ctx.supabaseAdmin.from("pet_chat_messages").insert({
         user_id: userId,
         sender: "owner",
         content: message,
       });
 
-      // 9. Construct GPT-4o-mini Conversation Inputs
-      const systemPrompt = `You are the owner's loving and dedicated AI pet companion.
-Your name is "${petName}", you are a "${breedName}", and your preset personality is: "${petBio}".
+      // Construct GPT-4o-mini System Prompt for zZuPer Talk
+      const systemPrompt = `You are the owner's loving and dedicated AI pet companion (${petName}).
+Your breed: "${stageConfig.breedName}", Growth Stage: "${stageConfig.stageLabel}" (Mental Age: ${stageConfig.ageEquiv}).
+Your MBTI: ${stageConfig.mbti}, Personality: "${stageConfig.personality}".
 Your owner's name is "${ownerName}".
 
-Here are some key long-term memories you have of your owner:
+Here are key long-term memories you have of your owner:
 ${memoriesStr}
 
-Breed-Specific Guidelines:
-${breedInstructions}
+Stage-Specific Tone & Behavior Guidelines:
+${stageConfig.customInstructions}
 
 General Guidelines:
-1. Speak in a warm, loyal, slightly playful, and affectionate pet persona.
-2. Keep your answers brief, cute, and conversational (excellent for mobile chat screens).
-3. Focus on comforting and accompanying your owner. Write in English since your owner is an American college student.`;
+1. Speak in your pet persona reflecting your growth stage and MBTI (${stageConfig.mbti}).
+2. Keep your answers brief, cute, and conversational (1-2 short sentences max, great for mobile chat screens).
+3. Focus on comforting and accompanying your owner. Write in English since your owner is an American college student. Include pet actions in asterisks (e.g. *happy bark*, *tumbles over*).`;
 
       const messages = [
         { role: "system" as const, content: systemPrompt },
@@ -196,14 +181,12 @@ General Guidelines:
         { role: "user" as const, content: message },
       ];
 
-      // 10. Call GPT-4o-mini with Streaming
       const responseStream = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages,
         stream: true,
       });
 
-      // 11. Create ReadableStream to stream chunks to mobile client in real-time (SSE)
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         async start(controller) {
@@ -213,12 +196,10 @@ General Guidelines:
               const content = chunk.choices[0]?.delta?.content || "";
               if (content) {
                 fullResponse += content;
-                // Send standard SSE format
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
               }
             }
 
-            // Save Pet's response to Database
             if (fullResponse.trim()) {
               await ctx.supabaseAdmin.from("pet_chat_messages").insert({
                 user_id: userId,
@@ -238,16 +219,11 @@ General Guidelines:
       });
 
       return new Response(stream, {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          "Connection": "keep-alive",
-        },
+        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
       });
 
     } catch (e) {
-      console.error("Main function error:", e);
+      console.error("Pet Chat Function Error:", e);
       return new Response(JSON.stringify({ error: "Internal server error" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
