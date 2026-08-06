@@ -6,7 +6,7 @@ export const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://mock
 export const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'mock-anon-key'
 
 // Set to true to bypass connection to offline local/remote Supabase backend
-export const USE_MOCK = false;
+export const USE_MOCK = true;
 
 const realSupabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -181,9 +181,9 @@ class MockAuth {
     if (this.isInitialized) return;
     try {
       const val = await AsyncStorage.getItem('zzup_mock_logged_in');
-      this.isLoggedIn = val === 'true';
+      this.isLoggedIn = val !== 'false';
     } catch {
-      this.isLoggedIn = false;
+      this.isLoggedIn = true;
     }
     this.isInitialized = true;
   }
@@ -203,14 +203,15 @@ class MockAuth {
     this.isLoggedIn = true;
     await AsyncStorage.setItem('zzup_mock_logged_in', 'true');
     
-    // Create new empty profile for onboarding
+    // Create new profile needing onboarding (Step 1 -> Step 2 -> Step 3)
     const newProfile = {
       ...MOCK_PROFILE_DEFAULT,
       personal_email: email,
-      real_name: null, // Null triggers onboarding
-      zzup_id: email.split('@')[0],
+      real_name: null, // Null triggers OnboardingScreen flow!
+      zzup_id: '00001',
       pet_name: null,
       university: null,
+      onboarded: false,
     };
     await setStoredProfile(newProfile);
 

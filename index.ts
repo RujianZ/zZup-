@@ -1,8 +1,21 @@
 import { registerRootComponent } from 'expo';
-
+import { Platform } from 'react-native';
 import App from './App';
 
-// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
-// It also ensures that whether you load the app in Expo Go or in a native build,
-// the environment is set up appropriately
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent = `
+    html, body, #root, #root > div {
+      height: 100% !important;
+      width: 100% !important;
+      display: flex !important;
+      flex-direction: column !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background-color: #FFFFFF !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 registerRootComponent(App);

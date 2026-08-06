@@ -252,6 +252,8 @@ export default function OnboardingScreen() {
 
   // ── STEP 2 UI ─────────────────────────────────────────────────────────────
   if (step === 2) {
+    const selectedIndex = OFFICIAL_PET_BREEDS.findIndex((b) => b.key === selectedBreed);
+
     return (
       <KeyboardAvoidingView
         style={styles.container}
@@ -260,41 +262,61 @@ export default function OnboardingScreen() {
         <ScrollView contentContainerStyle={styles.scroll}>
           <Text style={styles.stepLabel}>Step 2 of 3</Text>
           <Text style={styles.title}>Pet Avatar & Persona</Text>
-          <Text style={styles.subtitle}>Select your zZuPer's breed and persona</Text>
+          <Text style={styles.subtitle}>Swipe left/right to select your companion ({selectedIndex + 1}/10)</Text>
 
-          {/* Breed Grid Selector */}
-          <Text style={styles.sectionTitle}>2. Select Pet Breed & Personality</Text>
-          <View style={styles.breedGrid}>
+          {/* Large Horizontal Carousel Selector */}
+          <Text style={styles.sectionTitle}>2. Select Pet Breed (Swipe 👈 👉)</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.carouselContainer}
+            snapToInterval={240 + 16}
+            decelerationRate="fast"
+          >
+            {OFFICIAL_PET_BREEDS.map((b) => {
+              const isSelected = selectedBreed === b.key;
+              return (
+                <TouchableOpacity
+                  key={b.key}
+                  activeOpacity={0.85}
+                  style={[styles.largeBreedCard, isSelected && styles.largeBreedCardActive]}
+                  onPress={() => setSelectedBreed(b.key)}
+                >
+                  {isSelected && (
+                    <View style={styles.activeBadge}>
+                      <Ionicons name="checkmark-circle" size={14} color="#7C3AED" />
+                      <Text style={styles.activeBadgeText}>Selected</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.svgWrapper}>
+                    <PetSvgAvatar breed={b.key} stage="child" size={140} />
+                  </View>
+
+                  <Text style={[styles.largeBreedName, isSelected && styles.largeBreedNameActive]}>
+                    {b.name}
+                  </Text>
+
+                  <View style={styles.mbtiTag}>
+                    <Text style={styles.mbtiTagText}>{b.mbti}</Text>
+                  </View>
+
+                  <Text style={styles.largeBreedDesc}>{b.desc}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {/* Carousel Pagination Dots */}
+          <View style={styles.dotsRow}>
             {OFFICIAL_PET_BREEDS.map((b) => (
               <TouchableOpacity
                 key={b.key}
-                style={[styles.breedCard, selectedBreed === b.key && styles.breedCardActive]}
+                style={[styles.dot, selectedBreed === b.key && styles.dotActive]}
                 onPress={() => setSelectedBreed(b.key)}
-              >
-                <PetSvgAvatar breed={b.key} stage="child" size={44} />
-                <Text style={[styles.breedName, selectedBreed === b.key && styles.breedNameActive]}>{b.name}</Text>
-                <Text style={styles.breedMbti}>{b.mbti}</Text>
-              </TouchableOpacity>
+              />
             ))}
           </View>
-
-          {/* Custom Pet Avatar Upload */}
-          <TouchableOpacity
-            style={styles.avatarPicker}
-            onPress={() => {
-              const filename = `pet_avatar_${Date.now()}`;
-              pickAndUploadImage('avatars', filename, setPetAvatarUri, setPetAvatarUrl);
-            }}
-          >
-            {petAvatarUri ? (
-              <Image source={{ uri: petAvatarUri }} style={styles.avatar} />
-            ) : (
-              <View style={{ alignItems: 'center' }}>
-                <Ionicons name="paw-outline" size={28} color="#7C3AED" />
-                <Text style={styles.avatarPlaceholder}>Upload Pet Photo (Optional)</Text>
-              </View>
-            )}
-          </TouchableOpacity>
 
           <Text style={styles.inputLabel}>Pet Name *</Text>
           <TextInput
@@ -418,34 +440,105 @@ const styles = StyleSheet.create({
     color: '#09090B',
   },
   multiline: { height: 80, textAlignVertical: 'top' },
-  breedGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 20,
+  carouselContainer: {
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    marginBottom: 12,
   },
-  breedCard: {
-    width: '30%',
-    padding: 10,
-    borderRadius: 14,
-    borderWidth: 1.5,
+  largeBreedCard: {
+    width: 220,
+    padding: 16,
+    marginRight: 16,
+    borderRadius: 24,
+    borderWidth: 2,
     borderColor: '#E4E4E7',
     alignItems: 'center',
     backgroundColor: '#FAFAFA',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  breedCardActive: { borderColor: '#7C3AED', backgroundColor: '#F5F3FF' },
-  breedIcon: { fontSize: 24, marginBottom: 4 },
-  breedName: { fontSize: 11, fontWeight: '600', color: '#52525B', textAlign: 'center' },
-  breedNameActive: { color: '#7C3AED', fontWeight: '700' },
-  breedMbti: { fontSize: 9, color: '#A1A1AA', marginTop: 2, fontWeight: '700' },
-  avatarPicker: {
-    width: 90, height: 90, borderRadius: 45,
-    backgroundColor: '#FAFAFA', justifyContent: 'center',
-    alignItems: 'center', alignSelf: 'center', marginBottom: 20,
-    borderWidth: 1.5, borderColor: '#7C3AED', borderStyle: 'dashed',
+  largeBreedCardActive: {
+    borderColor: '#7C3AED',
+    backgroundColor: '#F5F3FF',
+    shadowColor: '#7C3AED',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
   },
-  avatar: { width: 90, height: 90, borderRadius: 45 },
-  avatarPlaceholder: { fontSize: 11, color: '#7C3AED', textAlign: 'center', marginTop: 4, fontWeight: '600' },
+  activeBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECE9FE',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  activeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#7C3AED',
+    marginLeft: 3,
+  },
+  svgWrapper: {
+    width: 140,
+    height: 140,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  largeBreedName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#18181B',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  largeBreedNameActive: {
+    color: '#7C3AED',
+  },
+  mbtiTag: {
+    backgroundColor: '#EDE9FE',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  mbtiTagText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#6D28D9',
+  },
+  largeBreedDesc: {
+    fontSize: 11,
+    color: '#71717A',
+    marginTop: 4,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  dotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 6,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#E4E4E7',
+  },
+  dotActive: {
+    width: 18,
+    backgroundColor: '#7C3AED',
+  },
   button: {
     backgroundColor: '#7C3AED', borderRadius: 14,
     padding: 16, alignItems: 'center', marginTop: 12,
