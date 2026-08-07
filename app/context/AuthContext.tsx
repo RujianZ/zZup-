@@ -44,10 +44,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
     
-    // Safety timeout: dismiss loading spinner within 200ms max to prevent hanging screen
+    // Safety timeout: dismiss loading spinner within 500ms max to guarantee Login screen renders
     const timer = setTimeout(() => {
       if (mounted) setLoading(false);
-    }, 200);
+    }, 500);
 
     // 1. 获取当前 session（App 启动时）
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -58,7 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (mounted) setLoading(false);
         });
       } else {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     }).catch(() => {
       if (mounted) setLoading(false);
