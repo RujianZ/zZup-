@@ -5,8 +5,8 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 export const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://mock.supabase.co'
 export const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'mock-anon-key'
 
-// Set to true to bypass connection to offline local/remote Supabase backend
-export const USE_MOCK = true;
+// Set to false when connecting to online Supabase backend
+export const USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK === 'true' || supabaseUrl.includes('mock.supabase.co');
 
 const realSupabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
