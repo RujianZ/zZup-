@@ -164,25 +164,31 @@ export async function updateProfile(
   const user = session?.user
   if (!user) return { error: 'Not authenticated' }
 
-  // 1. Try upsert first in case profile row doesn't exist yet for new user
-  let { error } = await supabase.from('profiles').upsert({
-    id: user.id,
-    ...fields,
-  })
-
-  // 2. Fallback to update if upsert fails
-  if (error) {
-    const updateRes = await supabase.from('profiles').update(fields).eq('id', user.id)
-    if (!updateRes.error) return { error: null }
-  } else {
-    return { error: null }
+  // Filter out protected columns (like edu_verified) that trigger PostgreSQL 42501 permission denied
+  const sanitizedFields: Record<string, any> = {}
+  for (const [key, value] of Object.entries(fields)) {
+    if (key === 'edu_verified') continue // Protected column, updated via edge function / DB trigger
+    if (value !== undefined) {
+      sanitizedFields[key] = value
+    }
   }
 
-  // 3. Fallback to RPC if direct table write is restricted by RLS
-  const rpcRes = await supabase.rpc('update_my_profile', fields as any)
-  if (!rpcRes.error) return { error: null }
+  // 1. Try update first on authenticated user's profile row
+  const { error: updateErr } = await supabase
+    .from('profiles')
+    .update(sanitizedFields)
+    .eq('id', user.id)
 
-  return { error: error?.message ?? null }
+  if (!updateErr) return { error: null }
+
+  // 2. Try upsert fallback if row does not exist yet
+  const { error: upsertErr } = await supabase
+    .from('profiles')
+    .upsert({ id: user.id, ...sanitizedFields })
+
+  if (!upsertErr) return { error: null }
+
+  return { error: updateErr?.message || upsertErr?.message || 'Update failed' }
 }
 
 export async function deleteAccount(): Promise<{ error: string | null }> {
