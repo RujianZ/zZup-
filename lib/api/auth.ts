@@ -159,11 +159,29 @@ export async function updateProfile(
   fields: ProfileUpdate
 ): Promise<{ error: string | null }> {
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: { session },
+  } = await supabase.auth.getSession()
+  const user = session?.user
   if (!user) return { error: 'Not authenticated' }
 
-  const { error } = await supabase.from('profiles').update(fields).eq('id', user.id)
+  // 1. Try upsert first in case profile row doesn't exist yet for new user
+  let { error } = await supabase.from('profiles').upsert({
+    id: user.id,
+    ...fields,
+  })
+
+  // 2. Fallback to update if upsert fails
+  if (error) {
+    const updateRes = await supabase.from('profiles').update(fields).eq('id', user.id)
+    if (!updateRes.error) return { error: null }
+  } else {
+    return { error: null }
+  }
+
+  // 3. Fallback to RPC if direct table write is restricted by RLS
+  const rpcRes = await supabase.rpc('update_my_profile', fields as any)
+  if (!rpcRes.error) return { error: null }
+
   return { error: error?.message ?? null }
 }
 

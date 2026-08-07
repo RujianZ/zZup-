@@ -5,14 +5,13 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 export const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://mock.supabase.co'
 export const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'mock-anon-key'
 
-// Set to false when connecting to online Supabase backend
-export const USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK === 'true' || supabaseUrl.includes('mock.supabase.co');
+// USE_MOCK = true uses the built-in mock client (works offline, instant startup)
+// USE_MOCK = false uses the real Supabase cloud backend
+export const USE_MOCK = false;
 
-let _realSupabaseInstance: SupabaseClient | null = null;
-
-export function getRealSupabase(): SupabaseClient {
-  if (!_realSupabaseInstance) {
-    _realSupabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+const realSupabase = USE_MOCK
+  ? (null as unknown as SupabaseClient)
+  : createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         storage: AsyncStorage,
         autoRefreshToken: true,
@@ -20,9 +19,6 @@ export function getRealSupabase(): SupabaseClient {
         detectSessionInUrl: false,
       },
     });
-  }
-  return _realSupabaseInstance;
-}
 
 // --- MOCK SUPABASE IMPLEMENTATION ---
 
@@ -705,12 +701,4 @@ class MockSupabaseClient {
   };
 }
 
-const mockClientInstance = new MockSupabaseClient();
-
-export const supabase = new Proxy({}, {
-  get(_target, prop) {
-    const client = USE_MOCK ? (mockClientInstance as any) : (getRealSupabase() as any);
-    const val = client[prop];
-    return typeof val === 'function' ? val.bind(client) : val;
-  }
-}) as unknown as SupabaseClient;
+export const supabase = (USE_MOCK ? new MockSupabaseClient() : realSupabase) as unknown as SupabaseClient;
