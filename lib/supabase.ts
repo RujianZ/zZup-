@@ -8,14 +8,21 @@ export const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'moc
 // Set to false when connecting to online Supabase backend
 export const USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK === 'true' || supabaseUrl.includes('mock.supabase.co');
 
-const realSupabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-})
+let _realSupabaseInstance: SupabaseClient | null = null;
+
+export function getRealSupabase(): SupabaseClient {
+  if (!_realSupabaseInstance) {
+    _realSupabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        storage: AsyncStorage,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+      },
+    });
+  }
+  return _realSupabaseInstance;
+}
 
 // --- MOCK SUPABASE IMPLEMENTATION ---
 
@@ -698,4 +705,12 @@ class MockSupabaseClient {
   };
 }
 
-export const supabase = (USE_MOCK ? new MockSupabaseClient() : realSupabase) as unknown as SupabaseClient;
+const mockClientInstance = new MockSupabaseClient();
+
+export const supabase = new Proxy({}, {
+  get(_target, prop) {
+    const client = USE_MOCK ? (mockClientInstance as any) : (getRealSupabase() as any);
+    const val = client[prop];
+    return typeof val === 'function' ? val.bind(client) : val;
+  }
+}) as unknown as SupabaseClient;
