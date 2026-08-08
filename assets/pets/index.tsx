@@ -1,46 +1,11 @@
 import React from 'react';
 import { View, Image } from 'react-native';
-import { SvgProps } from 'react-native-svg';
 
-import AlienAdult from './alien_adult.svg';
-import AlienChild from './alien_child.svg';
-import AlienYouth from './alien_youth.svg';
-
-import BearAdult from './bear_adult.svg';
-import BearChild from './bear_child.svg';
-import BearYouth from './bear_youth.svg';
-
-import CatAdult from './cat_adult.svg';
-import CatChild from './cat_child.svg';
-import CatYouth from './cat_youth.svg';
-
-import DiscoBallAdult from './disco_ball_adult.svg';
-import DiscoBallChild from './disco_ball_child.svg';
-import DiscoBallYouth from './disco_ball_youth.svg';
-
-import DogAdult from './dog_adult.svg';
-import DogChild from './dog_child.svg';
-import DogYouth from './dog_youth.svg';
-
-import MobiusAdult from './mobius_adult.svg';
-import MobiusChild from './mobius_child.svg';
-import MobiusYouth from './mobius_youth.svg';
-
-import MonkeyAdult from './monkey_adult.svg';
-import MonkeyChild from './monkey_child.svg';
-import MonkeyYouth from './monkey_youth.svg';
-
-import SlothAdult from './sloth_adult.svg';
-import SlothChild from './sloth_child.svg';
-import SlothYouth from './sloth_youth.svg';
-
-import SnakeAdult from './snake_adult.svg';
-import SnakeChild from './snake_child.svg';
-import SnakeYouth from './snake_youth.svg';
-
-import TimeLordAdult from './time_lord_adult.svg';
-import TimeLordChild from './time_lord_child.svg';
-import TimeLordYouth from './time_lord_youth.svg';
+// Pet art is authored as raster bitmaps. They were previously wrapped in giant
+// (3–4 MB) base64 SVGs and rendered through react-native-svg, which parsed the
+// whole base64 blob on the JS thread on every render — rendering several at once
+// (e.g. the Closet modal) froze or crashed the UI. We now ship pre-downscaled
+// PNGs rendered by the native Image component instead.
 
 /**
  * 10 大官方宠物品种与 3 阶段形态的 UI 资源映射库
@@ -64,62 +29,51 @@ export const PET_STAGES_INFO: Record<string, { label: string; sizeMultiplier: nu
   adult: { label: 'Ultimate Form', sizeMultiplier: 1.2 },
 };
 
-// 30 Pet SVG Component Map
-export const PET_ASSETS: Record<string, React.FC<SvgProps>> = {
-  alien_adult: AlienAdult,
-  alien_child: AlienChild,
-  alien_youth: AlienYouth,
-  bear_adult: BearAdult,
-  bear_child: BearChild,
-  bear_youth: BearYouth,
-  cat_adult: CatAdult,
-  cat_child: CatChild,
-  cat_youth: CatYouth,
-  disco_ball_adult: DiscoBallAdult,
-  disco_ball_child: DiscoBallChild,
-  disco_ball_youth: DiscoBallYouth,
-  dog_adult: DogAdult,
-  dog_child: DogChild,
-  dog_youth: DogYouth,
-  mobius_adult: MobiusAdult,
-  mobius_child: MobiusChild,
-  mobius_youth: MobiusYouth,
-  monkey_adult: MonkeyAdult,
-  monkey_child: MonkeyChild,
-  monkey_youth: MonkeyYouth,
-  sloth_adult: SlothAdult,
-  sloth_child: SlothChild,
-  sloth_youth: SlothYouth,
-  snake_adult: SnakeAdult,
-  snake_child: SnakeChild,
-  snake_youth: SnakeYouth,
-  time_lord_adult: TimeLordAdult,
-  time_lord_child: TimeLordChild,
-  time_lord_youth: TimeLordYouth,
+// 30 Pet PNG asset map (breed_stage -> require'd image module)
+export const PET_ASSETS: Record<string, any> = {
+  alien_adult: require('./png/alien_adult.png'),
+  alien_child: require('./png/alien_child.png'),
+  alien_youth: require('./png/alien_youth.png'),
+  bear_adult: require('./png/bear_adult.png'),
+  bear_child: require('./png/bear_child.png'),
+  bear_youth: require('./png/bear_youth.png'),
+  cat_adult: require('./png/cat_adult.png'),
+  cat_child: require('./png/cat_child.png'),
+  cat_youth: require('./png/cat_youth.png'),
+  disco_ball_adult: require('./png/disco_ball_adult.png'),
+  disco_ball_child: require('./png/disco_ball_child.png'),
+  disco_ball_youth: require('./png/disco_ball_youth.png'),
+  dog_adult: require('./png/dog_adult.png'),
+  dog_child: require('./png/dog_child.png'),
+  dog_youth: require('./png/dog_youth.png'),
+  mobius_adult: require('./png/mobius_adult.png'),
+  mobius_child: require('./png/mobius_child.png'),
+  mobius_youth: require('./png/mobius_youth.png'),
+  monkey_adult: require('./png/monkey_adult.png'),
+  monkey_child: require('./png/monkey_child.png'),
+  monkey_youth: require('./png/monkey_youth.png'),
+  sloth_adult: require('./png/sloth_adult.png'),
+  sloth_child: require('./png/sloth_child.png'),
+  sloth_youth: require('./png/sloth_youth.png'),
+  snake_adult: require('./png/snake_adult.png'),
+  snake_child: require('./png/snake_child.png'),
+  snake_youth: require('./png/snake_youth.png'),
+  time_lord_adult: require('./png/time_lord_adult.png'),
+  time_lord_child: require('./png/time_lord_child.png'),
+  time_lord_youth: require('./png/time_lord_youth.png'),
 };
 
 export function PetSvgAvatar({ breed, stage, size = 64 }: { breed?: string | null; stage?: string | null; size?: number }) {
   const bKey = (breed || 'dog').toLowerCase().trim();
   const sKey = (stage || 'child').toLowerCase().trim();
   const key = `${bKey}_${sKey}`;
-  const AssetOrComponent: any = PET_ASSETS[key] || PET_ASSETS['dog_child'];
+  const asset: any = PET_ASSETS[key] || PET_ASSETS['dog_child'];
 
-  if (!AssetOrComponent) return null;
+  if (!asset) return null;
 
-  // If react-native-svg-transformer compiled it into a React Component
-  if (typeof AssetOrComponent === 'function' || (typeof AssetOrComponent === 'object' && AssetOrComponent !== null)) {
-    const SvgComponent = AssetOrComponent as React.FC<any>;
-    return (
-      <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
-        <SvgComponent width={size} height={size} />
-      </View>
-    );
-  }
-
-  // Fallback if Metro bundled it as an asset number before restart
   return (
     <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
-      <Image source={AssetOrComponent} style={{ width: size, height: size, resizeMode: 'contain' }} />
+      <Image source={asset} style={{ width: size, height: size, resizeMode: 'contain' }} />
     </View>
   );
 }

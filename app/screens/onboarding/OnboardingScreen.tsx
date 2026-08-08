@@ -142,7 +142,6 @@ export default function OnboardingScreen() {
       pet_breed: selectedBreed,
       pet_avatar_url: petAvatarUrl || undefined,
       profile_visibility: profileVisibility,
-      edu_verified: isEduVerified,
       onboarded: true,
     });
     setLoading(false);
