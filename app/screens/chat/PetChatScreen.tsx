@@ -151,6 +151,34 @@ export default function PetChatScreen() {
       }
 
       const reader = response.body?.getReader();
+
+      // RN fetch has no streaming support: response.body is undefined.
+      // Fall back to reading the fully-buffered SSE text and showing the reply at once.
+      if (!reader) {
+        const fullText = await response.text();
+        let acc = '';
+        for (const line of fullText.split('\n')) {
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6).trim();
+            if (dataStr === '[DONE]') continue;
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed.content) acc += parsed.content;
+            } catch (e) {
+              // Ignore partial JSON chunks
+            }
+          }
+        }
+        if (acc) {
+          setMessages(prev =>
+            prev.map(msg => (msg.id === petMsgId ? { ...msg, content: acc } : msg))
+          );
+        } else {
+          await loadHistory();
+        }
+        setTimeout(() => setPetEmotion('idle'), 3000);
+        return;
+      }
       const decoder = new TextDecoder();
       let accumulatedResponse = '';
 

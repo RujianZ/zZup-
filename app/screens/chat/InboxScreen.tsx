@@ -104,7 +104,7 @@ export default function InboxScreen() {
         onPress={() => {
           closeAllMenus();
           if (item.kind === 'zzuper_talk') {
-            navigation.navigate('Chat', { groupId: item.conversation_id, groupName: 'zZuPer Talk', isDM: true });
+            navigation.navigate('PetChat');
           } else {
             navigation.navigate('Chat', { groupId: item.conversation_id, groupName: item.display_name, isDM });
           }
@@ -223,6 +223,16 @@ export default function InboxScreen() {
               }}
             >
               <Text style={styles.dropdownItemText}>Add Friend</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.dropdownItem}
+              onPress={() => {
+                setShowAddMenu(false);
+                navigation.navigate('FriendRequests');
+              }}
+            >
+              <Text style={styles.dropdownItemText}>Friend Requests</Text>
             </TouchableOpacity>
 
             <TouchableOpacity

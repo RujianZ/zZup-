@@ -303,6 +303,16 @@ export default function ProfileScreen() {
 
           <View style={styles.actionDivider} />
 
+          <TouchableOpacity style={styles.actionItem} onPress={handleLogout} activeOpacity={0.7}>
+            <View style={styles.actionLeft}>
+              <Ionicons name="log-out-outline" size={20} color="#7C3AED" />
+              <Text style={styles.actionText}>Sign Out</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#A1A1AA" />
+          </TouchableOpacity>
+
+          <View style={styles.actionDivider} />
+
           <TouchableOpacity style={styles.actionItem} onPress={handleDeleteAccount} activeOpacity={0.7}>
             <View style={styles.actionLeft}>
               <Ionicons name="trash-outline" size={20} color="#EF4444" />
