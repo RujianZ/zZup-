@@ -108,6 +108,8 @@ export interface FriendProfile {
   edu_verified: boolean
 }
 
+export type FriendItem = FriendProfile
+
 export interface FriendRequest extends FriendProfile {
   created_at: string
 }
@@ -221,6 +223,11 @@ export async function getFriends(): Promise<FriendProfile[]> {
 export async function getPendingRequests(): Promise<FriendRequest[]> {
   const { data } = await supabase.rpc('list_pending_requests')
   return (data ?? []) as FriendRequest[]
+}
+
+export async function getFriendRequestsCount(): Promise<number> {
+  const requests = await getPendingRequests()
+  return requests.length
 }
 
 export async function getSentRequests(): Promise<FriendRequest[]> {
