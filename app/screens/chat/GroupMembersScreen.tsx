@@ -84,7 +84,7 @@ export default function GroupMembersScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color="#09090B" />
+          <Ionicons name="chevron-back" size={24} color="#0B0B0F" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Pack Members ({members.length})</Text>
         <View style={styles.backBtn} />
@@ -152,11 +152,11 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#F4F4F5',
+    borderBottomWidth: 1, borderBottomColor: '#F2F2F5',
     backgroundColor: '#FFFFFF',
   },
   backBtn: { padding: 4, minWidth: 32 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#09090B' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0B0B0F' },
   list: { paddingVertical: 8, paddingHorizontal: 16 },
   memberItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },
   avatar: { width: 44, height: 44, borderRadius: 22 },
@@ -166,14 +166,14 @@ const styles = StyleSheet.create({
   },
   memberInfo: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3 },
-  memberName: { fontSize: 15, fontWeight: '600', color: '#09090B' },
+  memberName: { fontSize: 15, fontWeight: '600', color: '#0B0B0F' },
   adminBadge: {
     backgroundColor: 'rgba(124, 58, 237, 0.08)', paddingHorizontal: 8, paddingVertical: 2,
     borderRadius: 8, borderWidth: 1, borderColor: 'rgba(124, 58, 237, 0.15)',
   },
   adminBadgeText: { fontSize: 11, color: '#7C3AED', fontWeight: '600' },
-  memberMeta: { fontSize: 12, color: '#71717A' },
+  memberMeta: { fontSize: 12, color: '#A6A6AF' },
   removeBtn: { padding: 4 },
-  separator: { height: 1, backgroundColor: '#F4F4F5' },
+  separator: { height: 1, backgroundColor: '#F2F2F5' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

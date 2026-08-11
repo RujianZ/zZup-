@@ -1,33 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
-  StyleSheet, Alert, ScrollView, Image,
-  KeyboardAvoidingView, Platform, ActivityIndicator
+  View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, Image,
+  KeyboardAvoidingView, Platform, ActivityIndicator, SafeAreaView, Pressable,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons, Feather } from '@expo/vector-icons';
 import { updateProfile } from '../../../lib/api/auth';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../../lib/supabase';
-import { Ionicons } from '@expo/vector-icons';
 import { PetSvgAvatar } from '../../../assets/pets';
+import { light, spacing, radius, typography, lightShadow } from '../../theme';
 
-// 10 Official Pet Breed Personas
 const OFFICIAL_PET_BREEDS = [
-  { key: 'cat', name: 'Cat', mbti: 'ISFP', icon: '🐾', desc: 'Tsundere & Elegant' },
-  { key: 'dog', name: 'Dog', mbti: 'ENFP', icon: '🐶', desc: 'Sunny & Playful' },
-  { key: 'bear', name: 'Healing Bear', mbti: 'ISFJ', icon: '🐻', desc: 'Warm & Cuddly' },
-  { key: 'snake', name: 'Mystical Snake', mbti: 'INFJ', icon: '🐍', desc: 'Mysterious & Deep' },
-  { key: 'monkey', name: 'Trendy Monkey', mbti: 'ESTP', icon: '🐒', desc: 'Quirky & Witty' },
-  { key: 'mobius', name: 'Mobius Loop', mbti: 'INTJ', icon: '♾️', desc: 'Futuristic Geek' },
-  { key: 'sloth', name: 'Sleepy Sloth', mbti: 'ISTP', icon: '🦥', desc: 'Chill & Zen' },
-  { key: 'disco_ball', name: 'Disco Ball', mbti: 'ESFP', icon: '🪩', desc: 'Party Hype Maker' },
-  { key: 'alien', name: 'Quirky Alien', mbti: 'ENTP', icon: '👽', desc: 'Roast Master' },
-  { key: 'time_lord', name: 'Time Lord Hourglass', mbti: 'ENTJ', icon: '⏳', desc: 'Perfectionist Leader' },
+  { key: 'cat', name: 'Cat', mbti: 'ISFP', desc: 'Tsundere & elegant' },
+  { key: 'dog', name: 'Dog', mbti: 'ENFP', desc: 'Sunny & playful' },
+  { key: 'bear', name: 'Healing Bear', mbti: 'ISFJ', desc: 'Warm & cuddly' },
+  { key: 'snake', name: 'Mystical Snake', mbti: 'INFJ', desc: 'Mysterious & deep' },
+  { key: 'monkey', name: 'Trendy Monkey', mbti: 'ESTP', desc: 'Quirky & witty' },
+  { key: 'mobius', name: 'Mobius Loop', mbti: 'INTJ', desc: 'Futuristic geek' },
+  { key: 'sloth', name: 'Sleepy Sloth', mbti: 'ISTP', desc: 'Chill & zen' },
+  { key: 'disco_ball', name: 'Disco Ball', mbti: 'ESFP', desc: 'Party maker' },
+  { key: 'alien', name: 'Quirky Alien', mbti: 'ENTP', desc: 'Roast master' },
+  { key: 'time_lord', name: 'Time Lord', mbti: 'ENTJ', desc: 'Perfectionist' },
 ];
 
-// Presets for Virtual Human Avatars
 const VIRTUAL_HUMAN_PRESETS = [
   { key: 'asian_f', name: 'Asian Female', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80' },
   { key: 'asian_m', name: 'Asian Male', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80' },
@@ -44,93 +40,27 @@ export default function OnboardingScreen() {
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-
-  // Auto-detect .edu email
   const isEduVerified = user?.email?.toLowerCase().endsWith('.edu') ?? false;
 
-  // Step 1: Real Profile (Real Name & DOB mandatory; Nationality optional)
   const [realName, setRealName] = useState('');
   const [birthday, setBirthday] = useState('');
   const [nationality, setNationality] = useState('');
-
-  // Avatar Selection 1: Virtual Human Avatar
   const [selectedHumanAvatar, setSelectedHumanAvatar] = useState<string>(VIRTUAL_HUMAN_PRESETS[0].url);
-  const [customAvatarUri, setCustomAvatarUri] = useState<string | null>(null);
-
-  // Avatar Selection 2: Pet Avatar & Breed
+  const [customAvatarUri] = useState<string | null>(null);
   const [petName, setPetName] = useState('');
-  const [petBio, setPetBio] = useState('');
   const [selectedBreed, setSelectedBreed] = useState<string>('dog');
-  const [petAvatarUri, setPetAvatarUri] = useState<string | null>(null);
-  const [petAvatarUrl, setPetAvatarUrl] = useState<string | null>(null);
-
-  // Step 3: Visibility Preference
+  const [petAvatarUrl] = useState<string | null>(null);
   const [profileVisibility, setProfileVisibility] = useState<'real_only' | 'real_with_pet' | 'pet_only'>('real_with_pet');
 
-  const pickAndUploadImage = async (
-    bucket: string,
-    path: string,
-    onUri: (uri: string) => void,
-    onUrl: (url: string) => void
-  ) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'Camera roll permission is required to upload images.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-    if (result.canceled) return;
-
-    const uri = result.assets[0].uri;
-    onUri(uri);
-
-    const ext = uri.split('.').pop() ?? 'jpg';
-    const filePath = `${path}.${ext}`;
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    const arrayBuffer = await blob.arrayBuffer();
-
-    const { error } = await supabase.storage
-      .from(bucket)
-      .upload(filePath, arrayBuffer, { contentType: `image/${ext}`, upsert: true });
-
-    if (error) {
-      Alert.alert('Upload Failed', error.message);
-      return;
-    }
-
-    const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
-    onUrl(data.publicUrl);
-  };
-
-  // Step 1 Validation: Real Name & Birthday mandatory
   const handleStep1 = () => {
-    if (!realName.trim()) {
-      Alert.alert('Required Field', 'Please enter your Real Name.');
-      return;
-    }
-    if (!birthday.trim()) {
-      Alert.alert('Required Field', 'Please enter your Date of Birth (YYYY-MM-DD).');
-      return;
-    }
+    if (!realName.trim()) { Alert.alert('Required', 'Please enter your real name.'); return; }
+    if (!birthday.trim()) { Alert.alert('Required', 'Please enter your date of birth (YYYY-MM-DD).'); return; }
     setStep(2);
   };
-
-  // Step 2 Validation: Pet Name mandatory
   const handleStep2 = () => {
-    if (!petName.trim()) {
-      Alert.alert('Required Field', 'Please enter your pet\'s name.');
-      return;
-    }
+    if (!petName.trim()) { Alert.alert('Required', "Please enter your pet's name."); return; }
     setStep(3);
   };
-
-  // Step 3 Finish Setup
   const handleStep3 = async () => {
     setLoading(true);
     const { error } = await updateProfile({
@@ -145,447 +75,176 @@ export default function OnboardingScreen() {
       onboarded: true,
     });
     setLoading(false);
-
-    if (error) {
-      Alert.alert('Save Failed', error);
-      return;
-    }
-
+    if (error) { Alert.alert('Save failed', error); return; }
     await refreshProfile();
   };
 
-  // ── STEP 1 UI ─────────────────────────────────────────────────────────────
+  const Progress = ({ n }: { n: number }) => (
+    <View style={styles.progressRow}>
+      {[1, 2, 3].map(i => <View key={i} style={[styles.progressDot, i <= n && styles.progressDotActive]} />)}
+    </View>
+  );
+
+  const CTA = ({ label, onPress, busy }: { label: string; onPress: () => void; busy?: boolean }) => (
+    <Pressable onPress={onPress} disabled={busy} style={({ pressed }) => [styles.cta, pressed && { opacity: 0.85 }, busy && { opacity: 0.6 }]}>
+      {busy ? <ActivityIndicator color="#fff" /> : <><Text style={styles.ctaText}>{label}</Text><Feather name="arrow-right" size={19} color="#fff" /></>}
+    </Pressable>
+  );
+
+  // STEP 1
   if (step === 1) {
     return (
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <StatusBar style="light" />
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <Text style={styles.stepLabel}>Step 1 of 3</Text>
-          <Text style={styles.title}>Select Your Avatar</Text>
+      <SafeAreaView style={styles.safe}>
+        <StatusBar style="dark" />
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+            <Progress n={1} />
+            <Text style={styles.eyebrow}>STEP 1 OF 3</Text>
+            <Text style={styles.title}>Pick your look</Text>
 
-          {/* .edu Verification Banner */}
-          {isEduVerified && (
-            <View style={styles.eduBanner}>
-              <Ionicons name="school" size={20} color="#7C3AED" style={{ marginRight: 8 }} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.eduBannerTitle}>🎓 .edu Email Verified!</Text>
-                <Text style={styles.eduBannerSub}>Unlocked Student Badge & Exclusive Campus Rewards!</Text>
+            {isEduVerified && (
+              <View style={styles.eduBanner}>
+                <Ionicons name="school" size={18} color={light.brand} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.eduTitle}>.edu verified 🎓</Text>
+                  <Text style={styles.eduSub}>Student badge & campus perks unlocked.</Text>
+                </View>
               </View>
-            </View>
-          )}
+            )}
 
-          {/* Virtual Human Avatar Carousel */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.carouselContainer}
-            snapToInterval={180 + 16}
-            decelerationRate="fast"
-          >
-            {VIRTUAL_HUMAN_PRESETS.map((preset) => {
-              const isSelected = selectedHumanAvatar === preset.url;
-              return (
-                <TouchableOpacity
-                  key={preset.key}
-                  activeOpacity={0.85}
-                  style={[styles.largeAvatarCard, isSelected && styles.largeBreedCardActive]}
-                  onPress={() => {
-                    setSelectedHumanAvatar(preset.url);
-                    setCustomAvatarUri(null);
-                  }}
-                >
-                  {isSelected && (
-                    <View style={styles.activeBadge}>
-                      <Ionicons name="checkmark-circle" size={14} color="#7C3AED" />
-                      <Text style={styles.activeBadgeText}>Selected</Text>
-                    </View>
-                  )}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carousel} snapToInterval={156} decelerationRate="fast">
+              {VIRTUAL_HUMAN_PRESETS.map(preset => {
+                const sel = selectedHumanAvatar === preset.url;
+                return (
+                  <TouchableOpacity key={preset.key} activeOpacity={0.85} style={[styles.avatarCard, sel && styles.cardActive]} onPress={() => setSelectedHumanAvatar(preset.url)}>
+                    <Image source={{ uri: preset.url }} style={[styles.presetAvatar, sel && { borderColor: light.brand }]} />
+                    <Text style={[styles.cardName, sel && { color: light.brand }]} numberOfLines={1}>{preset.name}</Text>
+                    {sel && <View style={styles.checkBadge}><Ionicons name="checkmark" size={13} color="#fff" /></View>}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
 
-                  <View style={styles.avatarCircleWrapper}>
-                    <Image source={{ uri: preset.url }} style={styles.largePresetAvatar} />
-                  </View>
+            <Text style={styles.label}>Real name</Text>
+            <TextInput style={styles.input} placeholder="e.g. Alex Morgan" placeholderTextColor={light.textTertiary} value={realName} onChangeText={setRealName} />
+            <Text style={styles.label}>Date of birth</Text>
+            <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor={light.textTertiary} value={birthday} onChangeText={setBirthday} />
 
-                  <Text style={[styles.largeBreedName, isSelected && styles.largeBreedNameActive]}>
-                    {preset.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            <CTA label="Continue" onPress={handleStep1} />
           </ScrollView>
-
-          {/* Carousel Pagination Dots */}
-          <View style={styles.dotsRow}>
-            {VIRTUAL_HUMAN_PRESETS.map((preset) => (
-              <TouchableOpacity
-                key={preset.key}
-                style={[styles.dot, selectedHumanAvatar === preset.url && styles.dotActive]}
-                onPress={() => setSelectedHumanAvatar(preset.url)}
-              />
-            ))}
-          </View>
-
-          {/* Mandatory Inputs */}
-          <Text style={styles.inputLabel}>Real Name *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. Alex Morgan"
-            placeholderTextColor="#71717A"
-            value={realName}
-            onChangeText={setRealName}
-          />
-
-          <Text style={styles.inputLabel}>Date of Birth * (YYYY-MM-DD)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. 2002-05-18"
-            placeholderTextColor="#71717A"
-            value={birthday}
-            onChangeText={setBirthday}
-          />
-
-          <TouchableOpacity style={styles.button} onPress={handleStep1}>
-            <Text style={styles.buttonText}>Next →</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     );
   }
 
-  // ── STEP 2 UI ─────────────────────────────────────────────────────────────
+  // STEP 2
   if (step === 2) {
     return (
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <StatusBar style="light" />
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <Text style={styles.stepLabel}>Step 2 of 3</Text>
-          <Text style={styles.title}>Select your zZuPer</Text>
+      <SafeAreaView style={styles.safe}>
+        <StatusBar style="dark" />
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+            <Progress n={2} />
+            <Text style={styles.eyebrow}>STEP 2 OF 3</Text>
+            <Text style={styles.title}>Meet your zZuPer</Text>
 
-          {/* Large Horizontal Carousel Selector */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.carouselContainer}
-            snapToInterval={240 + 16}
-            decelerationRate="fast"
-          >
-            {OFFICIAL_PET_BREEDS.map((b) => {
-              const isSelected = selectedBreed === b.key;
-              return (
-                <TouchableOpacity
-                  key={b.key}
-                  activeOpacity={0.85}
-                  style={[styles.largeBreedCard, isSelected && styles.largeBreedCardActive]}
-                  onPress={() => setSelectedBreed(b.key)}
-                >
-                  {isSelected && (
-                    <View style={styles.activeBadge}>
-                      <Ionicons name="checkmark-circle" size={14} color="#E9D5FF" />
-                      <Text style={styles.activeBadgeText}>Selected</Text>
-                    </View>
-                  )}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carousel} snapToInterval={196} decelerationRate="fast">
+              {OFFICIAL_PET_BREEDS.map(b => {
+                const sel = selectedBreed === b.key;
+                return (
+                  <TouchableOpacity key={b.key} activeOpacity={0.85} style={[styles.breedCard, sel && styles.cardActive]} onPress={() => setSelectedBreed(b.key)}>
+                    <View style={styles.svgWrap}><PetSvgAvatar breed={b.key} stage="child" size={120} /></View>
+                    <Text style={[styles.cardName, sel && { color: light.brand }]}>{b.name}</Text>
+                    <View style={styles.mbti}><Text style={styles.mbtiText}>{b.mbti}</Text></View>
+                    <Text style={styles.breedDesc}>{b.desc}</Text>
+                    {sel && <View style={styles.checkBadge}><Ionicons name="checkmark" size={13} color="#fff" /></View>}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
 
-                  <View style={styles.svgWrapper}>
-                    <PetSvgAvatar breed={b.key} stage="child" size={140} />
-                  </View>
+            <Text style={styles.label}>Pet name</Text>
+            <TextInput style={styles.input} placeholder="e.g. Barnaby" placeholderTextColor={light.textTertiary} value={petName} onChangeText={setPetName} />
 
-                  <Text style={[styles.largeBreedName, isSelected && styles.largeBreedNameActive]}>
-                    {b.name}
-                  </Text>
-
-                  <View style={styles.mbtiTag}>
-                    <Text style={styles.mbtiTagText}>{b.mbti}</Text>
-                  </View>
-
-                  <Text style={styles.largeBreedDesc}>{b.desc}</Text>
-                </TouchableOpacity>
-              );
-            })}
+            <CTA label="Continue" onPress={handleStep2} />
+            <TouchableOpacity onPress={() => setStep(1)} style={styles.backLink}><Text style={styles.backText}>Back</Text></TouchableOpacity>
           </ScrollView>
-
-          {/* Carousel Pagination Dots */}
-          <View style={styles.dotsRow}>
-            {OFFICIAL_PET_BREEDS.map((b) => (
-              <TouchableOpacity
-                key={b.key}
-                style={[styles.dot, selectedBreed === b.key && styles.dotActive]}
-                onPress={() => setSelectedBreed(b.key)}
-              />
-            ))}
-          </View>
-
-          <Text style={styles.inputLabel}>Pet Name *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. Barnaby"
-            placeholderTextColor="#71717A"
-            value={petName}
-            onChangeText={setPetName}
-          />
-
-          <TouchableOpacity style={styles.button} onPress={handleStep2}>
-            <Text style={styles.buttonText}>Next</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => setStep(1)}>
-            <Text style={styles.back}>Back</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     );
   }
 
-  // ── STEP 3 UI ─────────────────────────────────────────────────────────────
+  // STEP 3
   return (
-    <ScrollView contentContainerStyle={styles.scroll} style={styles.container}>
-      <StatusBar style="light" />
-      <Text style={styles.stepLabel}>Step 3 of 3</Text>
-      <Text style={styles.title}>Preferences</Text>
+    <SafeAreaView style={styles.safe}>
+      <StatusBar style="dark" />
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <Progress n={3} />
+        <Text style={styles.eyebrow}>STEP 3 OF 3</Text>
+        <Text style={styles.title}>How you show up</Text>
+        <Text style={styles.sub}>Choose what others see on your profile.</Text>
 
-      <View style={[styles.optionColumn, { marginTop: 16 }]}>
-        {(['real_with_pet', 'real_only', 'pet_only'] as const).map(mode => (
-          <TouchableOpacity
-            key={mode}
-            style={[styles.optionBtn, profileVisibility === mode && styles.optionBtnActive]}
-            onPress={() => setProfileVisibility(mode)}
-          >
-            <Text style={[styles.optionText, profileVisibility === mode && styles.optionTextActive]}>
-              {mode === 'real_with_pet' ? 'Real Name & Pet Profile' : mode === 'real_only' ? 'Real Name Only' : 'Pet Profile Only'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+        <View style={{ gap: spacing.md, marginTop: spacing.lg }}>
+          {(['real_with_pet', 'real_only', 'pet_only'] as const).map(mode => {
+            const sel = profileVisibility === mode;
+            const labelText = mode === 'real_with_pet' ? 'Real name & pet' : mode === 'real_only' ? 'Real name only' : 'Pet profile only';
+            const descText = mode === 'real_with_pet' ? 'Show both you and your zZuPer' : mode === 'real_only' ? 'Keep it about you' : 'Stay behind your pet';
+            return (
+              <TouchableOpacity key={mode} style={[styles.optionBtn, sel && styles.optionActive]} onPress={() => setProfileVisibility(mode)} activeOpacity={0.85}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.optionText, sel && { color: light.brand }]}>{labelText}</Text>
+                  <Text style={styles.optionDesc}>{descText}</Text>
+                </View>
+                <Ionicons name={sel ? 'radio-button-on' : 'radio-button-off'} size={22} color={sel ? light.brand : light.textTertiary} />
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-      <TouchableOpacity
-        style={[styles.button, loading && styles.buttonDisabled]}
-        onPress={handleStep3}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#FFFFFF" size="small" />
-        ) : (
-          <Text style={styles.buttonText}>Finish Setup</Text>
-        )}
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={() => setStep(2)}>
-        <Text style={styles.back}>Back</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <CTA label="Finish setup" onPress={handleStep3} busy={loading} />
+        <TouchableOpacity onPress={() => setStep(2)} style={styles.backLink}><Text style={styles.backText}>Back</Text></TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0B0713' },
-  scroll: { padding: 24, paddingTop: 48 },
-  stepLabel: { fontSize: 13, color: '#C084FC', fontWeight: '800', letterSpacing: 1, marginBottom: 4 },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#F3E8FF', marginBottom: 12 },
-  subtitle: { fontSize: 14, color: '#A855F7', marginBottom: 20 },
-  eduBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1E1035',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 20,
-    borderWidth: 1.5,
-    borderColor: '#7C3AED',
-  },
-  eduBannerTitle: { fontSize: 13, fontWeight: '700', color: '#C084FC' },
-  eduBannerSub: { fontSize: 11, color: '#E9D5FF', marginTop: 2 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#C084FC', marginBottom: 12, marginTop: 4 },
-  presetScroll: { marginBottom: 16 },
-  presetItem: {
-    alignItems: 'center',
-    marginRight: 12,
-    padding: 6,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#261E38',
-    backgroundColor: '#161024',
-  },
-  presetItemActive: { borderColor: '#A855F7', backgroundColor: '#24153B' },
-  presetAvatar: { width: 64, height: 64, borderRadius: 32 },
-  presetName: { fontSize: 11, color: '#C084FC', marginTop: 6, fontWeight: '600' },
-  uploadOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    marginBottom: 20,
-    borderRadius: 12,
-    backgroundColor: '#161024',
-    borderWidth: 1,
-    borderColor: '#261E38',
-  },
-  uploadOptionText: { fontSize: 13, color: '#C084FC', fontWeight: '600' },
-  inputLabel: { fontSize: 13, fontWeight: '700', color: '#C084FC', marginBottom: 6, marginTop: 4 },
-  input: {
-    borderWidth: 1.5, borderColor: '#2E2248', borderRadius: 14,
-    padding: 14, fontSize: 15, marginBottom: 18, backgroundColor: '#161024',
-    color: '#FFFFFF',
-  },
-  multiline: { height: 80, textAlignVertical: 'top' },
-  carouselContainer: {
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-    marginBottom: 12,
-    marginTop: 12,
-  },
-  largeBreedCard: {
-    width: 220,
-    padding: 18,
-    marginRight: 16,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: '#261E38',
-    alignItems: 'center',
-    backgroundColor: '#161024',
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  largeAvatarCard: {
-    width: 170,
-    padding: 14,
-    marginRight: 16,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: '#261E38',
-    alignItems: 'center',
-    backgroundColor: '#161024',
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  avatarCircleWrapper: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    overflow: 'hidden',
-    marginVertical: 8,
-    borderWidth: 3,
-    borderColor: '#A855F7',
-    shadowColor: '#A855F7',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-  },
-  largePresetAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 50,
-  },
-  largeBreedCardActive: {
-    borderColor: '#A855F7',
-    backgroundColor: '#24153B',
-    shadowColor: '#C084FC',
-    shadowOpacity: 0.5,
-    shadowRadius: 14,
-    elevation: 8,
-  },
-  activeBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#3B1866',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#A855F7',
-  },
-  activeBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#E9D5FF',
-    marginLeft: 3,
-  },
-  svgWrapper: {
-    width: 140,
-    height: 140,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginVertical: 4,
-  },
-  largeBreedName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#E4E4E7',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  largeBreedNameActive: {
-    color: '#F3E8FF',
-  },
-  mbtiTag: {
-    backgroundColor: '#3B1866',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 8,
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: '#7C3AED',
-  },
-  mbtiTagText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#E9D5FF',
-  },
-  largeBreedDesc: {
-    fontSize: 11,
-    color: '#C084FC',
-    marginTop: 4,
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  dotsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-    gap: 6,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#27272A',
-  },
-  dotActive: {
-    width: 20,
-    backgroundColor: '#A855F7',
-  },
-  button: {
-    backgroundColor: '#8B5CF6', borderRadius: 16,
-    padding: 16, alignItems: 'center', marginTop: 14,
-    shadowColor: '#A855F7', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4, shadowRadius: 10, elevation: 6,
-  },
-  buttonDisabled: { backgroundColor: '#5B21B6' },
-  buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
-  back: { textAlign: 'center', marginTop: 18, color: '#A855F7', fontSize: 14, fontWeight: '600' },
-  sectionLabel: { fontSize: 15, fontWeight: '700', color: '#C084FC', marginBottom: 14, marginTop: 8 },
-  optionColumn: { gap: 12, marginBottom: 24 },
-  optionBtn: {
-    padding: 16, borderRadius: 16,
-    borderWidth: 2, borderColor: '#261E38', alignItems: 'center',
-    backgroundColor: '#161024',
-  },
-  optionBtnActive: { borderColor: '#A855F7', backgroundColor: '#24153B' },
-  optionText: { fontSize: 15, color: '#A1A1AA' },
-  optionTextActive: { color: '#F3E8FF', fontWeight: '700' },
+  safe: { flex: 1, backgroundColor: light.bg },
+  flex: { flex: 1 },
+  scroll: { paddingHorizontal: spacing.xl, paddingTop: spacing.base, paddingBottom: spacing['3xl'] },
+  progressRow: { flexDirection: 'row', gap: 6, marginBottom: spacing.xl },
+  progressDot: { flex: 1, height: 4, borderRadius: 2, backgroundColor: light.surfaceHi },
+  progressDotActive: { backgroundColor: light.brand },
+  eyebrow: { ...typography.eyebrow, color: light.brand, marginBottom: spacing.sm },
+  title: { ...typography.h1, color: light.text },
+  sub: { ...typography.subtle, color: light.textSecondary, marginTop: spacing.xs },
+
+  eduBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: light.brandSoft, borderRadius: radius.lg, padding: spacing.base, marginTop: spacing.lg },
+  eduTitle: { ...typography.subtle, color: light.brand, fontWeight: '700' },
+  eduSub: { ...typography.caption, color: light.textSecondary, marginTop: 1 },
+
+  carousel: { paddingVertical: spacing.lg, paddingRight: spacing.xl },
+  avatarCard: { width: 140, padding: spacing.md, marginRight: spacing.base, borderRadius: radius.xl, borderWidth: 1.5, borderColor: light.border, alignItems: 'center', backgroundColor: light.surface },
+  breedCard: { width: 180, padding: spacing.base, marginRight: spacing.base, borderRadius: radius.xl, borderWidth: 1.5, borderColor: light.border, alignItems: 'center', backgroundColor: light.surface },
+  cardActive: { borderColor: light.brand, backgroundColor: light.brandSoft },
+  presetAvatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: 'transparent', marginBottom: spacing.sm },
+  svgWrap: { width: 120, height: 120, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.xs },
+  cardName: { ...typography.body, color: light.text, fontWeight: '700', textAlign: 'center' },
+  mbti: { backgroundColor: light.brandSoft, paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.sm, marginTop: spacing.xs },
+  mbtiText: { ...typography.micro, color: light.brand, fontWeight: '800' },
+  breedDesc: { ...typography.caption, color: light.textSecondary, marginTop: spacing.xs, textAlign: 'center' },
+  checkBadge: { position: 'absolute', top: 10, right: 10, width: 24, height: 24, borderRadius: 12, backgroundColor: light.brand, alignItems: 'center', justifyContent: 'center' },
+
+  label: { ...typography.caption, color: light.textSecondary, fontWeight: '600', marginBottom: spacing.sm, marginTop: spacing.md },
+  input: { backgroundColor: light.surfaceHi, borderRadius: radius.md, paddingHorizontal: spacing.base, height: 52, ...typography.body, color: light.text },
+
+  cta: { height: 54, borderRadius: radius.full, backgroundColor: light.brand, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: spacing.xl, ...lightShadow.fab },
+  ctaText: { ...typography.bodyLg, color: '#fff', fontWeight: '800' },
+  backLink: { alignItems: 'center', paddingVertical: spacing.base, marginTop: spacing.xs },
+  backText: { ...typography.subtle, color: light.textSecondary, fontWeight: '600' },
+
+  optionBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderWidth: 1.5, borderColor: light.border, borderRadius: radius.lg, padding: spacing.base, backgroundColor: light.surface },
+  optionActive: { borderColor: light.brand, backgroundColor: light.brandSoft },
+  optionText: { ...typography.bodyLg, color: light.text, fontWeight: '700' },
+  optionDesc: { ...typography.caption, color: light.textSecondary, marginTop: 2 },
 });

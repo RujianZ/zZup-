@@ -62,7 +62,7 @@ export default function GroupListScreen() {
           <Image source={{ uri: avatarUrl }} style={styles.avatar} />
         ) : (
           <View style={styles.avatarFallback}>
-            <Ionicons name="people-outline" size={20} color="#71717A" />
+            <Ionicons name="people-outline" size={20} color="#A6A6AF" />
           </View>
         )}
         <View style={styles.groupInfo}>
@@ -102,7 +102,7 @@ export default function GroupListScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color="#09090B" />
+          <Ionicons name="chevron-back" size={24} color="#0B0B0F" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Pack Chats</Text>
         <TouchableOpacity onPress={() => navigation.navigate('CreateGroup')} style={styles.backBtn}>
@@ -127,11 +127,11 @@ export default function GroupListScreen() {
       {tab === 'discover' && (
         <View style={styles.searchRow}>
           <View style={styles.searchBox}>
-            <Ionicons name="search-outline" size={16} color="#71717A" />
+            <Ionicons name="search-outline" size={16} color="#A6A6AF" />
             <TextInput
               style={styles.searchInput}
               placeholder="Search Pack Chats..."
-              placeholderTextColor="#A1A1AA"
+              placeholderTextColor="#6C6C77"
               value={keyword}
               onChangeText={setKeyword}
               onSubmitEditing={handleSearch}
@@ -171,15 +171,15 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#F4F4F5',
+    borderBottomWidth: 1, borderBottomColor: '#F2F2F5',
     backgroundColor: '#FFFFFF',
   },
   backBtn: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#09090B' },
-  tabRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#F4F4F5' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0B0B0F' },
+  tabRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#F2F2F5' },
   tabBtn: { flex: 1, paddingVertical: 14, alignItems: 'center' },
   tabBtnActive: { borderBottomWidth: 2, borderBottomColor: '#7C3AED' },
-  tabText: { fontSize: 14, color: '#71717A', fontWeight: '600' },
+  tabText: { fontSize: 14, color: '#A6A6AF', fontWeight: '600' },
   tabTextActive: { color: '#7C3AED' },
   searchRow: {
     flexDirection: 'row', alignItems: 'center',
@@ -189,9 +189,9 @@ const styles = StyleSheet.create({
     flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: '#F9FAFB', borderRadius: 12,
     paddingHorizontal: 12, paddingVertical: 10,
-    borderWidth: 1, borderColor: '#F4F4F5',
+    borderWidth: 1, borderColor: '#F2F2F5',
   },
-  searchInput: { flex: 1, fontSize: 14, color: '#09090B' },
+  searchInput: { flex: 1, fontSize: 14, color: '#0B0B0F' },
   searchBtn: {
     backgroundColor: '#7C3AED', paddingHorizontal: 16,
     paddingVertical: 10, borderRadius: 12,
@@ -203,17 +203,17 @@ const styles = StyleSheet.create({
   avatarFallback: {
     width: 48, height: 48, borderRadius: 14,
     backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: '#F4F4F5',
+    borderWidth: 1, borderColor: '#F2F2F5',
   },
   groupInfo: { flex: 1 },
-  groupName: { fontSize: 15, fontWeight: '600', color: '#09090B' },
-  groupMeta: { fontSize: 12, color: '#71717A', marginTop: 4 },
-  groupDesc: { fontSize: 13, color: '#71717A', marginTop: 4 },
-  enteredBtn: { backgroundColor: '#F4F4F5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  enteredBtnText: { color: '#1F2937', fontSize: 13, fontWeight: '600' },
+  groupName: { fontSize: 15, fontWeight: '600', color: '#0B0B0F' },
+  groupMeta: { fontSize: 12, color: '#A6A6AF', marginTop: 4 },
+  groupDesc: { fontSize: 13, color: '#A6A6AF', marginTop: 4 },
+  enteredBtn: { backgroundColor: '#F2F2F5', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  enteredBtnText: { color: '#F2F2F5', fontSize: 13, fontWeight: '600' },
   joinBtn: { backgroundColor: '#7C3AED', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
   joinBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
-  emptyText: { color: '#71717A', fontSize: 14 },
-  separator: { height: 1, backgroundColor: '#F4F4F5' },
+  emptyText: { color: '#A6A6AF', fontSize: 14 },
+  separator: { height: 1, backgroundColor: '#F2F2F5' },
 });

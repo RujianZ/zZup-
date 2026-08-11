@@ -41,7 +41,7 @@ export default function BlockedUsersScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color="#09090B" />
+          <Ionicons name="chevron-back" size={24} color="#0B0B0F" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Blocked Users</Text>
       </View>
@@ -59,7 +59,7 @@ export default function BlockedUsersScreen() {
                 <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
               ) : (
                 <View style={styles.avatarFallback}>
-                  <Ionicons name="person" size={18} color="#71717A" />
+                  <Ionicons name="person" size={18} color="#A6A6AF" />
                 </View>
               )}
               <View style={styles.userInfo}>
@@ -81,7 +81,7 @@ export default function BlockedUsersScreen() {
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Ionicons name="shield-checkmark-outline" size={48} color="#A1A1AA" />
+              <Ionicons name="shield-checkmark-outline" size={48} color="#6C6C77" />
               <Text style={styles.emptyText}>No blocked users</Text>
             </View>
           }
@@ -96,10 +96,10 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 0.5, borderBottomColor: '#E4E4E7',
+    borderBottomWidth: 0.5, borderBottomColor: '#0B0B0F',
   },
   backBtn: { padding: 4, marginRight: 8 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#09090B' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0B0B0F' },
   list: { paddingHorizontal: 16, paddingVertical: 8 },
   userItem: {
     flexDirection: 'row', alignItems: 'center',
@@ -108,17 +108,17 @@ const styles = StyleSheet.create({
   avatar: { width: 48, height: 48, borderRadius: 24 },
   avatarFallback: {
     width: 48, height: 48, borderRadius: 24,
-    backgroundColor: '#F4F4F5', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#F2F2F5', alignItems: 'center', justifyContent: 'center',
   },
   userInfo: { flex: 1 },
-  userName: { fontSize: 15, fontWeight: '600', color: '#09090B', marginBottom: 3 },
-  userMeta: { fontSize: 12, color: '#71717A' },
+  userName: { fontSize: 15, fontWeight: '600', color: '#0B0B0F', marginBottom: 3 },
+  userMeta: { fontSize: 12, color: '#A6A6AF' },
   unblockBtn: {
     paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 10, backgroundColor: '#F4F4F5',
+    borderRadius: 10, backgroundColor: '#F2F2F5',
   },
   unblockBtnText: { color: '#7C3AED', fontSize: 13, fontWeight: '600' },
-  separator: { height: 0.5, backgroundColor: '#E4E4E7' },
+  separator: { height: 0.5, backgroundColor: '#0B0B0F' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingTop: 60 },
-  emptyText: { fontSize: 14, color: '#71717A' },
+  emptyText: { fontSize: 14, color: '#A6A6AF' },
 });

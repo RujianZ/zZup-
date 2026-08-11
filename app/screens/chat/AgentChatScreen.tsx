@@ -277,11 +277,11 @@ export default function AgentChatScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={24} color="#F3E8FF" />
+          <Ionicons name="chevron-back" size={24} color="#0B0B0F" />
         </TouchableOpacity>
 
         <View style={styles.headerInfo}>
@@ -290,7 +290,7 @@ export default function AgentChatScreen() {
         </View>
 
         <TouchableOpacity style={styles.backBtn} onPress={() => {}}>
-          <Ionicons name="settings-outline" size={20} color="#A1A1AA" />
+          <Ionicons name="settings-outline" size={20} color="#6C6C77" />
         </TouchableOpacity>
       </View>
 
@@ -320,7 +320,7 @@ export default function AgentChatScreen() {
 
       {loading ? (
         <View style={styles.loadingCenter}>
-          <ActivityIndicator color="#8B5CF6" size="large" />
+          <ActivityIndicator color="#7C3AED" size="large" />
           <Text style={styles.loadingText}>Connecting to zZuPer Proxy Chat...</Text>
         </View>
       ) : (
@@ -341,7 +341,7 @@ export default function AgentChatScreen() {
               Your zZuPer is proxy-chatting... Send a message to Jump In!
             </Text>
           ) : (
-            <Text style={[styles.indicatorText, { color: '#C084FC' }]}>
+            <Text style={[styles.indicatorText, { color: '#7C3AED' }]}>
               You have Jumped In and taken over
             </Text>
           )}
@@ -354,7 +354,7 @@ export default function AgentChatScreen() {
           onPress={() => setShowConfirmModal(true)}
           activeOpacity={0.8}
         >
-          <Ionicons name="person-add" size={16} color="#C084FC" style={{ marginRight: 6 }} />
+          <Ionicons name="person-add" size={16} color="#7C3AED" style={{ marginRight: 6 }} />
           <Text style={styles.takeoverRequestBtnText}>Send Friend Request to take over</Text>
         </TouchableOpacity>
       )}
@@ -371,7 +371,7 @@ export default function AgentChatScreen() {
                 ? "Type a message..."
                 : "Type to Jump In and chat..."
             }
-            placeholderTextColor="#71717A"
+            placeholderTextColor="#A6A6AF"
             value={input}
             onChangeText={setInput}
             onSubmitEditing={handleSend}
@@ -454,28 +454,28 @@ export default function AgentChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0B0713' },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 14,
-    backgroundColor: '#13101E', borderBottomWidth: 1, borderBottomColor: '#261E38',
+    backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#ECECEF',
   },
   backBtn: { padding: 4 },
   headerInfo: { alignItems: 'center', gap: 2 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#F3E8FF' },
-  headerSubtitle: { fontSize: 11, color: '#A1A1AA' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: '#0B0B0F' },
+  headerSubtitle: { fontSize: 11, color: '#6C6C77' },
 
   subHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 10,
-    backgroundColor: '#161024', borderBottomWidth: 1, borderBottomColor: '#261E38',
+    backgroundColor: '#F2F2F5', borderBottomWidth: 1, borderBottomColor: '#ECECEF',
   },
   interestTag: {
     backgroundColor: 'rgba(139, 92, 246, 0.15)',
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
     borderWidth: 1, borderColor: 'rgba(139, 92, 246, 0.3)',
   },
-  interestText: { color: '#C084FC', fontSize: 12, fontWeight: '600' },
+  interestText: { color: '#7C3AED', fontSize: 12, fontWeight: '600' },
   timerBadge: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(239, 68, 68, 0.15)',
@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
   upgradeBtnText: { color: '#fff', fontSize: 11, fontWeight: '700' },
 
   loadingCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { color: '#A1A1AA', fontSize: 14 },
+  loadingText: { color: '#6C6C77', fontSize: 14 },
 
   listContent: { paddingHorizontal: 16, paddingVertical: 20 },
 
@@ -508,75 +508,75 @@ const styles = StyleSheet.create({
 
   avatarContainer: { alignSelf: 'flex-end' },
   messageAvatar: { width: 34, height: 34, borderRadius: 10 },
-  avatarFallbackRed: { backgroundColor: '#8B5CF6', alignItems: 'center', justifyContent: 'center' },
+  avatarFallbackRed: { backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center' },
   avatarFallbackBlue: { backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center' },
 
   bubbleColumn: { gap: 2 },
   nameHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  messageSenderName: { fontSize: 10, color: '#A1A1AA', fontWeight: '500' },
+  messageSenderName: { fontSize: 10, color: '#6C6C77', fontWeight: '500' },
   aiBadge: {
     backgroundColor: 'rgba(139, 92, 246, 0.2)',
     paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6,
   },
-  aiBadgeText: { color: '#C084FC', fontSize: 8, fontWeight: '700' },
+  aiBadgeText: { color: '#7C3AED', fontSize: 8, fontWeight: '700' },
 
   messageBubble: {
     paddingHorizontal: 14, paddingVertical: 10,
     borderRadius: 18,
   },
   bubbleMe: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#7C3AED',
     borderBottomRightRadius: 2,
   },
   bubbleOther: {
-    backgroundColor: '#161024',
-    borderWidth: 1, borderColor: '#261E38',
+    backgroundColor: '#F2F2F5',
+    borderWidth: 1, borderColor: '#ECECEF',
     borderBottomLeftRadius: 2,
   },
   bubblePetMe: {
     backgroundColor: '#7C3AED',
   },
   bubblePetOther: {
-    backgroundColor: '#1F192F',
-    borderWidth: 1, borderColor: '#261E38',
+    backgroundColor: '#F2F2F5',
+    borderWidth: 1, borderColor: '#ECECEF',
   },
   messageText: { fontSize: 14, lineHeight: 20 },
   textMe: { color: '#fff' },
-  textOther: { color: '#F3E8FF' },
+  textOther: { color: '#0B0B0F' },
 
   takeoverIndicator: {
     paddingVertical: 8,
     alignItems: 'center',
-    backgroundColor: '#0B0713',
+    backgroundColor: '#FFFFFF',
   },
-  indicatorText: { fontSize: 11, color: '#A1A1AA', fontWeight: '500' },
+  indicatorText: { fontSize: 11, color: '#6C6C77', fontWeight: '500' },
 
   inputBar: {
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#13101E',
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#261E38',
+    borderTopColor: '#ECECEF',
     alignItems: 'center',
     gap: 12,
   },
   textInput: {
     flex: 1,
     height: 40,
-    backgroundColor: '#161024',
+    backgroundColor: '#F2F2F5',
     borderRadius: 20,
     paddingHorizontal: 16,
     color: '#FFFFFF',
     fontSize: 14,
     borderWidth: 1,
-    borderColor: '#261E38',
+    borderColor: '#ECECEF',
   },
   sendButton: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#7C3AED',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -594,27 +594,27 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(139, 92, 246, 0.2)',
   },
   takeoverRequestBtnText: {
-    color: '#C084FC',
+    color: '#7C3AED',
     fontSize: 12,
     fontWeight: '600',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(9, 8, 14, 0.85)',
+    backgroundColor: 'rgba(11,11,15,0.45)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
   },
   modalCard: {
-    backgroundColor: '#161024',
+    backgroundColor: '#F2F2F5',
     borderRadius: 18,
     borderWidth: 1.5,
-    borderColor: '#261E38',
+    borderColor: '#ECECEF',
     padding: 24,
     width: '100%',
     maxWidth: 320,
     alignItems: 'center',
-    shadowColor: '#A855F7',
+    shadowColor: '#7C3AED',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3,
     shadowRadius: 16,
@@ -623,7 +623,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#F3E8FF',
+    color: '#0B0B0F',
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,
@@ -638,21 +638,21 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: '#3F2A60',
+    borderColor: '#E1E1E6',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#261E38',
+    backgroundColor: '#ECECEF',
   },
   modalCancelText: {
     fontSize: 13,
-    color: '#F3E8FF',
+    color: '#0B0B0F',
     fontWeight: '600',
   },
   modalActionBtn: {
     flex: 1,
     height: 40,
     borderRadius: 10,
-    backgroundColor: '#8B5CF6',
+    backgroundColor: '#7C3AED',
     justifyContent: 'center',
     alignItems: 'center',
   },

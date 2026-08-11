@@ -90,7 +90,7 @@ export default function TravelDetailScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#09090B" />
+          <Ionicons name="arrow-back" size={24} color="#0B0B0F" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>zZuPer Details</Text>
         <View style={{ width: 40 }} />
@@ -150,7 +150,7 @@ export default function TravelDetailScreen() {
             <TextInput
               style={styles.commentInput}
               placeholder="Leave a Travel Note..."
-              placeholderTextColor="#A1A1AA"
+              placeholderTextColor="#6C6C77"
               value={newComment}
               onChangeText={setNewComment}
               maxLength={100}
@@ -205,19 +205,19 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#F4F4F5',
+    borderBottomWidth: 1, borderBottomColor: '#F2F2F5',
   },
   backBtn: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: '#F4F4F5', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#F2F2F5', alignItems: 'center', justifyContent: 'center',
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#09090B' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0B0B0F' },
 
   scroll: { padding: 20 },
 
   card: {
     backgroundColor: '#FFFFFF', borderRadius: 24,
-    padding: 20, borderWidth: 1, borderColor: '#F4F4F5',
+    padding: 20, borderWidth: 1, borderColor: '#F2F2F5',
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03, shadowRadius: 8, elevation: 2,
     marginBottom: 24,
@@ -241,40 +241,40 @@ const styles = StyleSheet.create({
 
   petMeta: { flex: 1, gap: 4 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  petName: { fontSize: 18, fontWeight: '700', color: '#09090B' },
+  petName: { fontSize: 18, fontWeight: '700', color: '#0B0B0F' },
   breedBadge: {
     backgroundColor: 'rgba(124, 58, 237, 0.08)',
     paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8,
     borderWidth: 1, borderColor: 'rgba(124, 58, 237, 0.15)',
   },
   breedText: { color: '#7C3AED', fontSize: 10, fontWeight: '700' },
-  ownerMeta: { fontSize: 12, color: '#71717A' },
+  ownerMeta: { fontSize: 12, color: '#A6A6AF' },
 
   travelContentBox: { marginVertical: 8, gap: 12 },
-  postBody: { color: '#374151', fontSize: 15, lineHeight: 22 },
+  postBody: { color: '#F2F2F5', fontSize: 15, lineHeight: 22 },
   postImage: { width: '100%', height: SCREEN_WIDTH - 80, borderRadius: 16, resizeMode: 'cover' },
 
   disabledBtn: { opacity: 0.6 },
 
   commentsSection: { gap: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#09090B' },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#0B0B0F' },
   commentInputBox: {
     flexDirection: 'row', backgroundColor: '#F9FAFB',
     borderRadius: 20, height: 50, alignItems: 'center',
-    paddingLeft: 16, paddingRight: 6, borderWidth: 1, borderColor: '#F4F4F5',
+    paddingLeft: 16, paddingRight: 6, borderWidth: 1, borderColor: '#F2F2F5',
   },
-  commentInput: { flex: 1, color: '#09090B', fontSize: 13 },
+  commentInput: { flex: 1, color: '#0B0B0F', fontSize: 13 },
   sendBtn: {
     width: 38, height: 38, borderRadius: 19,
     backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center',
   },
 
-  commentsListTitle: { fontSize: 14, fontWeight: '700', color: '#71717A', marginTop: 8 },
-  noCommentsText: { color: '#A1A1AA', fontSize: 12, textAlign: 'center', marginVertical: 12, lineHeight: 18 },
+  commentsListTitle: { fontSize: 14, fontWeight: '700', color: '#A6A6AF', marginTop: 8 },
+  noCommentsText: { color: '#6C6C77', fontSize: 12, textAlign: 'center', marginVertical: 12, lineHeight: 18 },
 
   commentCard: {
     backgroundColor: '#F9FAFB', borderRadius: 16,
-    padding: 12, borderWidth: 1, borderColor: '#F4F4F5',
+    padding: 12, borderWidth: 1, borderColor: '#F2F2F5',
     marginBottom: 8,
   },
   commentHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     width: 20, height: 20, borderRadius: 6,
     backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center',
   },
-  commentAuthor: { flex: 1, fontSize: 12, fontWeight: '600', color: '#09090B' },
-  commentTime: { fontSize: 10, color: '#A1A1AA' },
-  commentBody: { fontSize: 13, color: '#374151', lineHeight: 18 },
+  commentAuthor: { flex: 1, fontSize: 12, fontWeight: '600', color: '#0B0B0F' },
+  commentTime: { fontSize: 10, color: '#6C6C77' },
+  commentBody: { fontSize: 13, color: '#F2F2F5', lineHeight: 18 },
 });

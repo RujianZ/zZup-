@@ -1,27 +1,26 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View, Text, StyleSheet, SafeAreaView, ScrollView,
-  TouchableOpacity, Image, ActivityIndicator, Alert,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { Ionicons, Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { supabase } from '../../../lib/supabase';
 import { getProfile } from '../../../lib/api/auth';
 import { createDM } from '../../../lib/api/conversations';
-import {
-  getFriendshipStatus, sendFriendRequest, removeFriend,
-  blockIdentity, FriendshipStatus,
-} from '../../../lib/api/friends';
+import { getFriendshipStatus, sendFriendRequest, removeFriend, blockIdentity, FriendshipStatus } from '../../../lib/api/friends';
+import AppHeader from '../../components/ui/AppHeader';
+import Avatar from '../../components/ui/Avatar';
+import { light, gradients, spacing, radius, typography } from '../../theme';
 
 export default function OtherProfileScreen() {
   const navigation = useNavigation<any>();
-  const route      = useRoute<any>();
+  const route = useRoute<any>();
   const { userId } = route.params;
 
-  const [profile, setProfile]             = useState<any>(null);
-  const [status, setStatus]               = useState<FriendshipStatus>('none');
-  const [friendshipId, setFriendshipId]   = useState<string | null>(null);
-  const [loading, setLoading]             = useState(true);
+  const [profile, setProfile] = useState<any>(null);
+  const [status, setStatus] = useState<FriendshipStatus>('none');
+  const [friendshipId, setFriendshipId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => { loadData(); }, [userId]);
@@ -29,269 +28,144 @@ export default function OtherProfileScreen() {
   const loadData = async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
-    const [p, s] = await Promise.all([
-      getProfile(userId),
-      getFriendshipStatus(userId),
-    ]);
-    setProfile(p);
-    setStatus(s);
+    const [p, s] = await Promise.all([getProfile(userId), getFriendshipStatus(userId)]);
+    setProfile(p); setStatus(s);
     if (s === 'accepted' && user) {
-      const { data } = await supabase
-        .from('friendships')
-        .select('id')
-        .eq('status', 'accepted')
-        .or(`and(requester_id.eq.${user.id},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${user.id})`)
-        .maybeSingle();
+      const { data } = await supabase.from('friendships').select('id').eq('status', 'accepted')
+        .or(`and(requester_id.eq.${user.id},addressee_id.eq.${userId}),and(requester_id.eq.${userId},addressee_id.eq.${user.id})`).maybeSingle();
       setFriendshipId(data?.id ?? null);
-    } else {
-      setFriendshipId(null);
-    }
+    } else setFriendshipId(null);
     setLoading(false);
   };
 
   const handleAddFriend = async () => {
     setActionLoading(true);
     const { error } = await sendFriendRequest(userId);
-    if (error) Alert.alert('Error', error);
-    else setStatus('pending_sent');
+    if (error) Alert.alert('Error', error); else setStatus('pending_sent');
     setActionLoading(false);
   };
-
-  const handleRemoveFriend = async () => {
-    Alert.alert('Remove Friend', 'Are you sure you want to remove this friend?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove', style: 'destructive',
-        onPress: async () => {
-          if (!friendshipId) return;
-          setActionLoading(true);
-          const { error } = await removeFriend(friendshipId);
-          if (error) Alert.alert('Error', error);
-          else { setStatus('none'); setFriendshipId(null); }
-          setActionLoading(false);
-        },
-      },
-    ]);
-  };
-
+  const handleRemoveFriend = () => Alert.alert('Remove friend', 'Remove this friend?', [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Remove', style: 'destructive', onPress: async () => {
+      if (!friendshipId) return;
+      setActionLoading(true);
+      const { error } = await removeFriend(friendshipId);
+      if (error) Alert.alert('Error', error); else { setStatus('none'); setFriendshipId(null); }
+      setActionLoading(false);
+    } },
+  ]);
   const handleSendDM = async () => {
     setActionLoading(true);
     const isPetOnly = profile?.profile_visibility === 'pet_only';
-    const targetIdentity = isPetOnly ? 'pet' : 'real';
-    const conversationId = await createDM(userId, 'real', targetIdentity);
+    const conversationId = await createDM(userId, 'real', isPetOnly ? 'pet' : 'real');
     setActionLoading(false);
     if (!conversationId) { Alert.alert('Error', 'Unable to start chat.'); return; }
-    navigation.navigate('Chat', {
-      groupId: conversationId,
-      groupName: isPetOnly ? (profile?.pet_name ?? 'Pet Chat') : (profile?.real_name ?? 'Chat'),
-      isDM: true,
-    });
+    navigation.navigate('Chat', { groupId: conversationId, groupName: isPetOnly ? (profile?.pet_name ?? 'Pet') : (profile?.real_name ?? 'Chat'), isDM: true });
   };
-
-  const handleBlock = async () => {
-    Alert.alert('Block User', 'Blocking this user will prevent communication and remove them from your friends list.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Block', style: 'destructive',
-        onPress: async () => {
-          setActionLoading(true);
-          const { error } = await blockIdentity(userId, 'real');
-          if (error) Alert.alert('Error', error);
-          else navigation.goBack();
-          setActionLoading(false);
-        },
-      },
-    ]);
-  };
-
-  const renderActionButton = () => {
-    if (actionLoading) return <ActivityIndicator color="#7C3AED" style={{ marginTop: 16 }} />;
-
-    switch (status) {
-      case 'none':
-        return (
-          <TouchableOpacity style={styles.actionBtn} onPress={handleAddFriend}>
-            <Ionicons name="person-add-outline" size={16} color="#fff" />
-            <Text style={styles.actionBtnText}>Add Friend</Text>
-          </TouchableOpacity>
-        );
-      case 'pending_sent':
-        return (
-          <View style={styles.actionBtnGhost}>
-            <Ionicons name="time-outline" size={16} color="#71717A" />
-            <Text style={styles.actionBtnGhostText}>Request Sent</Text>
-          </View>
-        );
-      case 'pending_received':
-        return (
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => navigation.navigate('FriendRequests')}
-          >
-            <Ionicons name="checkmark-outline" size={16} color="#fff" />
-            <Text style={styles.actionBtnText}>Accept Request</Text>
-          </TouchableOpacity>
-        );
-      case 'accepted':
-        return (
-          <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.actionBtn} onPress={handleSendDM}>
-              <Ionicons name="chatbubble-outline" size={16} color="#fff" />
-              <Text style={styles.actionBtnText}>Message</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtnGhost} onPress={handleRemoveFriend}>
-              <Ionicons name="people-outline" size={16} color="#7C3AED" />
-              <Text style={[styles.actionBtnGhostText, { color: '#7C3AED' }]}>Friend</Text>
-            </TouchableOpacity>
-          </View>
-        );
-      case 'blocked':
-        return (
-          <View style={styles.actionBtnGhost}>
-            <Ionicons name="ban-outline" size={16} color="#EF4444" />
-            <Text style={[styles.actionBtnGhostText, { color: '#EF4444' }]}>Blocked</Text>
-          </View>
-        );
-    }
-  };
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Ionicons name="chevron-back" size={24} color="#09090B" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Profile</Text>
-          <View style={styles.backBtn} />
-        </View>
-        <View style={styles.center}><ActivityIndicator color="#7C3AED" /></View>
-      </SafeAreaView>
-    );
-  }
+  const handleBlock = () => Alert.alert('Block user', 'This removes them from your friends and blocks communication.', [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Block', style: 'destructive', onPress: async () => {
+      setActionLoading(true);
+      const { error } = await blockIdentity(userId, 'real');
+      if (error) Alert.alert('Error', error); else navigation.goBack();
+      setActionLoading(false);
+    } },
+  ]);
 
   const isPetOnly = profile?.profile_visibility === 'pet_only';
   const showPetCard = profile?.profile_visibility === 'real_with_pet' && profile?.pet_name;
-  
   const imageUrl = isPetOnly ? profile?.pet_avatar_url : profile?.avatar_url;
-  const displayName = isPetOnly ? (profile?.pet_name ?? profile?.real_name) : profile?.real_name;
+  const displayName = (isPetOnly ? (profile?.pet_name ?? profile?.real_name) : profile?.real_name) ?? 'zZuP! user';
+
+  const renderAction = () => {
+    if (actionLoading) return <ActivityIndicator color={light.brand} style={{ marginTop: spacing.base }} />;
+    switch (status) {
+      case 'none':
+        return <TouchableOpacity style={styles.primary} onPress={handleAddFriend} activeOpacity={0.85}><Feather name="user-plus" size={17} color="#fff" /><Text style={styles.primaryText}>Add friend</Text></TouchableOpacity>;
+      case 'pending_sent':
+        return <View style={styles.ghost}><Feather name="clock" size={16} color={light.textSecondary} /><Text style={styles.ghostText}>Request sent</Text></View>;
+      case 'pending_received':
+        return <TouchableOpacity style={styles.primary} onPress={() => navigation.navigate('FriendRequests')} activeOpacity={0.85}><Feather name="check" size={17} color="#fff" /><Text style={styles.primaryText}>Accept request</Text></TouchableOpacity>;
+      case 'accepted':
+        return (
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={styles.primary} onPress={handleSendDM} activeOpacity={0.85}><Feather name="message-circle" size={16} color="#fff" /><Text style={styles.primaryText}>Message</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.ghost} onPress={handleRemoveFriend} activeOpacity={0.7}><Ionicons name="people" size={16} color={light.brand} /><Text style={[styles.ghostText, { color: light.brand }]}>Friends</Text></TouchableOpacity>
+          </View>
+        );
+      case 'blocked':
+        return <View style={styles.ghost}><Feather name="slash" size={16} color={light.danger} /><Text style={[styles.ghostText, { color: light.danger }]}>Blocked</Text></View>;
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color="#09090B" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
-        {status !== 'blocked' ? (
-          <TouchableOpacity style={styles.backBtn} onPress={handleBlock}>
-            <Ionicons name="ellipsis-horizontal" size={22} color="#09090B" />
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.backBtn} />
-        )}
-      </View>
+    <SafeAreaView style={styles.safe}>
+      <StatusBar style="dark" />
+      <AppHeader
+        title="Profile"
+        right={status !== 'blocked' ? (
+          <TouchableOpacity style={styles.moreBtn} onPress={handleBlock}><Feather name="more-horizontal" size={22} color={light.text} /></TouchableOpacity>
+        ) : undefined}
+      />
+      {loading ? (
+        <View style={styles.center}><ActivityIndicator color={light.brand} /></View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <View style={styles.top}>
+            <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ring}>
+              <View style={styles.ringInner}><Avatar uri={imageUrl} name={displayName} size={104} /></View>
+            </LinearGradient>
+            <Text style={styles.name}>{displayName}</Text>
+            <Text style={styles.subId}>#{profile?.zzup_id}</Text>
+            {!!profile?.university && <Text style={styles.uni}>{profile.university}</Text>}
+          </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.avatarSection}>
-          {imageUrl ? (
-            <Image source={{ uri: imageUrl }} style={styles.bigAvatar} />
-          ) : (
-            <View style={[styles.bigAvatar, styles.avatarFallback,
-              { backgroundColor: isPetOnly ? '#F59E0B' : '#7C3AED' }]}>
-              <Ionicons name={isPetOnly ? 'paw' : 'person'} size={40} color="#fff" />
+          <View style={styles.actionSection}>{renderAction()}</View>
+
+          {!!profile?.bio && !isPetOnly && (
+            <View style={styles.card}><Text style={styles.cardLabel}>BIO</Text><Text style={styles.cardText}>{profile.bio}</Text></View>
+          )}
+
+          {showPetCard && (
+            <View style={styles.card}>
+              <View style={styles.petRow}>
+                <Avatar uri={profile.pet_avatar_url} name={profile.pet_name} size={44} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.petName}>{profile.pet_name}</Text>
+                  <Text style={styles.petLevel}>Lv.{profile.pet_level ?? 1} · {profile.pet_xp ?? 0} XP</Text>
+                </View>
+              </View>
+              {!!profile.pet_bio && <Text style={styles.petBio}>{profile.pet_bio}</Text>}
             </View>
           )}
-          <Text style={styles.displayName}>{displayName ?? 'No Name'}</Text>
-          <Text style={styles.sudoId}>zZuP ID: {profile?.zzup_id}</Text>
-          {profile?.university && <Text style={styles.university}>{profile.university}</Text>}
-        </View>
-
-        <View style={styles.actionSection}>
-          {renderActionButton()}
-        </View>
-
-        {profile?.bio && !isPetOnly && (
-          <View style={styles.bioCard}>
-            <Text style={styles.bioLabel}>Bio</Text>
-            <Text style={styles.bioText}>{profile.bio}</Text>
-          </View>
-        )}
-
-        {showPetCard && (
-          <View style={styles.petCard}>
-            <View style={styles.petRow}>
-              {profile.pet_avatar_url ? (
-                <Image source={{ uri: profile.pet_avatar_url }} style={styles.petAvatar} />
-              ) : (
-                <View style={[styles.petAvatar, { backgroundColor: '#F59E0B', alignItems: 'center', justifyContent: 'center' }]}>
-                  <Ionicons name="paw" size={16} color="#fff" />
-                </View>
-              )}
-              <View style={{ flex: 1 }}>
-                <Text style={styles.petName}>{profile.pet_name}</Text>
-                <Text style={styles.petLevel}>Lv.{profile.pet_level ?? 1} · {profile.pet_xp ?? 0} XP</Text>
-              </View>
-            </View>
-            {profile.pet_bio && <Text style={styles.petBio}>{profile.pet_bio}</Text>}
-          </View>
-        )}
-      </ScrollView>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 0.5, borderBottomColor: '#E4E4E7',
-  },
-  backBtn: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#09090B' },
-  scroll: { paddingBottom: 40 },
+  safe: { flex: 1, backgroundColor: light.bg },
+  moreBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-
-  avatarSection: { alignItems: 'center', paddingTop: 32, paddingBottom: 24, gap: 8 },
-  bigAvatar: { width: 96, height: 96, borderRadius: 28, marginBottom: 8 },
-  avatarFallback: { alignItems: 'center', justifyContent: 'center' },
-  displayName: { fontSize: 22, fontWeight: '700', color: '#09090B' },
-  sudoId:      { fontSize: 13, color: '#7C3AED', fontWeight: '600' },
-  university:  { fontSize: 13, color: '#71717A' },
-
-  actionSection: { alignItems: 'center', paddingBottom: 24 },
-  actionRow: { flexDirection: 'row', gap: 12 },
-  actionBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#7C3AED', paddingHorizontal: 28,
-    paddingVertical: 12, borderRadius: 24,
-  },
-  actionBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  actionBtnGhost: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#F4F4F5', paddingHorizontal: 24,
-    paddingVertical: 12, borderRadius: 24,
-    borderWidth: 0.5, borderColor: '#E4E4E7',
-  },
-  actionBtnGhostText: { color: '#71717A', fontWeight: '600', fontSize: 15 },
-
-  bioCard: {
-    marginHorizontal: 20, marginBottom: 16,
-    backgroundColor: '#F4F4F5', borderRadius: 16, padding: 16,
-    borderWidth: 0.5, borderColor: '#E4E4E7',
-  },
-  bioLabel: { fontSize: 12, color: '#71717A', marginBottom: 6 },
-  bioText:  { fontSize: 14, color: '#09090B', lineHeight: 20 },
-
-  petCard: {
-    marginHorizontal: 20,
-    backgroundColor: '#F4F4F5', borderRadius: 16, padding: 16,
-    borderWidth: 0.5, borderColor: '#E4E4E7', gap: 10,
-  },
-  petRow:    { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  petAvatar: { width: 44, height: 44, borderRadius: 14 },
-  petName:   { fontSize: 15, fontWeight: '600', color: '#09090B' },
-  petLevel:  { fontSize: 12, color: '#71717A', marginTop: 2 },
-  petBio:    { fontSize: 13, color: '#09090B', lineHeight: 19 },
+  scroll: { paddingBottom: spacing['3xl'] },
+  top: { alignItems: 'center', paddingTop: spacing.lg, paddingBottom: spacing.lg },
+  ring: { width: 116, height: 116, borderRadius: 58, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md },
+  ringInner: { width: 108, height: 108, borderRadius: 54, backgroundColor: light.bg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  name: { ...typography.h1, color: light.text },
+  subId: { ...typography.subtle, color: light.brand, fontWeight: '700', marginTop: 2 },
+  uni: { ...typography.caption, color: light.textSecondary, marginTop: 2 },
+  actionSection: { alignItems: 'center', paddingBottom: spacing.xl },
+  actionRow: { flexDirection: 'row', gap: spacing.md },
+  primary: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: light.text, paddingHorizontal: spacing['2xl'], height: 48, borderRadius: radius.full, justifyContent: 'center' },
+  primaryText: { ...typography.body, color: light.white, fontWeight: '700' },
+  ghost: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: light.surfaceHi, paddingHorizontal: spacing.xl, height: 48, borderRadius: radius.full, justifyContent: 'center' },
+  ghostText: { ...typography.body, color: light.text, fontWeight: '700' },
+  card: { marginHorizontal: spacing.lg, marginBottom: spacing.base, backgroundColor: light.bgMuted, borderRadius: radius.lg, padding: spacing.base },
+  cardLabel: { ...typography.micro, color: light.textTertiary, letterSpacing: 0.8, marginBottom: 6 },
+  cardText: { ...typography.body, color: light.text, lineHeight: 21 },
+  petRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.sm },
+  petName: { ...typography.bodyLg, color: light.text, fontWeight: '700' },
+  petLevel: { ...typography.caption, color: light.textSecondary, marginTop: 2 },
+  petBio: { ...typography.subtle, color: light.text, lineHeight: 20 },
 });

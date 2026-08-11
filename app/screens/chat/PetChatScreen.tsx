@@ -8,8 +8,11 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import LottieView from 'lottie-react-native';
+import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../../lib/supabase';
+import { PetSvgAvatar } from '../../../assets/pets';
+import { light, spacing, radius, typography } from '../../theme';
 
 interface PetMessage {
   id: string;
@@ -42,6 +45,8 @@ export default function PetChatScreen() {
   const breedInfo = PET_BREEDS[breedKey] || PET_BREEDS['golden_retriever'];
   const petBio = breedInfo.personality;
   const petLevel = profile?.pet_level || 1;
+  const currentPetBreed = profile?.pet_breed || 'dog';
+  const currentPetStage = profile?.pet_stage || 'child';
 
   const [messages, setMessages] = useState<PetMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -237,28 +242,21 @@ export default function PetChatScreen() {
   const renderMessage = ({ item }: { item: PetMessage }) => {
     const isMe = item.sender === 'owner';
     const isStreamingPlaceholder = item.content === '' && !isMe;
-
     return (
       <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
         {!isMe && (
-          profile?.pet_avatar_url ? (
-            <Image source={{ uri: profile.pet_avatar_url }} style={styles.msgAvatar} />
-          ) : (
-            <View style={[styles.msgAvatarFallback, { backgroundColor: '#8B5CF6' }]}>
-              <Ionicons name="paw" size={14} color="#fff" />
-            </View>
-          )
+          <View style={styles.petMsgAvatar}>
+            <PetSvgAvatar breed={currentPetBreed} stage={currentPetStage} size={30} />
+          </View>
         )}
-        <View style={[styles.msgBubble, isMe && styles.msgBubbleMe]}>
-          {!isMe && (
-            <Text style={styles.msgAuthor}>{petName}</Text>
-          )}
-          {isStreamingPlaceholder ? (
-            <Text style={[styles.msgContent, isMe && styles.msgContentMe]}>{streamingContent}</Text>
-          ) : (
-            <Text style={[styles.msgContent, isMe && styles.msgContentMe]}>{item.content}</Text>
-          )}
-          <Text style={[styles.msgTime, isMe && styles.msgTimeMe]}>
+        <View style={{ maxWidth: '78%' }}>
+          {!isMe && <Text style={styles.author}>{petName}</Text>}
+          <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
+            <Text style={[styles.content, isMe && styles.contentMe]}>
+              {isStreamingPlaceholder ? streamingContent : item.content}
+            </Text>
+          </View>
+          <Text style={[styles.time, isMe && { textAlign: 'right' }]}>
             {new Date(item.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
           </Text>
         </View>
@@ -266,94 +264,69 @@ export default function PetChatScreen() {
     );
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
+  const statusText =
+    petEmotion === 'happy' ? `${petName} is happy and listening` :
+    petEmotion === 'thinking' ? `${petName} is typing…` :
+    petEmotion === 'sleeping' ? `${petName} is taking a nap` :
+    `${petName} is online`;
 
-      {/* Upper Glassmorphic Header */}
+  return (
+    <SafeAreaView style={styles.safe}>
+      <StatusBar style="dark" />
+
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color="#F3E8FF" />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn} hitSlop={8}>
+          <Feather name="chevron-left" size={26} color={light.text} />
         </TouchableOpacity>
-        
         <View style={styles.petMeta}>
           <Text style={styles.headerTitle}>zZuPer Talk</Text>
-          <Text style={styles.petSubText} numberOfLines={1}>with {petName}</Text>
+          <Text style={styles.petSubText} numberOfLines={1}>{statusText}</Text>
         </View>
-
-        <View style={styles.levelBadge}>
-          <Text style={styles.levelText}>Lv.{petLevel}</Text>
-        </View>
+        <View style={styles.levelBadge}><Text style={styles.levelText}>Lv.{petLevel}</Text></View>
       </View>
 
-      {/* Pet Showcase Container */}
-      <View style={styles.petShowcase}>
+      {/* Pet showcase */}
+      <View style={styles.showcase}>
         <Animated.View style={[styles.avatarPulse, { transform: [{ scale: pulseAnim }] }]}>
-          {profile?.pet_avatar_url ? (
-            <Image source={{ uri: profile.pet_avatar_url }} style={styles.petImage} />
-          ) : (
-            <View style={styles.petImageFallback}>
-              <Ionicons name="paw" size={36} color="#8B5CF6" />
-            </View>
-          )}
+          <PetSvgAvatar breed={currentPetBreed} stage={currentPetStage} size={92} />
         </Animated.View>
-
-        <Text style={styles.emotionStatus}>
-          {petEmotion === 'happy' && `${petName} is happy and listening!`}
-          {petEmotion === 'thinking' && `${petName} is typing a response...`}
-          {petEmotion === 'sleeping' && `${petName} is taking a little nap...`}
-          {petEmotion === 'idle' && `${petName} is online & ready to chat`}
-        </Text>
       </View>
 
-      {/* Message Chat List */}
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#8B5CF6" />
-        </View>
+        <View style={styles.center}><ActivityIndicator size="large" color={light.brand} /></View>
       ) : (
         <FlatList
           ref={flatListRef}
           data={messages}
           keyExtractor={item => item.id}
           inverted
-          contentContainerStyle={styles.messageList}
+          contentContainerStyle={styles.list}
           renderItem={renderMessage}
           onContentSizeChange={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true })}
         />
       )}
 
-      {/* Text/Voice Input Panel */}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.inputArea}>
-          <View style={styles.inputRow}>
-            {/* Voice Input Button */}
-            <TouchableOpacity style={styles.voiceBtn} onPress={() => Alert.alert('Voice Feature', 'Recording is coming soon!')}>
-              <Ionicons name="mic-outline" size={20} color="#C084FC" />
-            </TouchableOpacity>
-
-            <TextInput
-              style={styles.textInput}
-              placeholder={`Send message to ${petName}...`}
-              placeholderTextColor="#71717A"
-              value={input}
-              onChangeText={setInput}
-              multiline
-              maxLength={300}
-            />
-            
-            {/* Send Message Button */}
-            <TouchableOpacity
-              style={[styles.sendBtn, (!input.trim() || sending) && styles.sendBtnDisabled]}
-              onPress={handleSend}
-              disabled={!input.trim() || sending}
-            >
-              {sending
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Ionicons name="send" size={16} color="#fff" />
-              }
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.voiceBtn} onPress={() => Alert.alert('Voice', 'Recording is coming soon!')}>
+            <Ionicons name="mic-outline" size={20} color={light.textSecondary} />
+          </TouchableOpacity>
+          <TextInput
+            style={styles.textInput}
+            placeholder={`Message ${petName}`}
+            placeholderTextColor={light.textTertiary}
+            value={input}
+            onChangeText={setInput}
+            multiline
+            maxLength={300}
+          />
+          <TouchableOpacity
+            style={[styles.sendBtn, (!input.trim() || sending) && styles.sendDisabled]}
+            onPress={handleSend}
+            disabled={!input.trim() || sending}
+          >
+            {sending ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="arrow-up" size={20} color="#fff" />}
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -361,89 +334,40 @@ export default function PetChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0B0713' },
+  safe: { flex: 1, backgroundColor: light.bg },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#261E38',
-    backgroundColor: '#13101E',
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: spacing.sm, height: 56,
+    borderBottomWidth: 1, borderBottomColor: light.border,
   },
-  backBtn: { padding: 4, minWidth: 32 },
-  petMeta: { flex: 1, alignItems: 'center', marginHorizontal: 8 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#F3E8FF' },
-  petSubText: { fontSize: 11, color: '#A1A1AA', marginTop: 2 },
-  levelBadge: {
-    paddingHorizontal: 8, paddingVertical: 4,
-    borderRadius: 12, backgroundColor: '#8B5CF6',
-    minWidth: 44, alignItems: 'center',
-  },
-  levelText: { fontSize: 10, fontWeight: '700', color: '#fff' },
-  
-  petShowcase: {
-    alignItems: 'center', paddingVertical: 20, gap: 10,
-    borderBottomWidth: 1, borderBottomColor: '#261E38',
-    backgroundColor: '#161024',
-  },
-  avatarPulse: {
-    width: 80, height: 80, borderRadius: 40,
-    padding: 2, backgroundColor: 'rgba(139, 92, 246, 0.25)',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  petImage: { width: 76, height: 76, borderRadius: 38 },
-  petImageFallback: {
-    width: 76, height: 76, borderRadius: 38,
-    backgroundColor: '#261E38', alignItems: 'center', justifyContent: 'center',
-  },
-  emotionStatus: { fontSize: 11, color: '#A1A1AA', fontStyle: 'italic' },
+  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  petMeta: { flex: 1, alignItems: 'center' },
+  headerTitle: { ...typography.h3, color: light.text },
+  petSubText: { ...typography.caption, color: light.textSecondary, marginTop: 1 },
+  levelBadge: { paddingHorizontal: spacing.md, height: 28, borderRadius: radius.full, backgroundColor: light.brandSoft, minWidth: 44, alignItems: 'center', justifyContent: 'center', marginRight: spacing.xs },
+  levelText: { ...typography.micro, color: light.brand, fontWeight: '800' },
+
+  showcase: { alignItems: 'center', paddingVertical: spacing.base, borderBottomWidth: 1, borderBottomColor: light.border, backgroundColor: light.bgMuted },
+  avatarPulse: { width: 96, height: 96, borderRadius: 48, backgroundColor: light.brandSoft, justifyContent: 'center', alignItems: 'center' },
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  messageList: { paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+  list: { paddingHorizontal: spacing.base, paddingVertical: spacing.md },
 
-  msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, maxWidth: '80%', marginVertical: 4 },
-  msgRowMe: { flexDirection: 'row-reverse', alignSelf: 'flex-end' },
+  msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, marginVertical: 5 },
+  msgRowMe: { justifyContent: 'flex-end', alignSelf: 'flex-end' },
   msgRowOther: { alignSelf: 'flex-start' },
-  msgAvatar: { width: 32, height: 32, borderRadius: 16 },
-  msgAvatarFallback: {
-    width: 32, height: 32, borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  msgBubble: {
-    maxWidth: '100%', backgroundColor: '#161024',
-    borderRadius: 16, borderBottomLeftRadius: 4,
-    paddingHorizontal: 12, paddingVertical: 8, gap: 4,
-    borderWidth: 1, borderColor: '#261E38',
-  },
-  msgBubbleMe: {
-    backgroundColor: '#8B5CF6',
-    borderBottomLeftRadius: 16, borderBottomRightRadius: 4,
-    borderColor: '#8B5CF6',
-  },
-  msgAuthor: { fontSize: 11, fontWeight: '600', color: '#C084FC' },
-  msgContent: { fontSize: 14, color: '#F3E8FF', lineHeight: 20 },
-  msgContentMe: { color: '#FFFFFF' },
-  msgTime: { fontSize: 10, color: '#A1A1AA', alignSelf: 'flex-end' },
-  msgTimeMe: { color: '#E9D5FF' },
+  petMsgAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: light.brandSoft, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  author: { ...typography.micro, color: light.brand, marginBottom: 3, marginLeft: spacing.sm },
+  bubble: { borderRadius: 20, paddingHorizontal: spacing.base, paddingVertical: 10 },
+  bubbleOther: { backgroundColor: light.surfaceHi, borderBottomLeftRadius: 6 },
+  bubbleMe: { backgroundColor: light.brand, borderBottomRightRadius: 6 },
+  content: { ...typography.body, color: light.text, lineHeight: 21 },
+  contentMe: { color: light.white },
+  time: { ...typography.micro, color: light.textTertiary, marginTop: 3, marginHorizontal: spacing.sm },
 
-  inputArea: {
-    borderTopWidth: 1, borderTopColor: '#261E38',
-    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16,
-    backgroundColor: '#13101E',
-  },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  voiceBtn: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: '#161024', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: '#261E38',
-  },
-  textInput: {
-    flex: 1, backgroundColor: '#161024', borderRadius: 20,
-    paddingHorizontal: 16, paddingVertical: 8,
-    color: '#FFFFFF', fontSize: 14, maxHeight: 80,
-    borderWidth: 1, borderColor: '#261E38',
-  },
-  sendBtn: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: '#8B5CF6', alignItems: 'center', justifyContent: 'center',
-  },
-  sendBtnDisabled: { opacity: 0.4 },
+  inputArea: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, borderTopWidth: 1, borderTopColor: light.border, paddingHorizontal: spacing.base, paddingTop: spacing.md, paddingBottom: spacing.xl },
+  voiceBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: light.surfaceHi, alignItems: 'center', justifyContent: 'center' },
+  textInput: { flex: 1, backgroundColor: light.surfaceHi, borderRadius: 22, paddingHorizontal: spacing.base, paddingVertical: 11, ...typography.body, color: light.text, maxHeight: 110 },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: light.brand, alignItems: 'center', justifyContent: 'center' },
+  sendDisabled: { opacity: 0.35 },
 });

@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { light } from '../theme';
 
 // Auth
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -53,28 +54,29 @@ function MainTabs() {
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#13101E',
-          borderTopColor: '#261E38',
+          backgroundColor: light.bg,
+          borderTopColor: light.border,
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
+          height: 88,
+          paddingBottom: 28,
+          paddingTop: 8,
         },
-        tabBarActiveTintColor: '#C084FC',
-        tabBarInactiveTintColor: '#71717A',
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarActiveTintColor: light.brand,
+        tabBarInactiveTintColor: light.textTertiary,
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: 2 },
         tabBarIcon: ({ focused, color }) => {
-          return (
-            <Ionicons
-              name={focused ? "ellipse" : "ellipse-outline"}
-              size={focused ? 10 : 8}
-              color={color}
-            />
-          );
+          const map: Record<string, [any, any]> = {
+            Lounge: ['chatbubble-ellipses', 'chatbubble-ellipses-outline'],
+            TravelMode: ['compass', 'compass-outline'],
+            Profile: ['person', 'person-outline'],
+          };
+          const [on, off] = map[route.name] ?? ['ellipse', 'ellipse-outline'];
+          return <Ionicons name={focused ? on : off} size={24} color={color} />;
         },
       })}
     >
       <Tab.Screen name="Lounge" component={InboxScreen} options={{ tabBarLabel: 'Lounge' }} />
-      <Tab.Screen name="TravelMode" component={TravelModeScreen} options={{ tabBarLabel: 'zZuPer Explore' }} />
+      <Tab.Screen name="TravelMode" component={TravelModeScreen} options={{ tabBarLabel: 'Explore' }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profile' }} />
     </Tab.Navigator>
   );
@@ -112,8 +114,8 @@ export default function RootNavigator() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0B0713' }}>
-        <ActivityIndicator size="large" color="#8B5CF6" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: light.bg }}>
+        <ActivityIndicator size="large" color={light.brand} />
       </View>
     );
   }

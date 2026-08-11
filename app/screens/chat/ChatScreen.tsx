@@ -1,35 +1,35 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, FlatList,
-  TouchableOpacity, Image, ActivityIndicator, TextInput,
+  TouchableOpacity, ActivityIndicator, TextInput,
   KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getMessages, sendMessage, subscribeToMessages, Message } from '../../../lib/api/messages';
 import { useAuth } from '../../context/AuthContext';
 import IdentityToggle from '../../components/IdentityToggle';
+import Avatar from '../../components/ui/Avatar';
+import { light, spacing, radius, typography } from '../../theme';
 
 function formatTime(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  return new Date(dateStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 }
 
 export default function ChatScreen() {
-  const navigation  = useNavigation<any>();
-  const route       = useRoute<any>();
+  const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const { groupId, groupName, isDM } = route.params;
   const { profile } = useAuth();
 
-  const [messages, setMessages]         = useState<Message[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [loadingMore, setLoadingMore]   = useState(false);
-  const [hasMore, setHasMore]           = useState(true);
-  const [input, setInput]               = useState('');
-  const [sending, setSending]           = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
   const [identityMode, setIdentityMode] = useState<'real' | 'pet'>('real');
-
   const flatListRef = useRef<FlatList>(null);
 
   const load = useCallback(async () => {
@@ -41,10 +41,8 @@ export default function ChatScreen() {
 
   useEffect(() => {
     load();
-    const unsubscribe = subscribeToMessages(groupId, (msg) => {
-      setMessages(prev => [msg, ...prev]);
-    });
-    return () => unsubscribe();
+    const unsub = subscribeToMessages(groupId, (msg) => setMessages(prev => [msg, ...prev]));
+    return () => unsub();
   }, [groupId, load]);
 
   const loadMore = async () => {
@@ -63,74 +61,57 @@ export default function ChatScreen() {
     setSending(true);
     setInput('');
     const { data, error } = await sendMessage(groupId, text, identityMode);
-    if (error || !data) {
-      Alert.alert('Send Failed', error || 'Please try again later.');
-    }
+    if (error || !data) Alert.alert('Send failed', error || 'Please try again later.');
     setSending(false);
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isMe = item.sender_id === profile?.id;
     const isPet = item.identity_mode === 'pet';
-
     return (
       <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
-        {!isMe && (
-          item.author_avatar_url ? (
-            <Image source={{ uri: item.author_avatar_url }} style={styles.msgAvatar} />
-          ) : (
-            <View style={[styles.msgAvatarFallback, { backgroundColor: isPet ? '#8B5CF6' : '#10B981' }]}>
-              <Ionicons name={isPet ? 'paw' : 'person'} size={14} color="#fff" />
-            </View>
-          )
-        )}
-        <View style={[styles.msgBubble, isMe && styles.msgBubbleMe]}>
-          {!isMe && (
-            <Text style={[styles.msgAuthor, { color: isPet ? '#C084FC' : '#A1A1AA' }]}>
-              {item.author_name ?? 'User'}
-            </Text>
+        {!isMe && <Avatar uri={item.author_avatar_url} name={item.author_name} size={30} />}
+        <View style={{ maxWidth: '78%' }}>
+          {!isMe && !isDM && (
+            <Text style={styles.author}>{item.author_name ?? 'User'}{isPet ? ' 🐾' : ''}</Text>
           )}
-          <Text style={[styles.msgContent, isMe && styles.msgContentMe]}>{item.content}</Text>
-          <Text style={[styles.msgTime, isMe && styles.msgTimeMe]}>{formatTime(item.created_at)}</Text>
+          <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleOther]}>
+            <Text style={[styles.content, isMe && styles.contentMe]}>{item.content}</Text>
+          </View>
+          <Text style={[styles.time, isMe && { textAlign: 'right' }]}>{formatTime(item.created_at)}</Text>
         </View>
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
+    <SafeAreaView style={styles.safe}>
+      <StatusBar style="dark" />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color="#C084FC" />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn} hitSlop={8}>
+          <Feather name="chevron-left" size={26} color={light.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {groupName || 'Whisper'}
-        </Text>
-        {!isDM && (
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => navigation.navigate('GroupMembers', { groupId, groupName })}
-          >
-            <Ionicons name="people-outline" size={22} color="#C084FC" />
+        <Text style={styles.headerTitle} numberOfLines={1}>{groupName || 'Chat'}</Text>
+        {!isDM ? (
+          <TouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('GroupMembers', { groupId, groupName })}>
+            <Ionicons name="people-outline" size={22} color={light.text} />
           </TouchableOpacity>
-        )}
-        {isDM && <View style={styles.backBtn} />}
+        ) : <View style={styles.iconBtn} />}
       </View>
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator color="#8B5CF6" /></View>
+        <View style={styles.center}><ActivityIndicator color={light.brand} /></View>
       ) : (
         <FlatList
           ref={flatListRef}
           data={messages}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.messageList}
+          contentContainerStyle={styles.list}
           inverted
           renderItem={renderMessage}
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
-          ListFooterComponent={loadingMore ? <ActivityIndicator color="#8B5CF6" style={{ padding: 16 }} /> : null}
+          ListFooterComponent={loadingMore ? <ActivityIndicator color={light.brand} style={{ padding: 16 }} /> : null}
         />
       )}
 
@@ -140,22 +121,19 @@ export default function ChatScreen() {
           <View style={styles.inputRow}>
             <TextInput
               style={styles.textInput}
-              placeholder="Type a message..."
-              placeholderTextColor="#71717A"
+              placeholder="Message"
+              placeholderTextColor={light.textTertiary}
               value={input}
               onChangeText={setInput}
               multiline
               maxLength={500}
             />
             <TouchableOpacity
-              style={[styles.sendBtn, (!input.trim() || sending) && styles.sendBtnDisabled]}
+              style={[styles.sendBtn, (!input.trim() || sending) && styles.sendDisabled]}
               onPress={handleSend}
               disabled={!input.trim() || sending}
             >
-              {sending
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Ionicons name="send" size={18} color="#fff" />
-              }
+              {sending ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="arrow-up" size={20} color="#fff" />}
             </TouchableOpacity>
           </View>
         </View>
@@ -165,58 +143,31 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0B0713' },
+  safe: { flex: 1, backgroundColor: light.bg },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#261E38',
-    backgroundColor: '#13101E',
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: spacing.sm, height: 52,
+    borderBottomWidth: 1, borderBottomColor: light.border,
   },
-  backBtn: { padding: 4, minWidth: 32 },
-  headerTitle: { flex: 1, fontSize: 17, fontWeight: '700', color: '#F3E8FF', textAlign: 'center', marginHorizontal: 8 },
+  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, ...typography.h3, color: light.text, textAlign: 'center' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  messageList: { paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+  list: { paddingHorizontal: spacing.base, paddingVertical: spacing.md },
 
-  msgRow:   { flexDirection: 'row', alignItems: 'flex-end', gap: 8, maxWidth: '80%', marginVertical: 4 },
-  msgRowMe: { flexDirection: 'row-reverse', alignSelf: 'flex-end' },
+  msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, marginVertical: 5 },
+  msgRowMe: { justifyContent: 'flex-end', alignSelf: 'flex-end' },
   msgRowOther: { alignSelf: 'flex-start' },
-  msgAvatar: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: '#261E38' },
-  msgAvatarFallback: {
-    width: 32, height: 32, borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  msgBubble: {
-    maxWidth: '100%', backgroundColor: '#161024',
-    borderRadius: 16, borderBottomLeftRadius: 4,
-    paddingHorizontal: 14, paddingVertical: 10, gap: 4,
-    borderWidth: 1.5, borderColor: '#261E38',
-  },
-  msgBubbleMe: {
-    backgroundColor: '#8B5CF6',
-    borderBottomLeftRadius: 16, borderBottomRightRadius: 4,
-    borderColor: '#8B5CF6',
-  },
-  msgAuthor:  { fontSize: 11, fontWeight: '600', marginBottom: 2 },
-  msgContent: { fontSize: 14, color: '#F3E8FF', lineHeight: 20 },
-  msgContentMe: { color: '#FFFFFF' },
-  msgTime:    { fontSize: 10, color: '#A1A1AA', alignSelf: 'flex-end' },
-  msgTimeMe:  { color: '#E9D5FF' },
+  author: { ...typography.micro, color: light.textSecondary, marginBottom: 3, marginLeft: spacing.sm },
+  bubble: { borderRadius: 20, paddingHorizontal: spacing.base, paddingVertical: 10 },
+  bubbleOther: { backgroundColor: light.surfaceHi, borderBottomLeftRadius: 6 },
+  bubbleMe: { backgroundColor: light.brand, borderBottomRightRadius: 6 },
+  content: { ...typography.body, color: light.text, lineHeight: 21 },
+  contentMe: { color: light.white },
+  time: { ...typography.micro, color: light.textTertiary, marginTop: 3, marginHorizontal: spacing.sm },
 
-  inputArea: {
-    borderTopWidth: 1, borderTopColor: '#261E38',
-    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, gap: 10,
-    backgroundColor: '#13101E',
-  },
-  inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
-  textInput: {
-    flex: 1, backgroundColor: '#161024', borderRadius: 20,
-    paddingHorizontal: 16, paddingVertical: 10,
-    color: '#FFFFFF', fontSize: 14, maxHeight: 100,
-    borderWidth: 1.5, borderColor: '#261E38',
-  },
-  sendBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: '#8B5CF6', alignItems: 'center', justifyContent: 'center',
-  },
-  sendBtnDisabled: { opacity: 0.4 },
+  inputArea: { borderTopWidth: 1, borderTopColor: light.border, paddingHorizontal: spacing.base, paddingTop: spacing.md, paddingBottom: spacing.xl, gap: spacing.md },
+  inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.md },
+  textInput: { flex: 1, backgroundColor: light.surfaceHi, borderRadius: 22, paddingHorizontal: spacing.base, paddingVertical: 11, ...typography.body, color: light.text, maxHeight: 110 },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: light.brand, alignItems: 'center', justifyContent: 'center' },
+  sendDisabled: { opacity: 0.35 },
 });

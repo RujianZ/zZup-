@@ -1,115 +1,63 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import {
-  View, Text, StyleSheet, SafeAreaView, FlatList,
-  TouchableOpacity, Image, ActivityIndicator, Alert,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
 import {
   getPendingRequests, getSentRequests,
-  acceptFriendRequest, declineFriendRequest, cancelRequest,
-  FriendRequest,
+  acceptFriendRequest, declineFriendRequest, cancelRequest, FriendRequest,
 } from '../../../lib/api/friends';
+import AppHeader from '../../components/ui/AppHeader';
+import Avatar from '../../components/ui/Avatar';
+import { light, spacing, radius, typography } from '../../theme';
 
 export default function FriendRequestsScreen() {
   const navigation = useNavigation<any>();
-  const [tab, setTab]               = useState<'received' | 'sent'>('received');
-  const [received, setReceived]     = useState<FriendRequest[]>([]);
-  const [sent, setSent]             = useState<FriendRequest[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [actionId, setActionId]     = useState<string | null>(null);
+  const [tab, setTab] = useState<'received' | 'sent'>('received');
+  const [received, setReceived] = useState<FriendRequest[]>([]);
+  const [sent, setSent] = useState<FriendRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionId, setActionId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     const [r, s] = await Promise.all([getPendingRequests(), getSentRequests()]);
-    setReceived(r);
-    setSent(s);
-    setLoading(false);
+    setReceived(r); setSent(s); setLoading(false);
   }, []);
-
   useEffect(() => { load(); }, [load]);
 
-  const handleAccept = async (friendshipId: string) => {
-    setActionId(friendshipId);
-    const { error } = await acceptFriendRequest(friendshipId);
+  const act = async (id: string, fn: (id: string) => Promise<{ error: string | null }>, list: 'received' | 'sent') => {
+    setActionId(id);
+    const { error } = await fn(id);
     if (error) Alert.alert('Error', error);
-    else setReceived(prev => prev.filter(r => r.friendship_id !== friendshipId));
+    else if (list === 'received') setReceived(prev => prev.filter(r => r.friendship_id !== id));
+    else setSent(prev => prev.filter(r => r.friendship_id !== id));
     setActionId(null);
   };
 
-  const handleDecline = async (friendshipId: string) => {
-    setActionId(friendshipId);
-    const { error } = await declineFriendRequest(friendshipId);
-    if (error) Alert.alert('Error', error);
-    else setReceived(prev => prev.filter(r => r.friendship_id !== friendshipId));
-    setActionId(null);
-  };
-
-  const handleCancel = async (friendshipId: string) => {
-    setActionId(friendshipId);
-    const { error } = await cancelRequest(friendshipId);
-    if (error) Alert.alert('Error', error);
-    else setSent(prev => prev.filter(r => r.friendship_id !== friendshipId));
-    setActionId(null);
-  };
-
-  const renderUser = (item: FriendRequest, type: 'received' | 'sent') => {
-    const imageUrl = item.avatar_url;
-    const displayName = item.real_name ?? item.zzup_id;
-    const isActing = actionId === item.friendship_id;
-
+  const renderUser = ({ item }: { item: FriendRequest }) => {
+    const name = item.real_name ?? `#${item.zzup_id}`;
+    const acting = actionId === item.friendship_id;
     return (
-      <View style={styles.requestItem}>
-        <TouchableOpacity
-          style={styles.userRow}
-          onPress={() => navigation.navigate('OtherProfile', { userId: item.id })}
-          activeOpacity={0.7}
-        >
-          {imageUrl ? (
-            <Image source={{ uri: imageUrl }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatarFallback, { backgroundColor: '#7C3AED' }]}>
-              <Ionicons name="person" size={18} color="#fff" />
-            </View>
-          )}
-          <View style={styles.userInfo}>
-            <Text style={styles.userName}>{displayName}</Text>
-            <Text style={styles.userMeta}>
-              zZuP ID: {item.zzup_id}{item.pet_name ? `  ·  Pet: ${item.pet_name}` : ''}{item.university ? `  ·  ${item.university}` : ''}
-            </Text>
+      <View style={styles.row}>
+        <TouchableOpacity style={styles.userRow} onPress={() => navigation.navigate('OtherProfile', { userId: item.id })} activeOpacity={0.6}>
+          <Avatar uri={item.avatar_url} name={name} size={48} />
+          <View style={styles.info}>
+            <Text style={styles.name} numberOfLines={1}>{name}</Text>
+            <Text style={styles.meta} numberOfLines={1}>#{item.zzup_id}{item.pet_name ? ` · 🐾 ${item.pet_name}` : ''}</Text>
           </View>
         </TouchableOpacity>
-
-        {type === 'received' ? (
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={styles.acceptBtn}
-              onPress={() => handleAccept(item.friendship_id)}
-              disabled={isActing}
-            >
-              {isActing
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={styles.acceptBtnText}>Accept</Text>
-              }
+        {tab === 'received' ? (
+          <View style={styles.actions}>
+            <TouchableOpacity style={styles.accept} onPress={() => act(item.friendship_id, acceptFriendRequest, 'received')} disabled={acting} activeOpacity={0.85}>
+              {acting ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.acceptText}>Accept</Text>}
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.declineBtn}
-              onPress={() => handleDecline(item.friendship_id)}
-              disabled={isActing}
-            >
-              <Text style={styles.declineBtnText}>Decline</Text>
+            <TouchableOpacity style={styles.decline} onPress={() => act(item.friendship_id, declineFriendRequest, 'received')} disabled={acting} activeOpacity={0.7}>
+              <Text style={styles.declineText}>Decline</Text>
             </TouchableOpacity>
           </View>
         ) : (
-          <TouchableOpacity
-            style={styles.cancelBtn}
-            onPress={() => handleCancel(item.friendship_id)}
-            disabled={isActing}
-          >
-            {isActing
-              ? <ActivityIndicator size="small" color="#71717A" />
-              : <Text style={styles.cancelBtnText}>Withdraw</Text>
-            }
+          <TouchableOpacity style={styles.decline} onPress={() => act(item.friendship_id, cancelRequest, 'sent')} disabled={acting} activeOpacity={0.7}>
+            {acting ? <ActivityIndicator size="small" color={light.textSecondary} /> : <Text style={styles.declineText}>Withdraw</Text>}
           </TouchableOpacity>
         )}
       </View>
@@ -119,47 +67,30 @@ export default function FriendRequestsScreen() {
   const currentList = tab === 'received' ? received : sent;
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color="#09090B" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Friend Requests</Text>
+    <SafeAreaView style={styles.safe}>
+      <StatusBar style="dark" />
+      <AppHeader title="Friend requests" />
+      <View style={styles.segment}>
+        {(['received', 'sent'] as const).map(t => (
+          <TouchableOpacity key={t} style={[styles.segTab, tab === t && styles.segActive]} onPress={() => setTab(t)} activeOpacity={0.8}>
+            <Text style={[styles.segText, tab === t && styles.segTextActive]}>
+              {t === 'received' ? 'Received' : 'Sent'}{(t === 'received' ? received.length : sent.length) > 0 ? ` ${t === 'received' ? received.length : sent.length}` : ''}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
-
-      <View style={styles.tabRow}>
-        <TouchableOpacity
-          style={[styles.tabBtn, tab === 'received' && styles.tabBtnActive]}
-          onPress={() => setTab('received')}
-        >
-          <Text style={[styles.tabText, tab === 'received' && styles.tabTextActive]}>
-            Received {received.length > 0 ? `(${received.length})` : ''}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabBtn, tab === 'sent' && styles.tabBtnActive]}
-          onPress={() => setTab('sent')}
-        >
-          <Text style={[styles.tabText, tab === 'sent' && styles.tabTextActive]}>
-            Sent {sent.length > 0 ? `(${sent.length})` : ''}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
       {loading ? (
-        <View style={styles.center}><ActivityIndicator color="#7C3AED" /></View>
+        <View style={styles.center}><ActivityIndicator color={light.brand} /></View>
       ) : (
         <FlatList
           data={currentList}
           keyExtractor={(item) => item.friendship_id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => renderUser(item, tab)}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          contentContainerStyle={currentList.length ? { paddingVertical: spacing.xs } : { flex: 1 }}
+          renderItem={renderUser}
+          ItemSeparatorComponent={() => <View style={styles.sep} />}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Text style={styles.emptyText}>
-                {tab === 'received' ? 'No received friend requests' : 'No sent friend requests'}
-              </Text>
+              <Text style={styles.emptyText}>{tab === 'received' ? 'No requests right now' : 'Nothing sent yet'}</Text>
             </View>
           }
         />
@@ -169,53 +100,23 @@ export default function FriendRequestsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#F4F4F5',
-    backgroundColor: '#FFFFFF',
-  },
-  backBtn: { padding: 4, marginRight: 8 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#09090B' },
-  tabRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1, borderBottomColor: '#F4F4F5',
-  },
-  tabBtn: { flex: 1, paddingVertical: 14, alignItems: 'center' },
-  tabBtnActive: { borderBottomWidth: 2, borderBottomColor: '#7C3AED' },
-  tabText: { fontSize: 14, color: '#71717A', fontWeight: '600' },
-  tabTextActive: { color: '#7C3AED' },
-  list: { paddingHorizontal: 16, paddingVertical: 8 },
-  requestItem: { paddingVertical: 12 },
-  userRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
-  avatar: { width: 48, height: 48, borderRadius: 24 },
-  avatarFallback: {
-    width: 48, height: 48, borderRadius: 24,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  userInfo: { flex: 1 },
-  userName: { fontSize: 15, fontWeight: '600', color: '#09090B', marginBottom: 3 },
-  userMeta: { fontSize: 12, color: '#71717A' },
-  actionRow: { flexDirection: 'row', gap: 10 },
-  acceptBtn: {
-    flex: 1, backgroundColor: '#7C3AED',
-    paddingVertical: 8, borderRadius: 10, alignItems: 'center',
-  },
-  acceptBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  declineBtn: {
-    flex: 1, backgroundColor: '#FFFFFF',
-    paddingVertical: 8, borderRadius: 10, alignItems: 'center',
-    borderWidth: 1, borderColor: '#E4E4E7',
-  },
-  declineBtnText: { color: '#71717A', fontWeight: '600', fontSize: 14 },
-  cancelBtn: {
-    alignSelf: 'flex-start', paddingHorizontal: 16,
-    paddingVertical: 8, borderRadius: 10,
-    backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E4E4E7',
-  },
-  cancelBtnText: { color: '#71717A', fontSize: 13, fontWeight: '600' },
-  separator: { height: 1, backgroundColor: '#F4F4F5' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
-  emptyText: { fontSize: 14, color: '#71717A' },
+  safe: { flex: 1, backgroundColor: light.bg },
+  segment: { flexDirection: 'row', gap: 4, marginHorizontal: spacing.lg, marginVertical: spacing.sm, backgroundColor: light.surfaceHi, borderRadius: radius.md, padding: 4 },
+  segTab: { flex: 1, height: 36, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
+  segActive: { backgroundColor: light.bg },
+  segText: { ...typography.subtle, color: light.textSecondary, fontWeight: '600' },
+  segTextActive: { color: light.text, fontWeight: '700' },
+  row: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  userRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.md },
+  info: { flex: 1, gap: 3 },
+  name: { ...typography.bodyLg, color: light.text, fontWeight: '700' },
+  meta: { ...typography.caption, color: light.textSecondary },
+  actions: { flexDirection: 'row', gap: spacing.md },
+  accept: { flex: 1, height: 42, borderRadius: radius.full, backgroundColor: light.text, alignItems: 'center', justifyContent: 'center' },
+  acceptText: { ...typography.subtle, color: light.white, fontWeight: '700' },
+  decline: { flex: 1, height: 42, borderRadius: radius.full, backgroundColor: light.surfaceHi, alignItems: 'center', justifyContent: 'center' },
+  declineText: { ...typography.subtle, color: light.text, fontWeight: '700' },
+  sep: { height: 1, backgroundColor: light.border, marginLeft: 84 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyText: { ...typography.body, color: light.textSecondary },
 });

@@ -1,238 +1,119 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  FlatList,
-  TouchableOpacity,
-  Image,
-  ActivityIndicator,
-  TextInput,
-  Modal,
-  Alert
-} from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, ActivityIndicator, TextInput, Modal } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { searchUsers, sendFriendRequest, UserSearchResult } from '../../../lib/api/friends';
+import Avatar from '../../components/ui/Avatar';
+import { light, spacing, radius, typography, lightShadow } from '../../theme';
 
 export default function UserSearchScreen() {
   const navigation = useNavigation<any>();
   const [keyword, setKeyword] = useState('');
   const [results, setResults] = useState<UserSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
-  
-  // Modal states
   const [selectedUser, setSelectedUser] = useState<UserSearchResult | null>(null);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [sendingRequest, setSendingRequest] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [sending, setSending] = useState(false);
 
-  // Real-time search as user types
   useEffect(() => {
-    const delayDebounce = setTimeout(async () => {
+    const t = setTimeout(async () => {
       setLoading(true);
-      const data = await searchUsers(keyword);
-      setResults(data);
+      setResults(await searchUsers(keyword));
       setLoading(false);
     }, 150);
-
-    return () => clearTimeout(delayDebounce);
+    return () => clearTimeout(t);
   }, [keyword]);
 
-  const handleAddPress = (user: UserSearchResult) => {
-    setSelectedUser(user);
-    setShowConfirmModal(true);
-  };
-
-  const handleSendRequest = async () => {
+  const handleSend = async () => {
     if (!selectedUser) return;
-    setSendingRequest(true);
+    setSending(true);
     const { error } = await sendFriendRequest(selectedUser.id);
-    setSendingRequest(false);
-    
-    if (error) {
-      alert(`Error: ${error}`);
-      setShowConfirmModal(false);
-    } else {
-      setShowConfirmModal(false);
-      setShowSuccessModal(true);
-    }
+    setSending(false);
+    setShowConfirm(false);
+    if (error) alert(`Error: ${error}`);
+    else setShowSuccess(true);
   };
 
-  // Determine section heading text
-  const getHeadingText = () => {
-    if (!keyword.trim()) {
-      return 'Recent Searches';
-    }
-    if (loading) {
-      return 'Searching...';
-    }
-    return 'Search result(s)';
-  };
+  const heading = !keyword.trim() ? 'RECENT' : loading ? 'SEARCHING…' : 'RESULTS';
 
   const renderUser = ({ item }: { item: UserSearchResult }) => {
     const isPetOnly = item.profile_visibility === 'pet_only';
-    const imageUrl = isPetOnly ? item.pet_avatar_url : item.avatar_url;
-    const displayName = isPetOnly ? (item.pet_name ?? item.real_name) : item.real_name;
-    const fallbackBg = isPetOnly ? '#3B1866' : '#261E38';
-    const fallbackColor = isPetOnly ? '#E9D5FF' : '#C084FC';
-
+    const name = (isPetOnly ? (item.pet_name ?? item.real_name) : item.real_name) ?? 'zZuP! user';
     return (
       <View style={styles.userItem}>
-        {imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatarFallback, { backgroundColor: fallbackBg }]}>
-            <Ionicons name={isPetOnly ? 'paw' : 'person'} size={20} color={fallbackColor} />
-          </View>
-        )}
-        <View style={styles.userInfo}>
-          <Text style={styles.userName}>{displayName ?? 'No Name'}</Text>
-          <Text style={{ fontSize: 12, color: '#C084FC', marginTop: 2 }}>zZuP ID: {item.zzup_id}</Text>
+        <Avatar uri={isPetOnly ? item.pet_avatar_url : item.avatar_url} name={name} size={46} />
+        <View style={styles.info}>
+          <Text style={styles.name} numberOfLines={1}>{name}</Text>
+          <Text style={styles.meta}>#{item.zzup_id}</Text>
         </View>
-        
-        {/* Plus action icon on the right */}
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => handleAddPress(item)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="person-add-outline" size={18} color="#FFFFFF" />
+        <TouchableOpacity style={styles.addBtn} onPress={() => { setSelectedUser(item); setShowConfirm(true); }} activeOpacity={0.85}>
+          <Feather name="user-plus" size={18} color={light.white} />
         </TouchableOpacity>
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" />
-      {/* Header with back button and input box */}
+    <SafeAreaView style={styles.safe}>
+      <StatusBar style="dark" />
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={24} color="#C084FC" />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
+          <Feather name="chevron-left" size={26} color={light.text} />
         </TouchableOpacity>
-        
-        <View style={[
-          styles.searchBox,
-          isFocused && styles.searchBoxFocused
-        ]}>
+        <View style={styles.searchBox}>
+          <Feather name="search" size={18} color={light.textTertiary} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Enter zZuP ID (e.g. monica_xu)"
-            placeholderTextColor="#71717A"
+            placeholder="Search by zZuP ID or name"
+            placeholderTextColor={light.textTertiary}
             value={keyword}
             onChangeText={setKeyword}
             autoCapitalize="none"
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
             autoFocus
           />
           {keyword.length > 0 && (
-            <TouchableOpacity onPress={() => setKeyword('')} activeOpacity={0.7}>
-              <Ionicons name="close-circle" size={18} color="#71717A" />
+            <TouchableOpacity onPress={() => setKeyword('')} hitSlop={8}>
+              <Feather name="x-circle" size={18} color={light.textTertiary} />
             </TouchableOpacity>
           )}
         </View>
       </View>
 
-      {/* Heading */}
-      <Text style={styles.sectionHeading}>{getHeadingText()}</Text>
+      <Text style={styles.sectionHeading}>{heading}</Text>
 
-      {/* Results List */}
       <FlatList
         data={results}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         renderItem={renderUser}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        ListEmptyComponent={
-          !loading && keyword.length > 0 ? (
-            <View style={styles.center}>
-              <Text style={styles.emptyText}>No users found</Text>
-            </View>
-          ) : null
-        }
+        ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+        keyboardShouldPersistTaps="handled"
+        ListEmptyComponent={!loading && keyword.length > 0 ? <View style={styles.center}><Text style={styles.emptyText}>No users found</Text></View> : null}
       />
 
-      {/* Modal 1: Friend Request Confirmation Overlay */}
-      <Modal
-        visible={showConfirmModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowConfirmModal(false)}
-      >
-        <View style={styles.modalOverlay}>
+      {/* Confirm modal */}
+      <Modal visible={showConfirm} transparent animationType="fade" onRequestClose={() => setShowConfirm(false)}>
+        <View style={styles.modalBg}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              Send a friend request to{'\n'}{selectedUser?.real_name ?? selectedUser?.zzup_id}?
-            </Text>
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setShowConfirmModal(false)}
-                activeOpacity={0.8}
-                disabled={sendingRequest}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.modalActionBtn}
-                onPress={handleSendRequest}
-                activeOpacity={0.8}
-                disabled={sendingRequest}
-              >
-                {sendingRequest ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Text style={styles.modalActionText}>Send Request</Text>
-                )}
-              </TouchableOpacity>
+            <Text style={styles.modalTitle}>Send a friend request to {selectedUser?.real_name ?? `#${selectedUser?.zzup_id}`}?</Text>
+            <View style={styles.modalRow}>
+              <TouchableOpacity style={styles.modalCancel} onPress={() => setShowConfirm(false)} disabled={sending} activeOpacity={0.8}><Text style={styles.modalCancelText}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirm} onPress={handleSend} disabled={sending} activeOpacity={0.85}>{sending ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.modalConfirmText}>Send</Text>}</TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Modal 2: Success confirmation Overlay */}
-      <Modal
-        visible={showSuccessModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowSuccessModal(false)}
-      >
-        <View style={styles.modalOverlay}>
+      {/* Success modal */}
+      <Modal visible={showSuccess} transparent animationType="fade" onRequestClose={() => setShowSuccess(false)}>
+        <View style={styles.modalBg}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              Success! Your friend{'\n'}request has been sent.
-            </Text>
-            
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setShowSuccessModal(false)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.modalCancelText}>Close</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.modalActionBtn}
-                onPress={() => {
-                  setShowSuccessModal(false);
-                  navigation.navigate('Main', { screen: 'Lounge', params: { activeTab: 'DMs' } });
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.modalActionText}>Go to My Chats</Text>
-              </TouchableOpacity>
+            <Text style={styles.modalTitle}>Request sent! 🎉</Text>
+            <View style={styles.modalRow}>
+              <TouchableOpacity style={styles.modalCancel} onPress={() => setShowSuccess(false)} activeOpacity={0.8}><Text style={styles.modalCancelText}>Close</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirm} onPress={() => { setShowSuccess(false); navigation.navigate('Main', { screen: 'Lounge', params: { activeTab: 'DMs' } }); }} activeOpacity={0.85}><Text style={styles.modalConfirmText}>My chats</Text></TouchableOpacity>
             </View>
           </View>
         </View>
@@ -242,175 +123,26 @@ export default function UserSearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#0B0713',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#261E38',
-    backgroundColor: '#13101E',
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  searchBox: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 42,
-    borderWidth: 1.5,
-    borderColor: '#261E38',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    backgroundColor: '#161024',
-  },
-  searchBoxFocused: {
-    borderColor: '#8B5CF6',
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#FFFFFF',
-    padding: 0,
-  },
-  sectionHeading: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#A1A1AA',
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  list: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
-  },
-  userItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    backgroundColor: '#161024',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#261E38',
-    marginVertical: 4,
-  },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderWidth: 1,
-    borderColor: '#261E38',
-  },
-  avatarFallback: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  userInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  userName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#F3E8FF',
-  },
-  addButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#8B5CF6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  separator: {
-    height: 6,
-  },
-  center: {
-    paddingTop: 60,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#A1A1AA',
-  },
-  // Modal Overlays
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(9, 8, 14, 0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  modalCard: {
-    backgroundColor: '#161024',
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: '#261E38',
-    padding: 24,
-    width: '100%',
-    maxWidth: 320,
-    alignItems: 'center',
-    shadowColor: '#A855F7',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#F3E8FF',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 24,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-  },
-  modalCancelBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#3F3F46',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#261E38',
-  },
-  modalCancelText: {
-    fontSize: 13,
-    color: '#E4E4E7',
-    fontWeight: '600',
-  },
-  modalActionBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#8B5CF6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalActionText: {
-    fontSize: 13,
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-});
+  safe: { flex: 1, backgroundColor: light.bg },
+  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
+  backBtn: { width: 36, height: 44, alignItems: 'center', justifyContent: 'center' },
+  searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, height: 46, borderRadius: radius.md, paddingHorizontal: spacing.base, backgroundColor: light.surfaceHi },
+  searchInput: { flex: 1, ...typography.body, color: light.text, padding: 0 },
+  sectionHeading: { ...typography.micro, color: light.textTertiary, letterSpacing: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.base, paddingBottom: spacing.sm },
+  list: { paddingHorizontal: spacing.lg, paddingTop: spacing.xs },
+  userItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md, paddingHorizontal: spacing.base, backgroundColor: light.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: light.border },
+  info: { flex: 1, gap: 2 },
+  name: { ...typography.bodyLg, color: light.text, fontWeight: '700' },
+  meta: { ...typography.caption, color: light.textSecondary },
+  addBtn: { width: 40, height: 40, borderRadius: radius.md, backgroundColor: light.brand, alignItems: 'center', justifyContent: 'center' },
+  center: { paddingTop: 60, alignItems: 'center' },
+  emptyText: { ...typography.body, color: light.textSecondary },
+  modalBg: { flex: 1, backgroundColor: 'rgba(11,11,15,0.45)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xl },
+  modalCard: { backgroundColor: light.surface, borderRadius: radius.xl, padding: spacing.xl, width: '100%', maxWidth: 340, ...lightShadow.card },
+  modalTitle: { ...typography.h3, color: light.text, textAlign: 'center', lineHeight: 24, marginBottom: spacing.xl },
+  modalRow: { flexDirection: 'row', gap: spacing.md },
+  modalCancel: { flex: 1, height: 50, borderRadius: radius.full, backgroundColor: light.surfaceHi, alignItems: 'center', justifyContent: 'center' },
+  modalCancelText: { ...typography.body, color: light.text, fontWeight: '700' },
+  modalConfirm: { flex: 1, height: 50, borderRadius: radius.full, backgroundColor: light.text, alignItems: 'center', justifyContent: 'center' },
+  modalConfirmText: { ...typography.body, color: light.white, fontWeight: '700' },
+});

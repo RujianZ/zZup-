@@ -131,7 +131,7 @@ export default function NearbyTravelScreen() {
               🎓 {post.author_profile?.university || 'University'}
             </Text>
             <View style={styles.viewCountBadge}>
-              <Ionicons name="eye-outline" size={12} color="#71717A" style={{ marginRight: 2 }} />
+              <Ionicons name="eye-outline" size={12} color="#A6A6AF" style={{ marginRight: 2 }} />
               <Text style={styles.viewCountText}>{post.view_count}</Text>
             </View>
           </View>
@@ -145,7 +145,7 @@ export default function NearbyTravelScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#09090B" />
+          <Ionicons name="arrow-back" size={24} color="#0B0B0F" />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>Campus Roamers</Text>
@@ -201,18 +201,18 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#F4F4F5',
+    borderBottomWidth: 1, borderBottomColor: '#F2F2F5',
   },
   backBtn: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: '#F4F4F5', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#F2F2F5', alignItems: 'center', justifyContent: 'center',
   },
   headerTitleContainer: { alignItems: 'center', gap: 2 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#09090B' },
-  headerSubtitle: { fontSize: 10, color: '#71717A' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: '#0B0B0F' },
+  headerSubtitle: { fontSize: 10, color: '#A6A6AF' },
 
   loadingCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { color: '#71717A', fontSize: 14 },
+  loadingText: { color: '#A6A6AF', fontSize: 14 },
 
   scrollContent: { padding: 16 },
   waterfallLayout: {
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#F4F4F5',
+    borderColor: '#F2F2F5',
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -249,21 +249,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderBottomWidth: 1,
-    borderColor: '#F4F4F5',
+    borderColor: '#F2F2F5',
   },
   cardInfo: {
     padding: 12,
   },
   cardMessage: {
     fontSize: 13,
-    color: '#374151',
+    color: '#F2F2F5',
     lineHeight: 18,
     fontWeight: '500',
     marginBottom: 8,
   },
   divider: {
     height: 1,
-    backgroundColor: '#F4F4F5',
+    backgroundColor: '#F2F2F5',
     marginVertical: 8,
   },
   petRow: {
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
   petName: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#09090B',
+    color: '#0B0B0F',
   },
   breedText: {
     fontSize: 9,
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   },
   universityText: {
     fontSize: 10,
-    color: '#71717A',
+    color: '#A6A6AF',
     maxWidth: COLUMN_WIDTH * 0.55,
   },
   viewCountBadge: {
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
   },
   viewCountText: {
     fontSize: 10,
-    color: '#71717A',
+    color: '#A6A6AF',
   },
 
   emptyContainer: {
@@ -339,11 +339,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#09090B',
+    color: '#0B0B0F',
   },
   emptyText: {
     fontSize: 13,
-    color: '#71717A',
+    color: '#A6A6AF',
     textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: 16,

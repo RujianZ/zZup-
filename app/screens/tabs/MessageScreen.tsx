@@ -59,10 +59,10 @@ export default function MessageScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f0f0f' },
+  container: { flex: 1, backgroundColor: '#F2F2F5' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: '#2a2a2a',
+    paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: '#F2F2F5',
   },
   headerTitle: { fontSize: 20, fontWeight: '700', color: '#fff' },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -80,12 +80,12 @@ const styles = StyleSheet.create({
   overlay: { flex: 1 },
   dropdown: {
     position: 'absolute', top: 90, right: 16,
-    backgroundColor: '#1e1e1e', borderRadius: 12,
+    backgroundColor: '#F2F2F5', borderRadius: 12,
     borderWidth: 0.5, borderColor: '#333',
     shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 12, elevation: 8,
     minWidth: 140,
   },
-  dropdownItem: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 0.5, borderBottomColor: '#2a2a2a' },
+  dropdownItem: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 0.5, borderBottomColor: '#F2F2F5' },
   dropdownText: { fontSize: 15, color: '#fff' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyText: { color: '#555', fontSize: 15 },

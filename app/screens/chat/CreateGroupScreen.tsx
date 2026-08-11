@@ -54,10 +54,10 @@ export default function CreateGroupScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color="#C084FC" />
+          <Ionicons name="chevron-back" size={24} color="#7C3AED" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Create Pack Chat</Text>
         <TouchableOpacity
@@ -79,7 +79,7 @@ export default function CreateGroupScreen() {
           <TextInput
             style={styles.input}
             placeholder="Enter Pack Chat name..."
-            placeholderTextColor="#71717A"
+            placeholderTextColor="#A6A6AF"
             value={name}
             onChangeText={setName}
             maxLength={30}
@@ -92,7 +92,7 @@ export default function CreateGroupScreen() {
           <TextInput
             style={[styles.input, styles.inputMulti]}
             placeholder="Introduce this Pack Chat..."
-            placeholderTextColor="#71717A"
+            placeholderTextColor="#A6A6AF"
             value={description}
             onChangeText={setDesc}
             multiline
@@ -114,7 +114,7 @@ export default function CreateGroupScreen() {
                 <Text style={styles.typeDesc}>{t.desc}</Text>
               </View>
               {groupType === t.key && (
-                <Ionicons name="checkmark-circle" size={20} color="#C084FC" />
+                <Ionicons name="checkmark-circle" size={20} color="#7C3AED" />
               )}
             </TouchableOpacity>
           ))}
@@ -130,7 +130,7 @@ export default function CreateGroupScreen() {
             <Switch
               value={isSearchable}
               onValueChange={setSearchable}
-              trackColor={{ false: '#261E38', true: '#8B5CF6' }}
+              trackColor={{ false: '#ECECEF', true: '#7C3AED' }}
               thumbColor="#fff"
             />
           </View>
@@ -141,40 +141,40 @@ export default function CreateGroupScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0B0713' },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#261E38',
-    backgroundColor: '#13101E',
+    borderBottomWidth: 1, borderBottomColor: '#ECECEF',
+    backgroundColor: '#FFFFFF',
   },
   backBtn: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#F3E8FF' },
-  createBtn: { backgroundColor: '#8B5CF6', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16 },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0B0B0F' },
+  createBtn: { backgroundColor: '#7C3AED', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 16 },
   createBtnDisabled: { opacity: 0.4 },
   createBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   scroll: { padding: 20, gap: 24 },
   section: { gap: 10 },
-  sectionLabel: { fontSize: 12, color: '#C084FC', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionLabel: { fontSize: 12, color: '#7C3AED', fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   input: {
-    backgroundColor: '#161024', borderRadius: 12, padding: 14,
-    color: '#FFFFFF', fontSize: 15, borderWidth: 1.5, borderColor: '#261E38',
+    backgroundColor: '#F2F2F5', borderRadius: 12, padding: 14,
+    color: '#FFFFFF', fontSize: 15, borderWidth: 1.5, borderColor: '#ECECEF',
   },
   inputMulti: { height: 80, textAlignVertical: 'top' },
   typeOption: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#161024', borderRadius: 14, padding: 16,
-    borderWidth: 1.5, borderColor: '#261E38',
+    backgroundColor: '#F2F2F5', borderRadius: 14, padding: 16,
+    borderWidth: 1.5, borderColor: '#ECECEF',
   },
-  typeOptionActive: { borderColor: '#8B5CF6', backgroundColor: '#24153B' },
+  typeOptionActive: { borderColor: '#7C3AED', backgroundColor: '#F3EEFE' },
   typeLeft: { gap: 3 },
-  typeLabel: { fontSize: 14, color: '#F3E8FF', fontWeight: '600' },
-  typeDesc:  { fontSize: 12, color: '#A1A1AA' },
+  typeLabel: { fontSize: 14, color: '#0B0B0F', fontWeight: '600' },
+  typeDesc:  { fontSize: 12, color: '#6C6C77' },
   switchRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: '#161024', borderRadius: 14, padding: 16,
-    borderWidth: 1.5, borderColor: '#261E38',
+    backgroundColor: '#F2F2F5', borderRadius: 14, padding: 16,
+    borderWidth: 1.5, borderColor: '#ECECEF',
   },
-  switchLabel: { fontSize: 14, color: '#F3E8FF', fontWeight: '600' },
-  switchDesc:  { fontSize: 12, color: '#A1A1AA', marginTop: 2 },
+  switchLabel: { fontSize: 14, color: '#0B0B0F', fontWeight: '600' },
+  switchDesc:  { fontSize: 12, color: '#6C6C77', marginTop: 2 },
 });
