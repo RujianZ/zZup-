@@ -37,7 +37,7 @@ export default function ChatScreen() {
 
   const flatListRef = useRef<FlatList>(null);
 
-  // Alert Modal State
+  // Custom Alert Modal State
   const [alertConfig, setAlertConfig] = useState<{
     visible: boolean;
     title: string;
@@ -51,14 +51,15 @@ export default function ChatScreen() {
 
   const isPetTalk = groupName === 'zZuPer Talk' || groupId === 'zzuper_talk';
 
-  // Resolve target conversation_id
+  // Resolve target conversation_id for DMs and zZuPer Talk
   useEffect(() => {
     let isMounted = true;
     async function resolveConversation() {
       if (isPetTalk) {
         const convId = await getOrCreateZzuperTalk();
         if (convId && isMounted) setRealConvId(convId);
-      } else if (isDM && (groupId.startsWith('user-') || groupId.length < 36)) {
+      } else if (isDM) {
+        // ALWAYS resolve 1v1 DM peerId -> conversation_id via createDM
         const convId = await createDM(groupId, identityMode, 'real');
         if (convId && isMounted) setRealConvId(convId);
       } else {
@@ -100,7 +101,10 @@ export default function ChatScreen() {
     setSending(true);
     setInput('');
 
-    const { data, error } = await sendMessage(realConvId, text, identityMode);
+    // In 1v1 DMs and zZuPer Talk, send mode is ALWAYS 'real'
+    const currentSendMode = (isDM || isPetTalk) ? 'real' : identityMode;
+
+    const { data, error } = await sendMessage(realConvId, text, currentSendMode);
     if (error || !data) {
       showAlert('Send Failed', error || 'Please try sending again.', 'error');
       setSending(false);
@@ -128,13 +132,15 @@ export default function ChatScreen() {
           ];
           const randomReply = petReplies[Math.floor(Math.random() * petReplies.length)];
           await sendMessage(realConvId, randomReply, 'pet');
-        }, 1200);
+        }, 1000);
       }
     }
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
-    const isMe = item.sender_id === profile?.id;
+    // In zZuPer Talk, messages with identity_mode === 'pet' are Pet AI Companion responses -> render on LEFT SIDE!
+    const isPetAIResponse = isPetTalk && item.identity_mode === 'pet';
+    const isMe = !isPetAIResponse && item.sender_id === profile?.id;
     const isPet = item.identity_mode === 'pet';
 
     return (
@@ -143,14 +149,18 @@ export default function ChatScreen() {
           item.author_avatar_url ? (
             <Image source={{ uri: item.author_avatar_url }} style={styles.peerAvatar} />
           ) : (
-            <View style={styles.peerAvatarFallback}>
-              <Ionicons name="person" size={16} color="#C084FC" />
+            <View style={[styles.peerAvatarFallback, isPetAIResponse && { backgroundColor: '#3B1866', borderColor: '#C084FC', borderWidth: 1.5 }]}>
+              {isPetAIResponse ? (
+                <Text style={{ fontSize: 16 }}>🐾</Text>
+              ) : (
+                <Ionicons name={isPet ? 'paw' : 'person'} size={16} color="#C084FC" />
+              )}
             </View>
           )
         )}
 
         <View style={{ maxWidth: '78%' }}>
-          {!isMe && !isDM && (
+          {!isMe && !isDM && !isPetTalk && (
             <Text style={styles.author}>{item.author_name ?? 'User'}{isPet ? ' 🐾' : ''}</Text>
           )}
 
@@ -163,7 +173,7 @@ export default function ChatScreen() {
           </Text>
         </View>
 
-        {/* Right-side Avatar for My Sent Messages to distinguish Real vs Pet Identity */}
+        {/* Right-side Avatar for My Sent Messages (Only in Pack Chats / Real messages) */}
         {isMe && (
           <View style={styles.myAvatarWrapper}>
             {isPet ? (
@@ -199,7 +209,7 @@ export default function ChatScreen() {
           <Feather name="chevron-left" size={26} color="#C084FC" />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{groupName || 'Chat'}</Text>
-        {!isDM ? (
+        {!isDM && !isPetTalk ? (
           <TouchableOpacity
             style={styles.iconBtn}
             onPress={() => navigation.navigate('GroupMembers', { groupId: realConvId, groupName })}
@@ -232,7 +242,10 @@ export default function ChatScreen() {
       {/* Bottom Input Section */}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.inputArea}>
-          <IdentityToggle value={identityMode} onChange={setIdentityMode} />
+          {/* Show IdentityToggle ONLY in Pack Chats (!isDM && !isPetTalk) */}
+          {!isDM && !isPetTalk && (
+            <IdentityToggle value={identityMode} onChange={setIdentityMode} />
+          )}
 
           <View style={styles.inputRow}>
             <TextInput
