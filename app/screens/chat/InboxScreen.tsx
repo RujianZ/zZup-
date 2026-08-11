@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { listConversations, ConversationListItem } from '../../../lib/api/conversations';
 import { useAuth } from '../../context/AuthContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function formatTime(dateStr: string): string {
   const d = new Date(dateStr);
@@ -36,6 +37,7 @@ export default function InboxScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { profile } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const [activeTab, setActiveTab] = useState<'DMs' | 'Packs'>('DMs');
 

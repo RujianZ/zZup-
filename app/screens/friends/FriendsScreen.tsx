@@ -9,10 +9,12 @@ import { useNavigation } from '@react-navigation/native';
 import { getFriends, getFriendRequestsCount, FriendItem } from '../../../lib/api/friends';
 import { listConversations, ConversationListItem } from '../../../lib/api/conversations';
 import { useAuth } from '../../context/AuthContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function FriendsScreen() {
   const navigation = useNavigation<any>();
   const { profile } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const [activeTab, setActiveTab] = useState<'Friends' | 'Packs'>('Friends');
   const [friends, setFriends] = useState<FriendItem[]>([]);
@@ -68,10 +70,10 @@ export default function FriendsScreen() {
 
         <View style={styles.cardInfo}>
           <Text style={styles.cardTitle} numberOfLines={1}>
-            {item.real_name || 'Friend'}
+            {item.real_name ?? `#${item.zzup_id}`}
           </Text>
           <Text style={styles.cardSub} numberOfLines={1}>
-            {item.pet_name ? `🐾 ${item.pet_name}` : item.university || 'zZuPer Member'}
+            #{item.zzup_id}{item.pet_name ? ` · 🐾 ${item.pet_name}` : ''}
           </Text>
         </View>
 
@@ -82,7 +84,7 @@ export default function FriendsScreen() {
           }}
           activeOpacity={0.8}
         >
-          <Ionicons name="chatbubble-ellipses-outline" size={20} color="#C084FC" />
+          <Ionicons name="chatbubble-ellipses-outline" size={18} color="#C084FC" />
         </TouchableOpacity>
       </TouchableOpacity>
     );
@@ -100,8 +102,8 @@ export default function FriendsScreen() {
         {item.display_avatar ? (
           <Image source={{ uri: item.display_avatar }} style={styles.avatar} />
         ) : (
-          <View style={[styles.avatarFallback, { backgroundColor: '#3B1866' }]}>
-            <Ionicons name="people" size={22} color="#E9D5FF" />
+          <View style={styles.avatarFallback}>
+            <Ionicons name="people" size={22} color="#C084FC" />
           </View>
         )}
 
@@ -110,7 +112,7 @@ export default function FriendsScreen() {
             {item.display_name}
           </Text>
           <Text style={styles.cardSub} numberOfLines={1}>
-            {item.last_message || 'Pack Chat'}
+            {item.last_message || 'No messages yet'}
           </Text>
         </View>
 
@@ -132,7 +134,7 @@ export default function FriendsScreen() {
       <StatusBar style="light" />
 
       {/* Header Bar */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={26} color="#C084FC" />
         </TouchableOpacity>

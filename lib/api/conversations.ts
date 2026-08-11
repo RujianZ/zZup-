@@ -95,7 +95,21 @@ export async function createGroup(params: {
     p_university: params.university ?? null,
     p_member_ids: params.memberIds,
   })
-  return { conversationId: (data as string) ?? null, error: error?.message ?? null }
+  const conversationId = (data as string) ?? null
+  if (conversationId && params.memberIds && params.memberIds.length > 0) {
+    try {
+      const inserts = params.memberIds.map(accId => ({
+        conversation_id: conversationId,
+        account_id: accId,
+        member_identity: 'real',
+        role: 'member',
+      }))
+      await supabase.from('conversation_members').upsert(inserts, { onConflict: 'conversation_id,account_id' })
+    } catch (e) {
+      console.warn('Failed to upsert conversation_members:', e)
+    }
+  }
+  return { conversationId, error: error?.message ?? null }
 }
 
 export async function joinGroup(conversationId: string): Promise<{ error: string | null }> {

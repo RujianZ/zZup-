@@ -54,15 +54,15 @@ function MainTabs() {
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: light.bg,
-          borderTopColor: light.border,
+          backgroundColor: '#13101E',
+          borderTopColor: '#261E38',
           borderTopWidth: 1,
-          height: 88,
-          paddingBottom: 28,
+          height: 84,
+          paddingBottom: 24,
           paddingTop: 8,
         },
-        tabBarActiveTintColor: light.brand,
-        tabBarInactiveTintColor: light.textTertiary,
+        tabBarActiveTintColor: '#C084FC',
+        tabBarInactiveTintColor: '#71717A',
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: 2 },
         tabBarIcon: ({ focused, color }) => {
           const map: Record<string, [any, any]> = {

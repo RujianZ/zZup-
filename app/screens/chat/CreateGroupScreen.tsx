@@ -11,11 +11,14 @@ import { getFriends, FriendItem } from '../../../lib/api/friends';
 import { useAuth } from '../../context/AuthContext';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 type GroupType = 'open' | 'edu_verified' | 'official';
 
 export default function CreateGroupScreen() {
   const navigation = useNavigation<any>();
   const { profile } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const [name, setName] = useState('');
   const [description, setDesc] = useState('');
@@ -107,7 +110,7 @@ export default function CreateGroupScreen() {
   const GROUP_TYPES: { key: GroupType; label: string; desc: string }[] = [
     { key: 'open', label: 'Open Pack', desc: 'Anyone can search and join' },
     { key: 'edu_verified', label: 'Campus Pack', desc: 'Only visible to verified members from the same school' },
-    { key: 'official', label: 'Official Pack', desc: 'Officially verified group chat' },
+    { key: 'official', label: 'Official Pack (zZuP! Verified)', desc: 'Official platform-certified group (Requires Official Badge)' },
   ];
 
   return (
@@ -115,7 +118,7 @@ export default function CreateGroupScreen() {
       <StatusBar style="light" />
       
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
           <Ionicons name="chevron-back" size={26} color="#C084FC" />
         </TouchableOpacity>
