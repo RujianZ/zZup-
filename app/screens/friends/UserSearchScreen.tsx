@@ -1,19 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, ActivityIndicator, TextInput, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, FlatList, TextInput, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { searchUsers, sendFriendRequest, UserSearchResult } from '../../../lib/api/friends';
+import { useTheme } from '../../context/ThemeContext';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 
 export default function UserSearchScreen() {
   const navigation = useNavigation<any>();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const [keyword, setKeyword] = useState('');
-  const [results, setResults] = useState<UserSearchResult[]>([]);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<(UserSearchResult & { friendship_status?: string })[]>([]);
   const [loading, setLoading] = useState(false);
+  const [addingId, setAddingId] = useState<string | null>(null);
 
   // Custom Alert Modal State
   const [alertConfig, setAlertConfig] = useState<{
@@ -27,112 +30,108 @@ export default function UserSearchScreen() {
     setAlertConfig({ visible: true, title, message, type });
   };
 
-  useEffect(() => {
-    const t = setTimeout(async () => {
-      setLoading(true);
-      setResults(await searchUsers(keyword));
-      setLoading(false);
-    }, 150);
-    return () => clearTimeout(t);
-  }, [keyword]);
+  const handleSearch = async () => {
+    if (!query.trim()) return;
+    setLoading(true);
+    const data = await searchUsers(query.trim());
+    setResults(data);
+    setLoading(false);
+  };
 
-  const handleSend = async (user: UserSearchResult) => {
-    const { error } = await sendFriendRequest(user.id);
+  const handleAdd = async (userId: string) => {
+    setAddingId(userId);
+    const { error } = await sendFriendRequest(userId);
+    setAddingId(null);
     if (error) {
-      showAlert('Request Failed', error, 'error');
+      showAlert('Error', error, 'error');
     } else {
-      showAlert(
-        'Request Sent! 🎉',
-        `Friend request has been sent to ${user.real_name ?? `#${user.zzup_id}`}.`,
-        'success'
-      );
+      setResults(prev => prev.map(u => u.id === userId ? { ...u, friendship_status: 'pending_sent' } : u));
+      showAlert('Request Sent', 'Friend request sent successfully.', 'success');
     }
   };
 
-  const heading = !keyword.trim() ? 'RECENT USERS' : loading ? 'SEARCHING…' : 'SEARCH RESULTS';
-
-  const renderUser = ({ item }: { item: UserSearchResult }) => {
-    const isPetOnly = item.profile_visibility === 'pet_only';
-    const name = (isPetOnly ? (item.pet_name ?? item.real_name) : item.real_name) ?? 'zZuP! User';
-    const avatarUri = isPetOnly ? item.pet_avatar_url : item.avatar_url;
-
-    return (
-      <View style={styles.userCard}>
-        {avatarUri ? (
-          <Image source={{ uri: avatarUri }} style={styles.avatar} />
-        ) : (
-          <View style={styles.avatarFallback}>
-            <Ionicons name="person" size={20} color="#C084FC" />
-          </View>
-        )}
-
-        <View style={styles.info}>
-          <Text style={styles.name} numberOfLines={1}>{name}</Text>
-          <Text style={styles.meta}>#{item.zzup_id}</Text>
+  const renderItem = ({ item }: { item: UserSearchResult & { friendship_status?: string } }) => (
+    <TouchableOpacity style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.border }]} onPress={() => navigation.navigate('OtherProfile', { userId: item.id })} activeOpacity={0.7}>
+      {item.avatar_url ? (
+        <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
+      ) : (
+        <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>
+          <Ionicons name="person" size={24} color={colors.brand} />
         </View>
+      )}
 
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => handleSend(item)}
-          activeOpacity={0.8}
-        >
-          <Feather name="user-plus" size={18} color="#FFFFFF" />
-        </TouchableOpacity>
+      <View style={styles.info}>
+        <Text style={[styles.name, { color: colors.text }]}>{item.real_name}</Text>
+        <Text style={[styles.sub, { color: colors.subText }]}>#{item.zzup_id} · {item.university || 'Member'}</Text>
       </View>
-    );
-  };
+
+      {item.friendship_status === 'none' && (
+        <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.brand }]} onPress={() => handleAdd(item.id)} disabled={addingId === item.id} activeOpacity={0.8}>
+          {addingId === item.id ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.addText}>Add</Text>}
+        </TouchableOpacity>
+      )}
+      {item.friendship_status === 'pending_sent' && <Text style={[styles.badgeText, { color: colors.subText }]}>Pending</Text>}
+      {item.friendship_status === 'accepted' && <Text style={[styles.badgeText, { color: colors.brand }]}>Friends</Text>}
+    </TouchableOpacity>
+  );
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar style="light" />
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
+      <StatusBar style={colors.statusBarStyle} />
 
-      {/* Header Search Bar */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
-          <Feather name="chevron-left" size={26} color="#C084FC" />
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.border, paddingTop: Math.max(insets.top, 12) }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn} activeOpacity={0.7}>
+          <Ionicons name="chevron-back" size={26} color={colors.brand} />
         </TouchableOpacity>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Find People</Text>
+        <View style={styles.iconBtn} />
+      </View>
 
-        <View style={styles.searchBox}>
-          <Feather name="search" size={18} color="#71717A" />
+      {/* Search Input Box */}
+      <View style={[styles.searchBox, { backgroundColor: colors.headerBg, borderBottomColor: colors.border }]}>
+        <View style={[styles.inputRow, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+          <Ionicons name="search" size={20} color={colors.subText} />
           <TextInput
-            style={styles.searchInput}
-            placeholder="Search by zZuP ID or name"
-            placeholderTextColor="#71717A"
-            value={keyword}
-            onChangeText={setKeyword}
-            autoCapitalize="none"
-            autoFocus
+            style={[styles.input, { color: colors.text }]}
+            placeholder="Search by name, ID or school..."
+            placeholderTextColor={colors.tertiaryText}
+            value={query}
+            onChangeText={setQuery}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
           />
-          {keyword.length > 0 && (
-            <TouchableOpacity onPress={() => setKeyword('')} activeOpacity={0.7}>
-              <Feather name="x-circle" size={18} color="#71717A" />
+          {query.length > 0 && (
+            <TouchableOpacity onPress={() => setQuery('')}>
+              <Ionicons name="close-circle" size={18} color={colors.tertiaryText} />
             </TouchableOpacity>
           )}
         </View>
+        <TouchableOpacity style={[styles.searchBtn, { backgroundColor: colors.brand }]} onPress={handleSearch} activeOpacity={0.8}>
+          <Text style={styles.searchBtnText}>Search</Text>
+        </TouchableOpacity>
       </View>
 
-      <Text style={styles.sectionHeading}>{heading}</Text>
-
-      {/* Results List */}
       {loading ? (
-        <View style={styles.center}><ActivityIndicator color="#8B5CF6" size="large" /></View>
+        <View style={styles.center}><ActivityIndicator size="large" color={colors.brand} /></View>
       ) : (
         <FlatList
           data={results}
-          keyExtractor={(item) => item.id}
+          keyExtractor={i => i.id}
+          renderItem={renderItem}
           contentContainerStyle={styles.list}
-          renderItem={renderUser}
-          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-          keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
-            keyword.length > 0 ? (
+            query ? (
               <View style={styles.center}>
-                <View style={styles.emptyIconBg}>
-                  <Feather name="user-x" size={32} color="#C084FC" />
-                </View>
-                <Text style={styles.emptyText}>No users found matching "{keyword}"</Text>
+                <Ionicons name="search-outline" size={48} color={colors.tertiaryText} style={{ marginBottom: 12 }} />
+                <Text style={[styles.emptyText, { color: colors.subText }]}>No users found for "{query}"</Text>
               </View>
-            ) : null
+            ) : (
+              <View style={styles.center}>
+                <Ionicons name="people-outline" size={48} color={colors.tertiaryText} style={{ marginBottom: 12 }} />
+                <Text style={[styles.emptyText, { color: colors.subText }]}>Search by name or zZuP! ID to add friends</Text>
+              </View>
+            )
           }
         />
       )}
@@ -150,118 +149,32 @@ export default function UserSearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#0B0713',
-  },
+  safe: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 12,
-    backgroundColor: '#13101E',
     borderBottomWidth: 1,
-    borderBottomColor: '#261E38',
   },
-  backBtn: {
-    width: 36,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  searchBox: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    height: 44,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    backgroundColor: '#161024',
-    borderWidth: 1,
-    borderColor: '#261E38',
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#FFFFFF',
-    padding: 0,
-  },
-  sectionHeading: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#A1A1AA',
-    letterSpacing: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  list: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
-  },
-  userCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    backgroundColor: '#161024',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#261E38',
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-  },
-  avatarFallback: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#261E38',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  info: {
-    flex: 1,
-    gap: 2,
-  },
-  name: {
-    fontSize: 15,
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  meta: {
-    fontSize: 12,
-    color: '#A1A1AA',
-  },
-  addBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#8B5CF6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  center: {
-    paddingTop: 50,
-    alignItems: 'center',
-  },
-  emptyIconBg: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#161024',
-    borderWidth: 1,
-    borderColor: '#261E38',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#A1A1AA',
-  },
+  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '700' },
+  searchBox: { flexDirection: 'row', padding: 12, gap: 10, borderBottomWidth: 1 },
+  inputRow: { flex: 1, flexDirection: 'row', alignItems: 'center', borderRadius: 16, borderWidth: 1, paddingHorizontal: 12, height: 44, gap: 8 },
+  input: { flex: 1, fontSize: 14 },
+  searchBtn: { paddingHorizontal: 18, height: 44, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  searchBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
+  list: { paddingHorizontal: 16, paddingVertical: 14, gap: 10 },
+  card: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 18, borderWidth: 1, gap: 12 },
+  avatar: { width: 48, height: 48, borderRadius: 24 },
+  avatarFallback: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  info: { flex: 1 },
+  name: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
+  sub: { fontSize: 12 },
+  addBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, justifyContent: 'center' },
+  addText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  badgeText: { fontSize: 13, fontWeight: '600', paddingHorizontal: 8 },
+  emptyText: { fontSize: 14, textAlign: 'center' },
 });

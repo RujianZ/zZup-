@@ -1,39 +1,25 @@
-import React, { useEffect, useState } from 'react';
-import {
-  View, Text, StyleSheet, SafeAreaView, FlatList,
-  TouchableOpacity, Image, ActivityIndicator
-} from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from '../../../lib/supabase';
-import { getConversationMembers, removeMember } from '../../../lib/api/conversations';
+import { getConversationMembers, removeMember, ConversationMember } from '../../../lib/api/conversations';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
-
-interface Member {
-  user_id: string;
-  role: string;
-  joined_at: string;
-  real_name: string | null;
-  pet_name: string | null;
-  avatar_url: string | null;
-  pet_avatar_url: string | null;
-  identity_mode: 'real' | 'pet';
-}
 
 export default function GroupMembersScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { groupId, groupName } = route.params;
   const { profile } = useAuth();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const [members, setMembers] = useState<Member[]>([]);
-  const [creatorId, setCreatorId] = useState<string | null>(null);
+  const [members, setMembers] = useState<ConversationMember[]>([]);
   const [loading, setLoading] = useState(true);
-  const [removing, setRemoving] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   // Custom Alert Modal State
   const [alertConfig, setAlertConfig] = useState<{
@@ -47,116 +33,100 @@ export default function GroupMembersScreen() {
     setAlertConfig({ visible: true, title, message, type });
   };
 
-  useEffect(() => {
-    loadMembers();
+  const load = useCallback(async () => {
+    setLoading(true);
+    const data = await getConversationMembers(groupId);
+    setMembers(data);
+    setLoading(false);
   }, [groupId]);
 
-  const loadMembers = async () => {
-    setLoading(true);
-    const { data: group } = await supabase
-      .from('conversations')
-      .select('created_by')
-      .eq('id', groupId)
-      .single();
-    setCreatorId(group?.created_by ?? null);
+  useEffect(() => { load(); }, [load]);
 
-    try {
-      const data = await getConversationMembers(groupId);
-      setMembers(data.map((m) => ({
-        user_id: m.account_id,
-        role: m.role,
-        joined_at: m.joined_at,
-        real_name: m.display_name,
-        pet_name: m.display_name,
-        avatar_url: m.display_avatar,
-        pet_avatar_url: m.display_avatar,
-        identity_mode: m.member_identity,
-      })));
-    } catch (e) {
-      console.error('Failed to load group members:', e);
-    }
-    setLoading(false);
-  };
+  const me = members.find(m => m.account_id === profile?.id);
+  const isAdmin = me?.role === 'admin';
 
-  const handleRemove = async (targetId: string, name: string) => {
-    const { error } = await removeMember(groupId, targetId);
-    if (error) {
-      showAlert('Remove Failed', error, 'error');
-    } else {
-      setMembers(prev => prev.filter(m => m.user_id !== targetId));
-      showAlert('Member Removed', `${name} has been removed from this Pack Chat.`, 'success');
+  const handleRemove = async (accId: string, name: string) => {
+    setRemovingId(accId);
+    const { error } = await removeMember(groupId, accId);
+    setRemovingId(null);
+    if (error) showAlert('Error', error, 'error');
+    else {
+      setMembers(prev => prev.filter(m => m.account_id !== accId));
+      showAlert('Member Removed', `${name} has been removed from the Pack.`, 'success');
     }
   };
 
-  const isAdmin = profile?.id === creatorId;
+  const renderItem = ({ item }: { item: ConversationMember }) => {
+    const isMe = item.account_id === profile?.id;
+    const isPet = item.member_identity === 'pet';
+    const name = item.display_name ?? 'Member';
+
+    return (
+      <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+        {item.display_avatar ? (
+          <Image source={{ uri: item.display_avatar }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>
+            <Ionicons name={isPet ? 'paw' : 'person'} size={24} color={colors.brand} />
+          </View>
+        )}
+
+        <View style={styles.info}>
+          <View style={styles.nameRow}>
+            <Text style={[styles.name, { color: colors.text }]}>{name}</Text>
+            {item.role === 'admin' && (
+              <View style={[styles.badge, { backgroundColor: colors.cardMutedBg }]}>
+                <Text style={[styles.badgeText, { color: colors.brand }]}>Leader</Text>
+              </View>
+            )}
+          </View>
+
+          <Text style={[styles.sub, { color: colors.subText }]}>
+            {isPet ? '🐾 Pet Identity' : '👤 Host Mode'}
+            {isMe ? ' (You)' : ''}
+          </Text>
+        </View>
+
+        {isAdmin && !isMe && (
+          <TouchableOpacity
+            style={styles.removeBtn}
+            onPress={() => handleRemove(item.account_id, name)}
+            disabled={removingId === item.account_id}
+            activeOpacity={0.7}
+          >
+            {removingId === item.account_id ? (
+              <ActivityIndicator size="small" color="#EF4444" />
+            ) : (
+              <Ionicons name="remove-circle-outline" size={24} color="#EF4444" />
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
+      <StatusBar style={colors.statusBarStyle} />
 
       {/* Header */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={26} color="#C084FC" />
+      <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.border, paddingTop: Math.max(insets.top, 12) }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn} activeOpacity={0.7}>
+          <Feather name="chevron-left" size={26} color={colors.brand} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Pack Members ({members.length})</Text>
-        <View style={styles.backBtn} />
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Pack Members ({members.length})</Text>
+        <View style={styles.iconBtn} />
       </View>
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator color="#8B5CF6" size="large" /></View>
+        <View style={styles.center}><ActivityIndicator size="large" color={colors.brand} /></View>
       ) : (
         <FlatList
           data={members}
-          keyExtractor={(item) => item.user_id}
+          keyExtractor={i => i.account_id}
+          renderItem={renderItem}
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => {
-            const isPet = item.identity_mode === 'pet';
-            const imageUrl = isPet ? item.pet_avatar_url : item.avatar_url;
-            const displayName = isPet ? (item.pet_name ?? item.real_name) : item.real_name;
-            const isCreator = item.user_id === creatorId;
-            const isMe = item.user_id === profile?.id;
-
-            return (
-              <View style={styles.memberCard}>
-                {imageUrl ? (
-                  <Image source={{ uri: imageUrl }} style={styles.avatar} />
-                ) : (
-                  <View style={[styles.avatarFallback, { backgroundColor: isPet ? '#3B1866' : '#261E38' }]}>
-                    <Ionicons name={isPet ? 'paw' : 'person'} size={20} color="#C084FC" />
-                  </View>
-                )}
-
-                <View style={styles.memberInfo}>
-                  <View style={styles.nameRow}>
-                    <Text style={styles.memberName}>{displayName ?? 'Member'}</Text>
-                    {isCreator && (
-                      <View style={styles.adminBadge}>
-                        <Text style={styles.adminBadgeText}>Leader</Text>
-                      </View>
-                    )}
-                  </View>
-                  <Text style={styles.memberMeta}>{isPet ? '🐾 zZuPer Mode' : '👤 Host Mode'}</Text>
-                </View>
-
-                {isAdmin && !isMe && !isCreator && (
-                  <TouchableOpacity
-                    style={styles.removeBtn}
-                    onPress={() => handleRemove(item.user_id, displayName ?? 'this member')}
-                    disabled={removing === item.user_id}
-                    activeOpacity={0.8}
-                  >
-                    {removing === item.user_id ? (
-                      <ActivityIndicator size="small" color="#EF4444" />
-                    ) : (
-                      <Ionicons name="remove-circle-outline" size={24} color="#EF4444" />
-                    )}
-                  </TouchableOpacity>
-                )}
-              </View>
-            );
-          }}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ListEmptyComponent={<Text style={[styles.empty, { color: colors.subText }]}>No members found.</Text>}
         />
       )}
 
@@ -173,95 +143,28 @@ export default function GroupMembersScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0B0713',
-  },
+  safe: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 12,
-    backgroundColor: '#13101E',
     borderBottomWidth: 1,
-    borderBottomColor: '#261E38',
   },
-  backBtn: {
-    padding: 4,
-    minWidth: 36,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  list: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-  },
-  memberCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#161024',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#261E38',
-    padding: 12,
-    gap: 12,
-  },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-  },
-  avatarFallback: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  memberInfo: {
-    flex: 1,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  memberName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  adminBadge: {
-    backgroundColor: '#3B1866',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#8B5CF6',
-  },
-  adminBadgeText: {
-    fontSize: 11,
-    color: '#C084FC',
-    fontWeight: '700',
-  },
-  memberMeta: {
-    fontSize: 12,
-    color: '#A1A1AA',
-  },
-  removeBtn: {
-    padding: 6,
-  },
-  separator: {
-    height: 10,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '700' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  list: { paddingHorizontal: 16, paddingVertical: 16, gap: 10 },
+  card: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 18, borderWidth: 1, gap: 12 },
+  avatar: { width: 48, height: 48, borderRadius: 24 },
+  avatarFallback: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  info: { flex: 1 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  name: { fontSize: 16, fontWeight: '700' },
+  badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  badgeText: { fontSize: 11, fontWeight: '700' },
+  sub: { fontSize: 12 },
+  removeBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  empty: { textAlign: 'center', marginTop: 40, fontSize: 14 },
 });

@@ -1,22 +1,21 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import {
-  View, Text, StyleSheet, SafeAreaView, FlatList,
-  TouchableOpacity, Image, ActivityIndicator
-} from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getBlockedUsers, unblockIdentity, BlockedUser } from '../../../lib/api/friends';
+import { useTheme } from '../../context/ThemeContext';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 
 export default function BlockedUsersScreen() {
   const navigation = useNavigation<any>();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const [blocked, setBlocked] = useState<BlockedUser[]>([]);
+  const [list, setList] = useState<BlockedUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actionId, setActionId] = useState<string | null>(null);
+  const [unblockingId, setUnblockingId] = useState<string | null>(null);
 
   // Custom Alert Modal State
   const [alertConfig, setAlertConfig] = useState<{
@@ -33,79 +32,73 @@ export default function BlockedUsersScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     const data = await getBlockedUsers();
-    setBlocked(data);
+    setList(data);
     setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
   const handleUnblock = async (item: BlockedUser) => {
-    setActionId(item.blocked_id);
+    setUnblockingId(item.blocked_id);
     const { error } = await unblockIdentity(item.blocked_id, item.blocked_identity_type);
-    if (error) {
-      showAlert('Unblock Failed', error, 'error');
-    } else {
-      setBlocked(prev => prev.filter(b => b.blocked_id !== item.blocked_id));
-      showAlert('User Unblocked', `${item.real_name ?? item.zzup_id} has been unblocked.`, 'success');
+    setUnblockingId(null);
+    if (error) showAlert('Error', error, 'error');
+    else {
+      setList(prev => prev.filter(x => x.blocked_id !== item.blocked_id));
+      showAlert('Unblocked', 'User has been unblocked.', 'success');
     }
-    setActionId(null);
+  };
+
+  const renderItem = ({ item }: { item: BlockedUser }) => {
+    const isPet = item.blocked_identity_type === 'pet';
+    const name = (isPet ? (item.pet_name ?? item.real_name) : item.real_name) ?? 'User';
+    const avatar = isPet ? item.pet_avatar_url : item.avatar_url;
+
+    return (
+      <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+        {avatar ? (
+          <Image source={{ uri: avatar }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>
+            <Ionicons name={isPet ? 'paw' : 'person'} size={22} color={colors.brand} />
+          </View>
+        )}
+        <View style={styles.info}>
+          <Text style={[styles.name, { color: colors.text }]}>{name} {isPet ? '🐾' : ''}</Text>
+          <Text style={[styles.sub, { color: colors.subText }]}>{isPet ? 'Pet identity blocked' : 'User blocked'}</Text>
+        </View>
+        <TouchableOpacity style={[styles.unblockBtn, { backgroundColor: colors.cardMutedBg, borderColor: colors.border }]} onPress={() => handleUnblock(item)} disabled={unblockingId === item.blocked_id} activeOpacity={0.8}>
+          {unblockingId === item.blocked_id ? <ActivityIndicator size="small" color={colors.brand} /> : <Text style={[styles.unblockText, { color: colors.brand }]}>Unblock</Text>}
+        </TouchableOpacity>
+      </View>
+    );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
+      <StatusBar style={colors.statusBarStyle} />
 
       {/* Header */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={26} color="#C084FC" />
+      <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.border, paddingTop: Math.max(insets.top, 12) }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn} activeOpacity={0.7}>
+          <Ionicons name="chevron-back" size={26} color={colors.brand} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Blocked Users</Text>
-        <View style={styles.backBtn} />
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Blocked Users</Text>
+        <View style={styles.iconBtn} />
       </View>
 
-      {/* List */}
       {loading ? (
-        <View style={styles.center}><ActivityIndicator color="#8B5CF6" size="large" /></View>
+        <View style={styles.center}><ActivityIndicator size="large" color={colors.brand} /></View>
       ) : (
         <FlatList
-          data={blocked}
-          keyExtractor={(item) => item.blocked_id}
+          data={list}
+          keyExtractor={i => i.blocked_id}
+          renderItem={renderItem}
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <View style={styles.userCard}>
-              {item.avatar_url ? (
-                <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
-              ) : (
-                <View style={styles.avatarFallback}>
-                  <Ionicons name="person" size={20} color="#C084FC" />
-                </View>
-              )}
-              <View style={styles.userInfo}>
-                <Text style={styles.userName}>{item.real_name ?? 'User'}</Text>
-                <Text style={styles.userMeta}>#{item.zzup_id}</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.unblockBtn}
-                onPress={() => handleUnblock(item)}
-                disabled={actionId === item.blocked_id}
-                activeOpacity={0.8}
-              >
-                {actionId === item.blocked_id ? (
-                  <ActivityIndicator size="small" color="#8B5CF6" />
-                ) : (
-                  <Text style={styles.unblockBtnText}>Unblock</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
-          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           ListEmptyComponent={
             <View style={styles.center}>
-              <View style={styles.emptyIconBg}>
-                <Ionicons name="shield-checkmark-outline" size={32} color="#C084FC" />
-              </View>
-              <Text style={styles.emptyText}>No blocked users</Text>
+              <Ionicons name="shield-checkmark-outline" size={48} color={colors.tertiaryText} style={{ marginBottom: 12 }} />
+              <Text style={[styles.empty, { color: colors.subText }]}>No blocked users</Text>
             </View>
           }
         />
@@ -124,101 +117,26 @@ export default function BlockedUsersScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0B0713',
-  },
+  safe: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 12,
-    backgroundColor: '#13101E',
     borderBottomWidth: 1,
-    borderBottomColor: '#261E38',
   },
-  backBtn: {
-    padding: 4,
-    minWidth: 36,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  list: {
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  userCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#161024',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#261E38',
-    padding: 12,
-    gap: 12,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-  },
-  avatarFallback: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#261E38',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 2,
-  },
-  userMeta: {
-    fontSize: 12,
-    color: '#A1A1AA',
-  },
-  unblockBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#261E38',
-    borderWidth: 1,
-    borderColor: '#3F2A60',
-  },
-  unblockBtnText: {
-    color: '#C084FC',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 60,
-  },
-  emptyIconBg: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#161024',
-    borderWidth: 1,
-    borderColor: '#261E38',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#A1A1AA',
-  },
+  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '700' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
+  list: { paddingHorizontal: 16, paddingVertical: 14, gap: 10 },
+  card: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 18, borderWidth: 1, gap: 12 },
+  avatar: { width: 48, height: 48, borderRadius: 24 },
+  avatarFallback: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  info: { flex: 1 },
+  name: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
+  sub: { fontSize: 12 },
+  unblockBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, borderWidth: 1, justifyContent: 'center' },
+  unblockText: { fontSize: 13, fontWeight: '700' },
+  empty: { fontSize: 14, textAlign: 'center' },
 });

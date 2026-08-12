@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { listConversations, ConversationListItem } from '../../../lib/api/conversations';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function formatTime(dateStr: string): string {
@@ -37,6 +38,7 @@ export default function InboxScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { profile } = useAuth();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
   const [activeTab, setActiveTab] = useState<'DMs' | 'Packs'>('DMs');
@@ -102,7 +104,8 @@ export default function InboxScreen() {
       <TouchableOpacity
         style={[
           styles.chatItem,
-          isMyPet && styles.activeChatItem
+          { backgroundColor: colors.cardBg, borderColor: colors.border },
+          isMyPet && { borderColor: colors.brandSecondary, backgroundColor: colors.cardMutedBg }
         ]}
         onPress={() => {
           closeAllMenus();
@@ -117,23 +120,23 @@ export default function InboxScreen() {
         {item.display_avatar ? (
           <Image source={{ uri: item.display_avatar }} style={styles.avatar} />
         ) : (
-          <View style={[styles.avatarFallback, { backgroundColor: isDM ? '#261E38' : '#3B1866' }]}>
-            <Ionicons name={isDM ? 'person' : 'people'} size={24} color={isDM ? '#C084FC' : '#E9D5FF'} />
+          <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>
+            <Ionicons name={isDM ? 'person' : 'people'} size={24} color={colors.brand} />
           </View>
         )}
 
         <View style={styles.chatInfo}>
           <View style={styles.chatHeaderRow}>
-            <Text style={[styles.chatName, isMyPet && styles.activeChatName]} numberOfLines={1}>
+            <Text style={[styles.chatName, { color: colors.text }]} numberOfLines={1}>
               {item.display_name}
             </Text>
             {item.last_message_at && (
-              <Text style={styles.timeText}>{formatTime(item.last_message_at)}</Text>
+              <Text style={[styles.timeText, { color: colors.tertiaryText }]}>{formatTime(item.last_message_at)}</Text>
             )}
           </View>
 
           <View style={styles.lastMsgRow}>
-            <Text style={styles.lastMsgText} numberOfLines={1}>
+            <Text style={[styles.lastMsgText, { color: colors.subText }]} numberOfLines={1}>
               {item.last_message || 'No messages yet'}
             </Text>
           </View>
@@ -143,429 +146,267 @@ export default function InboxScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" />
+    <TouchableWithoutFeedback onPress={closeAllMenus}>
+      <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
+        <StatusBar style={colors.statusBarStyle} />
 
-      {/* Backdrop overlay to close open menu when tapping anywhere outside */}
-      {showAddMenu && (
-        <TouchableWithoutFeedback onPress={closeAllMenus}>
-          <View style={styles.menuBackdrop} />
-        </TouchableWithoutFeedback>
-      )}
-
-      {/* Header Bar */}
-      <View style={styles.header}>
-        {/* Contacts Hub Left Button (Replaces Search Icon) */}
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => {
-            closeAllMenus();
-            navigation.navigate('Friends'); // Contacts & Packs Hub!
-          }}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="people-outline" size={26} color="#C084FC" />
-        </TouchableOpacity>
-
-        {/* Tab Segment control center */}
-        <View style={styles.segmentContainer}>
+        {/* Top Header */}
+        <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.border, paddingTop: Math.max(insets.top, 12) }]}>
           <TouchableOpacity
-            style={[styles.segmentTab, activeTab === 'DMs' && styles.activeSegmentTab]}
+            style={styles.iconBtn}
             onPress={() => {
               closeAllMenus();
-              setActiveTab('DMs');
-            }}
-            activeOpacity={0.9}
-          >
-            <Text style={[styles.segmentTabText, activeTab === 'DMs' && styles.activeSegmentTabText]}>
-              DMs
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.segmentTab, activeTab === 'Packs' && styles.activeSegmentTab]}
-            onPress={() => {
-              closeAllMenus();
-              setActiveTab('Packs');
-            }}
-            activeOpacity={0.9}
-          >
-            <Text style={[styles.segmentTabText, activeTab === 'Packs' && styles.activeSegmentTabText]}>
-              Packs
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Header Right Button: Single Add Trigger */}
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => {
-              setShowAddMenu(!showAddMenu);
+              navigation.navigate('Friends');
             }}
             activeOpacity={0.7}
           >
-            <Ionicons name="add-circle-outline" size={28} color="#C084FC" />
+            <Ionicons name="people-outline" size={24} color={colors.brand} />
+          </TouchableOpacity>
+
+          {/* Segmented Switch */}
+          <View style={[styles.segmentContainer, { backgroundColor: colors.cardMutedBg, borderColor: colors.border }]}>
+            <TouchableOpacity
+              style={[styles.segmentTab, activeTab === 'DMs' && { backgroundColor: colors.brand }]}
+              onPress={() => {
+                closeAllMenus();
+                setActiveTab('DMs');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.segmentText, { color: activeTab === 'DMs' ? '#FFFFFF' : colors.subText }]}>
+                DMs
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.segmentTab, activeTab === 'Packs' && { backgroundColor: colors.brand }]}
+              onPress={() => {
+                closeAllMenus();
+                setActiveTab('Packs');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.segmentText, { color: activeTab === 'Packs' ? '#FFFFFF' : colors.subText }]}>
+                Packs
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Plus Add Button */}
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => setShowAddMenu(!showAddMenu)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="add-circle-outline" size={28} color={colors.brand} />
           </TouchableOpacity>
         </View>
 
-        {/* Unified Dropdown Menu Overlay */}
+        {/* Dropdown Menu */}
         {showAddMenu && (
-          <View style={styles.dropdownMenu}>
+          <View style={[styles.dropdownMenu, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
             <TouchableOpacity
-              style={styles.dropdownItem}
+              style={[styles.menuItem, { borderBottomColor: colors.border }]}
               onPress={() => {
                 setShowAddMenu(false);
                 navigation.navigate('UserSearch');
               }}
+              activeOpacity={0.7}
             >
-              <Text style={styles.dropdownItemText}>Add Friend</Text>
+              <Ionicons name="person-add-outline" size={20} color={colors.brand} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Add Friend</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.dropdownItem}
-              onPress={() => {
-                setShowAddMenu(false);
-                navigation.navigate('FriendRequests');
-              }}
-            >
-              <Text style={styles.dropdownItemText}>Friend Requests</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.dropdownItem}
+              style={styles.menuItem}
               onPress={() => {
                 setShowAddMenu(false);
                 navigation.navigate('CreateGroup');
               }}
+              activeOpacity={0.7}
             >
-              <Text style={styles.dropdownItemText}>Create Pack</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.dropdownItem}
-              onPress={() => {
-                setShowAddMenu(false);
-                navigation.navigate('GroupList', { activeTab: 'Discover' });
-              }}
-            >
-              <Text style={styles.dropdownItemText}>Join Pack</Text>
+              <Ionicons name="people-outline" size={20} color={colors.brand} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Create Pack</Text>
             </TouchableOpacity>
           </View>
         )}
-      </View>
 
-      {/* Main Content Area */}
-      <View style={{ flex: 1 }}>
-        {loading ? (
+        {/* Conversation List */}
+        {loading && !refreshing ? (
           <View style={styles.center}>
-            <ActivityIndicator color="#7C3AED" size="large" />
+            <ActivityIndicator size="large" color={colors.brand} />
           </View>
         ) : (
           <FlatList
             data={filteredData}
             keyExtractor={(item) => item.conversation_id}
-            contentContainerStyle={styles.list}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#7C3AED" />
-            }
             renderItem={renderItem}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.brand}
+                colors={[colors.brand]}
+              />
+            }
             ListEmptyComponent={
-              activeTab === 'DMs' ? (
-                /* Empty state for DMs tab */
-                <View style={styles.center}>
-                  <View style={styles.emptyIconBg}>
-                    <Ionicons name="chatbubble-outline" size={28} color="#C084FC" />
-                  </View>
-                  <Text style={styles.emptyTitle}>No DMs Yet</Text>
-                  <Text style={styles.emptyText}>
-                    You haven't added any friends yet. Get started by sending or accepting a request
-                  </Text>
-                  <View style={styles.emptyActionsRow}>
-                    <TouchableOpacity
-                      style={styles.purpleActionBtn}
-                      onPress={() => {
-                        closeAllMenus();
-                        navigation.navigate('UserSearch');
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.purpleActionBtnText}>Sending a Request</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.whiteActionBtn}
-                      onPress={() => {
-                        closeAllMenus();
-                        navigation.navigate('FriendRequests');
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.whiteActionBtnText}>Accepting a Request</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
-                /* Empty state for Packs tab */
-                <View style={styles.center}>
-                  <View style={styles.emptyIconBg}>
-                    <Ionicons name="chatbubbles-outline" size={28} color="#C084FC" />
-                  </View>
-                  <Text style={styles.emptyTitle}>No Pack Chats Yet</Text>
-                  <Text style={styles.emptyText}>
-                    You haven't joined any Pack Chats yet. Get started by joining or creating a Pack Chat
-                  </Text>
-                  <View style={styles.emptyActionsRow}>
-                    <TouchableOpacity
-                      style={styles.purpleActionBtn}
-                      onPress={() => {
-                        closeAllMenus();
-                        navigation.navigate('GroupList', { activeTab: 'Discover' });
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.purpleActionBtnText}>Join Pack</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.whiteActionBtn}
-                      onPress={() => {
-                        closeAllMenus();
-                        navigation.navigate('CreateGroup');
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.whiteActionBtnText}>Create Pack</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )
+              <View style={styles.emptyContainer}>
+                <Ionicons
+                  name={activeTab === 'DMs' ? 'chatbubbles-outline' : 'people-outline'}
+                  size={54}
+                  color={colors.tertiaryText}
+                />
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>
+                  No {activeTab === 'DMs' ? 'Direct Messages' : 'Packs'} Yet
+                </Text>
+                <Text style={[styles.emptySubtitle, { color: colors.subText }]}>
+                  {activeTab === 'DMs'
+                    ? 'Start chatting with friends or your pet companion!'
+                    : 'Create or join a Pack to start group chatting!'}
+                </Text>
+              </View>
             }
           />
         )}
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </TouchableWithoutFeedback>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  safe: {
     flex: 1,
-    backgroundColor: '#0B0713',
   },
   header: {
-    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    backgroundColor: '#13101E',
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#261E38',
-    zIndex: 100,
   },
-  headerButton: {
-    padding: 6,
-    borderRadius: 8,
-  },
-  headerRight: {
-    flexDirection: 'row',
+  iconBtn: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   segmentContainer: {
     flexDirection: 'row',
-    backgroundColor: '#0B0713',
-    borderRadius: 12,
+    borderRadius: 20,
     padding: 3,
+    width: 160,
+    height: 38,
     borderWidth: 1,
-    borderColor: '#261E38',
   },
   segmentTab: {
-    paddingHorizontal: 20,
-    paddingVertical: 6,
-    borderRadius: 9,
+    flex: 1,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  activeSegmentTab: {
-    backgroundColor: '#8B5CF6',
-  },
-  segmentTabText: {
+  segmentText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#71717A',
-  },
-  activeSegmentTabText: {
-    color: '#FFFFFF',
     fontWeight: '700',
-  },
-  menuBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 90,
   },
   dropdownMenu: {
     position: 'absolute',
-    top: 50,
+    top: 60,
     right: 16,
-    backgroundColor: '#161024',
-    borderRadius: 14,
-    paddingVertical: 6,
-    width: 170,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#3F2A60',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 10,
+    paddingVertical: 4,
+    width: 170,
     zIndex: 1000,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
   },
-  dropdownItem: {
-    paddingVertical: 12,
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
   },
-  dropdownItemText: {
+  menuText: {
     fontSize: 14,
-    color: '#F3E8FF',
     fontWeight: '600',
   },
-  list: {
-    paddingVertical: 8,
-    flexGrow: 1,
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
   },
   chatItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  activeChatItem: {
-    backgroundColor: '#161024',
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    gap: 12,
   },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    marginRight: 14,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   avatarFallback: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    justifyContent: 'center',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
-    marginRight: 14,
+    justifyContent: 'center',
   },
   chatInfo: {
     flex: 1,
+    justifyContent: 'center',
   },
   chatHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 4,
   },
   chatName: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    flex: 1,
-    marginRight: 8,
-  },
-  activeChatName: {
-    color: '#C084FC',
+    fontWeight: '700',
+    maxWidth: '70%',
   },
   timeText: {
-    fontSize: 12,
-    color: '#71717A',
+    fontSize: 11,
   },
   lastMsgRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
   lastMsgText: {
-    fontSize: 14,
-    color: '#A1A1AA',
-    flex: 1,
-    marginRight: 8,
+    fontSize: 13,
   },
-  badge: {
-    backgroundColor: '#8B5CF6',
-    borderRadius: 10,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    minWidth: 20,
+  emptyContainer: {
     alignItems: 'center',
-  },
-  badgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#1C152B',
-    marginLeft: 82,
-  },
-  center: {
-    flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
+    paddingTop: 80,
     paddingHorizontal: 32,
-    marginTop: 60,
-  },
-  emptyIconBg: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#161024',
-    borderWidth: 1,
-    borderColor: '#261E38',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 8,
+    marginTop: 16,
+    marginBottom: 6,
   },
-  emptyText: {
+  emptySubtitle: {
     fontSize: 13,
-    color: '#A1A1AA',
     textAlign: 'center',
     lineHeight: 18,
-    marginBottom: 24,
-  },
-  emptyActionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  purpleActionBtn: {
-    backgroundColor: '#8B5CF6',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  purpleActionBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  whiteActionBtn: {
-    backgroundColor: '#261E38',
-    borderWidth: 1,
-    borderColor: '#3F2A60',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  whiteActionBtnText: {
-    color: '#F3E8FF',
-    fontSize: 13,
-    fontWeight: '600',
   },
 });

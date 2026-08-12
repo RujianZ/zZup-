@@ -2,17 +2,17 @@ import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   SafeAreaView, Image, ScrollView,
-  Modal, TextInput, ActivityIndicator, Pressable,
+  Modal, TextInput, ActivityIndicator
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { updateProfile, deleteAccount } from '../../../lib/api/auth';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 import { PetSvgAvatar } from '../../../assets/pets';
-import { light, gradients, spacing, radius, typography, lightShadow } from '../../theme';
 
 const HOST_OUTFITS = [
   { id: 'host-default', name: 'Classic', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300' },
@@ -28,6 +28,7 @@ const PET_STAGE_ITEMS: { stage: 'child' | 'youth' | 'adult'; name: string }[] = 
 
 export default function ProfileScreen() {
   const { profile, refreshProfile } = useAuth();
+  const { themeMode, setThemeMode, colors, isDark } = useTheme();
   const navigation = useNavigation<any>();
 
   const [activeSubTab, setActiveSubTab] = useState<'zZuPer' | 'Pet'>('zZuPer');
@@ -111,18 +112,23 @@ export default function ProfileScreen() {
   ];
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar style="dark" />
-      <View style={styles.header}>
-        <Text style={styles.title}>Profile</Text>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
+      <StatusBar style={colors.statusBarStyle} />
+      <View style={[styles.header, { backgroundColor: colors.headerBg }]}>
+        <Text style={[styles.title, { color: colors.text }]}>Profile</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* zZuPer / Pet segment */}
-        <View style={styles.segment}>
+        <View style={[styles.segment, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
           {(['zZuPer', 'Pet'] as const).map(tab => (
-            <TouchableOpacity key={tab} style={[styles.segTab, activeSubTab === tab && styles.segTabActive]} onPress={() => setActiveSubTab(tab)} activeOpacity={0.8}>
-              <Text style={[styles.segText, activeSubTab === tab && styles.segTextActive]}>{tab}</Text>
+            <TouchableOpacity
+              key={tab}
+              style={[styles.segTab, activeSubTab === tab && { backgroundColor: colors.brand }]}
+              onPress={() => setActiveSubTab(tab)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.segText, { color: activeSubTab === tab ? '#FFFFFF' : colors.subText }]}>{tab}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -130,61 +136,70 @@ export default function ProfileScreen() {
         {/* Hero */}
         <View style={styles.hero}>
           <View style={styles.avatarWrap}>
-            <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatarRing}>
-              <View style={styles.avatarInner}>
+            <LinearGradient colors={[colors.brand, colors.brandSecondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatarRing}>
+              <View style={[styles.avatarInner, { backgroundColor: colors.bg }]}>
                 {isHostTab ? (
                   profile?.avatar_url ? (
                     <Image source={{ uri: profile.avatar_url }} style={styles.bigAvatar} />
                   ) : (
-                    <View style={[styles.bigAvatar, styles.fallback]}>
-                      <Ionicons name="person" size={72} color={light.brand} />
+                    <View style={[styles.bigAvatar, { backgroundColor: colors.cardMutedBg }]}>
+                      <Ionicons name="person" size={72} color={colors.brand} />
                     </View>
                   )
                 ) : (
-                  <View style={[styles.bigAvatar, styles.fallback]}>
+                  <View style={[styles.bigAvatar, { backgroundColor: colors.cardMutedBg }]}>
                     <PetSvgAvatar breed={currentPetBreed} stage={currentPetStage} size={150} />
                   </View>
                 )}
               </View>
             </LinearGradient>
-            <TouchableOpacity style={styles.closetFab} onPress={() => setShowClosetModal(true)} activeOpacity={0.85}>
-              <Ionicons name="shirt" size={17} color={light.white} />
+            <TouchableOpacity style={[styles.closetFab, { backgroundColor: colors.brand, borderColor: colors.bg }]} onPress={() => setShowClosetModal(true)} activeOpacity={0.85}>
+              <Ionicons name="shirt" size={17} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
 
           {isHostTab ? (
             <>
-              <Text style={styles.name}>{profile?.real_name ?? 'Not configured'}</Text>
-              <Text style={styles.subId}>zZuPer ID · #{profile?.zzup_id ?? '00001'}</Text>
+              <Text style={[styles.name, { color: colors.text }]}>{profile?.real_name ?? 'Not configured'}</Text>
+              <Text style={[styles.subId, { color: colors.brand }]}>zZuPer ID · #{profile?.zzup_id ?? '00001'}</Text>
               <View style={styles.badges}>
                 {profile?.edu_verified && (
-                  <View style={styles.chip}><Ionicons name="school" size={13} color={light.brand} /><Text style={styles.chipText}>Verified student</Text></View>
+                  <View style={[styles.chip, { backgroundColor: colors.cardMutedBg }]}>
+                    <Ionicons name="school" size={13} color={colors.brand} />
+                    <Text style={[styles.chipText, { color: colors.brand }]}>Verified student</Text>
+                  </View>
                 )}
                 {!!profile?.university && (
-                  <View style={styles.chipMuted}><Ionicons name="business-outline" size={13} color={light.textSecondary} /><Text style={styles.chipMutedText}>{profile.university}</Text></View>
+                  <View style={[styles.chipMuted, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+                    <Ionicons name="business-outline" size={13} color={colors.subText} />
+                    <Text style={[styles.chipMutedText, { color: colors.subText }]}>{profile.university}</Text>
+                  </View>
                 )}
               </View>
             </>
           ) : (
             <>
-              <Text style={styles.name}>{profile?.pet_name ?? 'Not configured'}</Text>
-              <View style={styles.chip}><Ionicons name="paw" size={13} color={light.brand} /><Text style={styles.chipText}>Lv.{profile?.pet_level ?? 1} · {profile?.pet_breed || 'Companion'}</Text></View>
+              <Text style={[styles.name, { color: colors.text }]}>{profile?.pet_name ?? 'Not configured'}</Text>
+              <View style={[styles.chip, { backgroundColor: colors.cardMutedBg }]}>
+                <Ionicons name="paw" size={13} color={colors.brand} />
+                <Text style={[styles.chipText, { color: colors.brand }]}>Lv.{profile?.pet_level ?? 1} · {profile?.pet_breed || 'Companion'}</Text>
+              </View>
               <View style={styles.xpBox}>
                 <View style={styles.xpTop}>
-                  <Text style={styles.xpLabel}>Level progress</Text>
-                  <Text style={styles.xpVal}>{xp % 100}/100 XP</Text>
+                  <Text style={[styles.xpLabel, { color: colors.subText }]}>Level progress</Text>
+                  <Text style={[styles.xpVal, { color: colors.text }]}>{xp % 100}/100 XP</Text>
                 </View>
-                <View style={styles.xpBar}>
-                  <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.xpFill, { width: `${Math.max(4, xpProgress * 100)}%` }]} />
+                <View style={[styles.xpBar, { backgroundColor: colors.border }]}>
+                  <LinearGradient colors={[colors.brand, colors.brandSecondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.xpFill, { width: `${Math.max(4, xpProgress * 100)}%` }]} />
                 </View>
               </View>
             </>
           )}
 
           {/* Bio card */}
-          <View style={styles.bioCard}>
-            <Text style={styles.bioLabel}>{isHostTab ? 'BIO' : 'PET PERSONA'}</Text>
-            <Text style={styles.bioText}>
+          <View style={[styles.bioCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+            <Text style={[styles.bioLabel, { color: colors.subText }]}>{isHostTab ? 'BIO' : 'PET PERSONA'}</Text>
+            <Text style={[styles.bioText, { color: colors.text }]}>
               {isHostTab
                 ? (profile?.bio || 'No bio yet. Tap Edit profile to write one.')
                 : (profile?.pet_bio || 'No persona written yet.')}
@@ -192,13 +207,52 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Theme Selector Section */}
+        <View style={styles.themeSection}>
+          <Text style={[styles.sectionTitle, { color: colors.subText }]}>APPEARANCE & THEME</Text>
+          <View style={[styles.themePillContainer, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+            <TouchableOpacity
+              style={[styles.themeOption, themeMode === 'light' && { backgroundColor: colors.brand }]}
+              onPress={() => setThemeMode('light')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="sunny" size={16} color={themeMode === 'light' ? '#FFFFFF' : colors.subText} />
+              <Text style={[styles.themeOptionText, { color: themeMode === 'light' ? '#FFFFFF' : colors.subText }]}>
+                Light Mint
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.themeOption, themeMode === 'dark' && { backgroundColor: colors.brand }]}
+              onPress={() => setThemeMode('dark')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="moon" size={16} color={themeMode === 'dark' ? '#FFFFFF' : colors.subText} />
+              <Text style={[styles.themeOptionText, { color: themeMode === 'dark' ? '#FFFFFF' : colors.subText }]}>
+                Dark Purple
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.themeOption, themeMode === 'system' && { backgroundColor: colors.brand }]}
+              onPress={() => setThemeMode('system')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="phone-portrait-outline" size={16} color={themeMode === 'system' ? '#FFFFFF' : colors.subText} />
+              <Text style={[styles.themeOptionText, { color: themeMode === 'system' ? '#FFFFFF' : colors.subText }]}>
+                System
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Actions */}
-        <View style={styles.actionCard}>
+        <View style={[styles.actionCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
           {actions.map((a, i) => (
-            <TouchableOpacity key={a.label} style={[styles.actionItem, i < actions.length - 1 && styles.actionDivider]} onPress={a.onPress} activeOpacity={0.6}>
-              <Ionicons name={a.icon as any} size={20} color={a.danger ? light.danger : light.text} />
-              <Text style={[styles.actionText, a.danger && { color: light.danger }]}>{a.label}</Text>
-              <Feather name="chevron-right" size={18} color={light.textTertiary} />
+            <TouchableOpacity key={a.label} style={[styles.actionItem, i < actions.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: 1 }]} onPress={a.onPress} activeOpacity={0.6}>
+              <Ionicons name={a.icon as any} size={20} color={a.danger ? '#EF4444' : colors.text} />
+              <Text style={[styles.actionText, { color: a.danger ? '#EF4444' : colors.text }]}>{a.label}</Text>
+              <Feather name="chevron-right" size={18} color={colors.tertiaryText} />
             </TouchableOpacity>
           ))}
         </View>
@@ -207,18 +261,18 @@ export default function ProfileScreen() {
       {/* Edit modal */}
       <Modal visible={showEditModal} transparent animationType="fade" onRequestClose={() => setShowEditModal(false)}>
         <View style={styles.modalBg}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Edit {isHostTab ? 'profile' : 'pet'}</Text>
-            <Text style={styles.inputLabel}>Name</Text>
-            <TextInput style={styles.input} value={editName} onChangeText={setEditName} placeholder="Enter name" placeholderTextColor={light.textTertiary} maxLength={30} />
-            <Text style={styles.inputLabel}>Bio</Text>
-            <TextInput style={[styles.input, styles.textArea]} value={editBio} onChangeText={setEditBio} placeholder="Say something about yourself" placeholderTextColor={light.textTertiary} multiline maxLength={150} />
+          <View style={[styles.modalCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Edit {isHostTab ? 'profile' : 'pet'}</Text>
+            <Text style={[styles.inputLabel, { color: colors.subText }]}>Name</Text>
+            <TextInput style={[styles.input, { backgroundColor: colors.bg, color: colors.text, borderColor: colors.border }]} value={editName} onChangeText={setEditName} placeholder="Enter name" placeholderTextColor={colors.tertiaryText} maxLength={30} />
+            <Text style={[styles.inputLabel, { color: colors.subText }]}>Bio</Text>
+            <TextInput style={[styles.input, styles.textArea, { backgroundColor: colors.bg, color: colors.text, borderColor: colors.border }]} value={editBio} onChangeText={setEditBio} placeholder="Say something about yourself" placeholderTextColor={colors.tertiaryText} multiline maxLength={150} />
             <View style={styles.modalRow}>
-              <TouchableOpacity style={styles.modalCancel} onPress={() => setShowEditModal(false)} disabled={saving} activeOpacity={0.7}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
+              <TouchableOpacity style={[styles.modalCancel, { backgroundColor: colors.bg }]} onPress={() => setShowEditModal(false)} disabled={saving} activeOpacity={0.7}>
+                <Text style={[styles.modalCancelText, { color: colors.text }]}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSave} onPress={handleSaveProfile} disabled={saving} activeOpacity={0.85}>
-                {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.modalSaveText}>Save</Text>}
+              <TouchableOpacity style={[styles.modalSave, { backgroundColor: colors.brand }]} onPress={handleSaveProfile} disabled={saving} activeOpacity={0.85}>
+                {saving ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.modalSaveText}>Save</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -228,33 +282,33 @@ export default function ProfileScreen() {
       {/* Closet modal */}
       <Modal visible={showClosetModal} transparent animationType="fade" onRequestClose={() => setShowClosetModal(false)}>
         <View style={styles.modalBg}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{isHostTab ? 'Closet' : 'Pet form'}</Text>
-            <Text style={styles.modalSub}>{isHostTab ? 'Pick an outfit' : `Choose a growth form for ${profile?.pet_name || 'your pet'}`}</Text>
+          <View style={[styles.modalCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>{isHostTab ? 'Closet' : 'Pet form'}</Text>
+            <Text style={[styles.modalSub, { color: colors.subText }]}>{isHostTab ? 'Pick an outfit' : `Choose a growth form for ${profile?.pet_name || 'your pet'}`}</Text>
             <ScrollView style={{ maxHeight: 340 }} contentContainerStyle={styles.closetGrid}>
               {isHostTab
                 ? HOST_OUTFITS.map(item => {
                     const sel = profile?.avatar_url === item.url;
                     return (
-                      <TouchableOpacity key={item.id} style={[styles.closetItem, sel && styles.closetItemSel]} onPress={() => handleSelectOutfit(item.url, item.name)} disabled={saving} activeOpacity={0.85}>
+                      <TouchableOpacity key={item.id} style={[styles.closetItem, { backgroundColor: colors.bg, borderColor: sel ? colors.brand : colors.border }]} onPress={() => handleSelectOutfit(item.url, item.name)} disabled={saving} activeOpacity={0.85}>
                         <Image source={{ uri: item.url }} style={styles.closetImg} />
-                        <Text style={[styles.closetName, sel && { color: light.brand }]}>{item.name}</Text>
-                        {sel && <View style={styles.check}><Ionicons name="checkmark-circle" size={20} color={light.brand} /></View>}
+                        <Text style={[styles.closetName, { color: sel ? colors.brand : colors.text }]}>{item.name}</Text>
+                        {sel && <View style={styles.check}><Ionicons name="checkmark-circle" size={20} color={colors.brand} /></View>}
                       </TouchableOpacity>
                     );
                   })
                 : PET_STAGE_ITEMS.map(item => {
                     const sel = currentPetStage === item.stage;
                     return (
-                      <TouchableOpacity key={item.stage} style={[styles.closetItem, sel && styles.closetItemSel]} onPress={() => handleSelectPetStage(item.stage, item.name)} disabled={saving} activeOpacity={0.85}>
+                      <TouchableOpacity key={item.stage} style={[styles.closetItem, { backgroundColor: colors.bg, borderColor: sel ? colors.brand : colors.border }]} onPress={() => handleSelectPetStage(item.stage, item.name)} disabled={saving} activeOpacity={0.85}>
                         <View style={styles.petBox}><PetSvgAvatar breed={currentPetBreed} stage={item.stage} size={72} /></View>
-                        <Text style={[styles.closetName, sel && { color: light.brand }]}>{item.name}</Text>
-                        {sel && <View style={styles.check}><Ionicons name="checkmark-circle" size={20} color={light.brand} /></View>}
+                        <Text style={[styles.closetName, { color: sel ? colors.brand : colors.text }]}>{item.name}</Text>
+                        {sel && <View style={styles.check}><Ionicons name="checkmark-circle" size={20} color={colors.brand} /></View>}
                       </TouchableOpacity>
                     );
                   })}
             </ScrollView>
-            <TouchableOpacity style={styles.closetClose} onPress={() => setShowClosetModal(false)} disabled={saving} activeOpacity={0.8}>
+            <TouchableOpacity style={[styles.closetClose, { backgroundColor: colors.brand }]} onPress={() => setShowClosetModal(false)} disabled={saving} activeOpacity={0.8}>
               <Text style={styles.closetCloseText}>Done</Text>
             </TouchableOpacity>
           </View>
@@ -273,69 +327,70 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: light.bg },
-  header: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.sm },
-  title: { ...typography.h1, color: light.text },
-  scroll: { paddingBottom: spacing['3xl'] },
+  safe: { flex: 1 },
+  header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12 },
+  title: { fontSize: 26, fontWeight: '800' },
+  scroll: { paddingBottom: 40 },
 
-  segment: { flexDirection: 'row', gap: 4, marginHorizontal: spacing.lg, marginBottom: spacing.lg, backgroundColor: light.surfaceHi, borderRadius: radius.md, padding: 4 },
-  segTab: { flex: 1, height: 38, borderRadius: radius.sm, alignItems: 'center', justifyContent: 'center' },
-  segTabActive: { backgroundColor: light.bg, ...lightShadow.card, shadowOpacity: 0.08 },
-  segText: { ...typography.subtle, color: light.textSecondary, fontWeight: '600' },
-  segTextActive: { color: light.text, fontWeight: '700' },
+  segment: { flexDirection: 'row', gap: 4, marginHorizontal: 20, marginBottom: 20, borderRadius: 14, padding: 4, borderWidth: 1 },
+  segTab: { flex: 1, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  segText: { fontSize: 14, fontWeight: '600' },
 
-  hero: { alignItems: 'center', paddingHorizontal: spacing.lg },
-  avatarWrap: { marginBottom: spacing.base },
+  hero: { alignItems: 'center', paddingHorizontal: 20 },
+  avatarWrap: { marginBottom: 16 },
   avatarRing: { width: 168, height: 168, borderRadius: 84, alignItems: 'center', justifyContent: 'center' },
-  avatarInner: { width: 158, height: 158, borderRadius: 79, backgroundColor: light.bg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarInner: { width: 158, height: 158, borderRadius: 79, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   bigAvatar: { width: 150, height: 150, borderRadius: 75 },
-  fallback: { backgroundColor: light.brandSoft, alignItems: 'center', justifyContent: 'center' },
-  closetFab: { position: 'absolute', right: 6, bottom: 6, width: 42, height: 42, borderRadius: 21, backgroundColor: light.brand, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: light.bg },
+  closetFab: { position: 'absolute', right: 6, bottom: 6, width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', borderWidth: 3 },
 
-  name: { ...typography.h1, color: light.text, marginTop: spacing.xs },
-  subId: { ...typography.subtle, color: light.textSecondary, marginTop: 2 },
-  badges: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md, flexWrap: 'wrap', justifyContent: 'center' },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: light.brandSoft, paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.full, marginTop: spacing.sm },
-  chipText: { ...typography.caption, color: light.brand, fontWeight: '700' },
-  chipMuted: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: light.surfaceHi, paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.full },
-  chipMutedText: { ...typography.caption, color: light.textSecondary, fontWeight: '600' },
+  name: { fontSize: 24, fontWeight: '800', marginTop: 4 },
+  subId: { fontSize: 14, fontWeight: '700', marginTop: 2 },
+  badges: { flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap', justifyContent: 'center' },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  chipText: { fontSize: 13, fontWeight: '700' },
+  chipMuted: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1 },
+  chipMutedText: { fontSize: 13, fontWeight: '600' },
 
-  xpBox: { width: '100%', marginTop: spacing.lg },
-  xpTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm },
-  xpLabel: { ...typography.caption, color: light.textSecondary, fontWeight: '600' },
-  xpVal: { ...typography.caption, color: light.text, fontWeight: '700' },
-  xpBar: { height: 8, borderRadius: 4, backgroundColor: light.surfaceHi, overflow: 'hidden' },
+  xpBox: { width: '100%', marginTop: 20 },
+  xpTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  xpLabel: { fontSize: 13, fontWeight: '600' },
+  xpVal: { fontSize: 13, fontWeight: '700' },
+  xpBar: { height: 8, borderRadius: 4, overflow: 'hidden' },
   xpFill: { height: '100%', borderRadius: 4 },
 
-  bioCard: { width: '100%', backgroundColor: light.bgMuted, borderRadius: radius.lg, padding: spacing.base, marginTop: spacing.lg },
-  bioLabel: { ...typography.micro, color: light.textTertiary, letterSpacing: 0.8, marginBottom: 6 },
-  bioText: { ...typography.body, color: light.text, lineHeight: 21 },
+  bioCard: { width: '100%', borderRadius: 18, padding: 16, marginTop: 20, borderWidth: 1 },
+  bioLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 6 },
+  bioText: { fontSize: 15, lineHeight: 21 },
 
-  actionCard: { marginHorizontal: spacing.lg, marginTop: spacing.xl, backgroundColor: light.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: light.border, overflow: 'hidden' },
-  actionItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.base, paddingVertical: spacing.base },
-  actionDivider: { borderBottomWidth: 1, borderBottomColor: light.border },
-  actionText: { ...typography.body, color: light.text, fontWeight: '600', flex: 1 },
+  themeSection: { marginHorizontal: 20, marginTop: 24 },
+  sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, marginBottom: 8 },
+  themePillContainer: { flexDirection: 'row', borderRadius: 16, padding: 4, borderWidth: 1, gap: 4 },
+  themeOption: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 40, borderRadius: 12 },
+  themeOptionText: { fontSize: 12, fontWeight: '700' },
 
-  modalBg: { flex: 1, backgroundColor: 'rgba(11,11,15,0.45)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing.xl },
-  modalCard: { width: '100%', maxWidth: 360, backgroundColor: light.surface, borderRadius: radius.xl, padding: spacing.xl, ...lightShadow.card },
-  modalTitle: { ...typography.h2, color: light.text, marginBottom: spacing.xs },
-  modalSub: { ...typography.subtle, color: light.textSecondary, marginBottom: spacing.lg },
-  inputLabel: { ...typography.caption, color: light.textSecondary, fontWeight: '600', marginTop: spacing.md, marginBottom: spacing.sm },
-  input: { backgroundColor: light.surfaceHi, borderRadius: radius.md, paddingHorizontal: spacing.base, height: 50, ...typography.body, color: light.text },
-  textArea: { height: 96, paddingTop: spacing.md, textAlignVertical: 'top' },
-  modalRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xl },
-  modalCancel: { flex: 1, height: 50, borderRadius: radius.full, backgroundColor: light.surfaceHi, alignItems: 'center', justifyContent: 'center' },
-  modalCancelText: { ...typography.body, color: light.text, fontWeight: '700' },
-  modalSave: { flex: 1, height: 50, borderRadius: radius.full, backgroundColor: light.text, alignItems: 'center', justifyContent: 'center' },
-  modalSaveText: { ...typography.body, color: light.white, fontWeight: '700' },
+  actionCard: { marginHorizontal: 20, marginTop: 24, borderRadius: 18, borderWidth: 1, overflow: 'hidden' },
+  actionItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 16 },
+  actionText: { fontSize: 15, fontWeight: '600', flex: 1 },
 
-  closetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, justifyContent: 'center', paddingVertical: spacing.sm },
-  closetItem: { width: 96, alignItems: 'center', padding: spacing.md, borderRadius: radius.lg, borderWidth: 1.5, borderColor: light.border, backgroundColor: light.bg },
-  closetItemSel: { borderColor: light.brand, backgroundColor: light.brandSoft },
-  closetImg: { width: 64, height: 64, borderRadius: 32, marginBottom: spacing.sm },
-  petBox: { width: 72, height: 72, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xs },
-  closetName: { ...typography.caption, color: light.text, fontWeight: '600' },
+  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
+  modalCard: { width: '100%', maxWidth: 360, borderRadius: 24, padding: 24, borderWidth: 1 },
+  modalTitle: { fontSize: 20, fontWeight: '800', marginBottom: 4 },
+  modalSub: { fontSize: 14, marginBottom: 16 },
+  inputLabel: { fontSize: 13, fontWeight: '600', marginTop: 12, marginBottom: 6 },
+  input: { borderRadius: 14, paddingHorizontal: 16, height: 50, fontSize: 15, borderWidth: 1 },
+  textArea: { height: 96, paddingTop: 12, textAlignVertical: 'top' },
+  modalRow: { flexDirection: 'row', gap: 12, marginTop: 24 },
+  modalCancel: { flex: 1, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
+  modalCancelText: { fontSize: 15, fontWeight: '700' },
+  modalSave: { flex: 1, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
+  modalSaveText: { fontSize: 15, color: '#FFFFFF', fontWeight: '700' },
+
+  closetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'center', paddingVertical: 8 },
+  closetItem: { width: 96, alignItems: 'center', padding: 12, borderRadius: 16, borderWidth: 1.5 },
+  closetImg: { width: 64, height: 64, borderRadius: 32, marginBottom: 8 },
+  petBox: { width: 72, height: 72, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  closetName: { fontSize: 13, fontWeight: '600' },
   check: { position: 'absolute', top: 6, right: 6 },
-  closetClose: { marginTop: spacing.lg, height: 50, borderRadius: radius.full, backgroundColor: light.text, alignItems: 'center', justifyContent: 'center' },
-  closetCloseText: { ...typography.body, color: light.white, fontWeight: '700' },
+  closetClose: { marginTop: 20, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
+  closetCloseText: { fontSize: 15, color: '#FFFFFF', fontWeight: '700' },
 });

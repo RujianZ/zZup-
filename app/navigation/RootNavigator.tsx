@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { light } from '../theme';
 
 // Auth
@@ -49,20 +50,22 @@ function AuthStack() {
 }
 
 function MainTabs() {
+  const { colors } = useTheme();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#13101E',
-          borderTopColor: '#261E38',
+          backgroundColor: colors.tabBarBg,
+          borderTopColor: colors.tabBarBorder,
           borderTopWidth: 1,
           height: 84,
           paddingBottom: 24,
           paddingTop: 8,
         },
-        tabBarActiveTintColor: '#C084FC',
-        tabBarInactiveTintColor: '#71717A',
+        tabBarActiveTintColor: colors.brand,
+        tabBarInactiveTintColor: colors.tertiaryText,
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: 2 },
         tabBarIcon: ({ focused, color }) => {
           const map: Record<string, [any, any]> = {
