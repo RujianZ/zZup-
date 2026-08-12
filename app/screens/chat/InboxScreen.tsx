@@ -62,8 +62,10 @@ export default function InboxScreen() {
 
   const load = useCallback(async () => {
     const data = await listConversations();
-    // Sort by last_message_at descending
+    // zZuPer Talk is ALWAYS pinned to top, others sorted by last_message_at descending
     setConversations(data.sort((a, b) => {
+      if (a.kind === 'zzuper_talk') return -1;
+      if (b.kind === 'zzuper_talk') return 1;
       const timeA = new Date(a.last_message_at || 0).getTime();
       const timeB = new Date(b.last_message_at || 0).getTime();
       return timeB - timeA;
