@@ -7,6 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 import { PetSvgAvatar } from '../../../assets/pets';
 import {
@@ -24,6 +25,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export default function FreeTravelScreen() {
   const navigation = useNavigation<any>();
   const { profile } = useAuth();
+  const { colors } = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -279,10 +281,10 @@ export default function FreeTravelScreen() {
   const isReturned = activePost && activePost.ends_at && new Date() >= new Date(activePost.ends_at);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
+      <StatusBar style={colors.statusBarStyle} />
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.border }]}>
         <TouchableOpacity 
           style={styles.backBtn} 
           onPress={() => {
@@ -293,12 +295,12 @@ export default function FreeTravelScreen() {
             }
           }}
         >
-          <Ionicons name="arrow-back" size={24} color="#7C3AED" />
+          <Ionicons name="arrow-back" size={24} color={colors.brand} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>zZuPer Roam</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>zZuPer Roam</Text>
         {activePost ? (
           <TouchableOpacity style={styles.refreshBtn} onPress={handleRefresh}>
-            <Ionicons name="refresh" size={22} color="#7C3AED" />
+            <Ionicons name="refresh" size={22} color={colors.brand} />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 40 }} />

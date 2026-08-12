@@ -8,15 +8,18 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 import { startMatching, cancelMatching, subscribeToMatchResult } from '../../../lib/api/match';
 import { PetSvgAvatar } from '../../../assets/pets';
-import { light, gradients, spacing, radius, typography, lightShadow } from '../../theme';
+import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function TravelModeScreen() {
   const navigation = useNavigation<any>();
   const { session, profile } = useAuth();
+  const { colors } = useTheme();
+  const isDark = colors.isDark;
   const user = session?.user;
 
   const [matching, setMatching] = useState(false);
@@ -30,7 +33,7 @@ export default function TravelModeScreen() {
   const [showTopicModal, setShowTopicModal] = useState(false);
   const [topicChoice, setTopicChoice] = useState<'anything' | 'custom'>('anything');
   const [customTopic, setCustomTopic] = useState('');
-  const [alertConfig, setAlertConfig] = useState<{ visible: boolean; title: string; message: string }>({ visible: false, title: '', message: '' });
+  const [alertConfig, setAlertConfig] = useState<{ visible: boolean; title: string; message: string; type?: 'error' | 'info' | 'success' }>({ visible: false, title: '', message: '' });
 
   const petBreed = profile?.pet_breed || 'dog';
   const petStage = profile?.pet_stage || 'child';
@@ -64,7 +67,7 @@ export default function TravelModeScreen() {
     try {
       const result = await startMatching(finalTopic);
       setLoading(false);
-      if (result.error) { setAlertConfig({ visible: true, title: 'Match failed', message: result.error }); return; }
+      if (result.error) { setAlertConfig({ visible: true, title: 'Match failed', message: result.error, type: 'error' }); return; }
       if (result.status === 'matched' && result.groupId) {
         setMatchedGroupId(result.groupId); setShowMatchedModal(true);
       } else if (result.status === 'waiting') {
@@ -77,7 +80,7 @@ export default function TravelModeScreen() {
       }
     } catch (e: any) {
       setLoading(false);
-      setAlertConfig({ visible: true, title: 'Error', message: e.message || 'Network request failed' });
+      setAlertConfig({ visible: true, title: 'Error', message: e.message || 'Network request failed', type: 'error' });
     }
   };
 
@@ -91,66 +94,114 @@ export default function TravelModeScreen() {
     finally { setLoading(false); }
   };
 
+  const iconGradientColors: [string, string] = !isDark
+    ? ['#10B981', '#059669']
+    : ['#8B5CF6', '#7C3AED'];
+
+  const pulseIconBg = !isDark ? '#059669' : '#8B5CF6';
+
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar style="dark" />
-      <View style={styles.header}><Text style={styles.title}>Explore</Text></View>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
+      <StatusBar style={colors.statusBarStyle} />
+
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.border }]}>
+        <Text style={[styles.title, { color: colors.text }]}>Explore</Text>
+      </View>
 
       <View style={styles.content}>
-        <Text style={styles.sectionLabel}>DISCOVER</Text>
+        <Text style={[styles.sectionLabel, { color: colors.tertiaryText }]}>DISCOVER</Text>
 
-        <TouchableOpacity style={styles.card} activeOpacity={0.85} onPress={() => navigation.navigate('FreeTravel')}>
-          <LinearGradient colors={gradients.brand} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardIcon}>
-            <Ionicons name="paper-plane" size={26} color="#fff" />
+        {/* zZuPer Roam Card */}
+        <TouchableOpacity
+          style={[styles.card, { backgroundColor: colors.cardBg }]}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('FreeTravel')}
+        >
+          <LinearGradient colors={iconGradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardIcon}>
+            <Ionicons name="paper-plane" size={26} color="#ffffff" />
           </LinearGradient>
           <View style={styles.cardBody}>
             <View style={styles.cardHead}>
-              <Text style={styles.cardTitle}>zZuPer Roam</Text>
-              <View style={styles.badge}><Text style={styles.badgeText}>6 hours</Text></View>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>zZuPer Roam</Text>
+              <View style={[styles.badge, { backgroundColor: colors.cardMutedBg }]}>
+                <Text style={[styles.badgeText, { color: colors.brand }]}>6 hours</Text>
+              </View>
             </View>
-            <Text style={styles.cardDesc}>Send your zZuPer out to roam campus and meet new friends.</Text>
+            <Text style={[styles.cardDesc, { color: colors.subText }]}>
+              Send your zZuPer out to roam campus and meet new friends.
+            </Text>
           </View>
-          <Feather name="chevron-right" size={20} color={light.textTertiary} />
+          <Feather name="chevron-right" size={20} color={colors.tertiaryText} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.card} activeOpacity={0.85} onPress={handleOpenMatchModal}>
-          <View style={[styles.cardIcon, { backgroundColor: light.accentPink }]}>
-            <Ionicons name="pulse" size={26} color="#fff" />
+        {/* zZuPer Pulse Card */}
+        <TouchableOpacity
+          style={[styles.card, { backgroundColor: colors.cardBg }]}
+          activeOpacity={0.85}
+          onPress={handleOpenMatchModal}
+        >
+          <View style={[styles.cardIcon, { backgroundColor: pulseIconBg }]}>
+            <Ionicons name="pulse" size={26} color="#ffffff" />
           </View>
           <View style={styles.cardBody}>
             <View style={styles.cardHead}>
-              <Text style={styles.cardTitle}>zZuPer Pulse</Text>
-              <View style={[styles.badge, { backgroundColor: light.accentPinkSoft }]}><Text style={[styles.badgeText, { color: light.accentPink }]}>Live</Text></View>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>zZuPer Pulse</Text>
+              <View style={[styles.badge, { backgroundColor: colors.cardMutedBg }]}>
+                <Text style={[styles.badgeText, { color: colors.brand }]}>Live</Text>
+              </View>
             </View>
-            <Text style={styles.cardDesc}>Let AI break the ice and match you with someone new, instantly.</Text>
+            <Text style={[styles.cardDesc, { color: colors.subText }]}>
+              Let AI break the ice and match you with someone new, instantly.
+            </Text>
           </View>
-          <Feather name="chevron-right" size={20} color={light.textTertiary} />
+          <Feather name="chevron-right" size={20} color={colors.tertiaryText} />
         </TouchableOpacity>
       </View>
 
       {/* Topic modal */}
       <Modal visible={showTopicModal} transparent animationType="fade">
         <View style={styles.modalBg}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>What's on your mind?</Text>
-            <Text style={styles.modalSub}>Pick a topic so we can pair you well.</Text>
+          <View style={[styles.modalCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>What's on your mind?</Text>
+            <Text style={[styles.modalSub, { color: colors.subText }]}>Pick a topic so we can pair you well.</Text>
             {(['anything', 'custom'] as const).map(opt => (
-              <TouchableOpacity key={opt} style={[styles.optionBtn, topicChoice === opt && styles.optionActive]} onPress={() => setTopicChoice(opt)} activeOpacity={0.8}>
-                <Ionicons name={topicChoice === opt ? 'radio-button-on' : 'radio-button-off'} size={20} color={topicChoice === opt ? light.brand : light.textTertiary} />
-                <Text style={[styles.optionText, topicChoice === opt && styles.optionTextActive]}>
+              <TouchableOpacity
+                key={opt}
+                style={[
+                  styles.optionBtn,
+                  { backgroundColor: colors.bg, borderColor: colors.border },
+                  topicChoice === opt && { borderColor: colors.brand, backgroundColor: colors.cardMutedBg }
+                ]}
+                onPress={() => setTopicChoice(opt)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name={topicChoice === opt ? 'radio-button-on' : 'radio-button-off'} size={20} color={topicChoice === opt ? colors.brand : colors.tertiaryText} />
+                <Text style={[styles.optionText, { color: colors.subText }, topicChoice === opt && { color: colors.text, fontWeight: '700' }]}>
                   {opt === 'anything' ? 'Anything — just vibing' : 'Custom topic (max 10)'}
                 </Text>
               </TouchableOpacity>
             ))}
             {topicChoice === 'custom' && (
-              <View style={styles.customWrap}>
-                <TextInput style={styles.customInput} placeholder="e.g. Tennis, Coding" placeholderTextColor={light.textTertiary} maxLength={10} value={customTopic} onChangeText={setCustomTopic} />
-                <Text style={styles.counter}>{customTopic.length}/10</Text>
+              <View style={[styles.customWrap, { backgroundColor: colors.bg, borderColor: colors.brand }]}>
+                <TextInput
+                  style={[styles.customInput, { color: colors.text }]}
+                  placeholder="e.g. Tennis, Coding"
+                  placeholderTextColor={colors.tertiaryText}
+                  maxLength={10}
+                  value={customTopic}
+                  onChangeText={setCustomTopic}
+                />
+                <Text style={[styles.counter, { color: colors.tertiaryText }]}>{customTopic.length}/10</Text>
               </View>
             )}
             <View style={styles.modalRow}>
-              <TouchableOpacity style={styles.modalCancel} onPress={() => setShowTopicModal(false)} activeOpacity={0.8}><Text style={styles.modalCancelText}>Cancel</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirm} onPress={handleConfirmStartMatch} activeOpacity={0.85}><Text style={styles.modalConfirmText}>Start</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.modalCancel, { backgroundColor: colors.cardMutedBg }]} onPress={() => setShowTopicModal(false)} activeOpacity={0.8}>
+                <Text style={[styles.modalCancelText, { color: colors.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalConfirm, { backgroundColor: colors.brand }]} onPress={handleConfirmStartMatch} activeOpacity={0.85}>
+                <Text style={styles.modalConfirmText}>Start</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -158,21 +209,25 @@ export default function TravelModeScreen() {
 
       {/* Matching fullscreen */}
       <Modal visible={matching} transparent={false} animationType="slide">
-        <SafeAreaView style={styles.matchScreen}>
+        <SafeAreaView style={[styles.matchScreen, { backgroundColor: colors.bg }]}>
           <View style={styles.matchHeader}>
-            <TouchableOpacity style={styles.matchBack} onPress={handleCancelMatch} activeOpacity={0.7}>
-              <Feather name="x" size={24} color={light.text} />
+            <TouchableOpacity style={[styles.matchBack, { backgroundColor: colors.cardMutedBg }]} onPress={handleCancelMatch} activeOpacity={0.7}>
+              <Feather name="x" size={24} color={colors.text} />
             </TouchableOpacity>
           </View>
           <View style={styles.matchCenter}>
-            <View style={styles.radarOuter}><View style={styles.radarMid}><View style={styles.radarInner}>
-              <PetSvgAvatar breed={petBreed} stage={petStage} size={72} />
-            </View></View></View>
-            <Text style={styles.matchTitle}>{profile?.pet_name || 'Your zZuPer'} is looking…</Text>
-            <Text style={styles.matchTimeLabel}>MATCHING</Text>
-            <Text style={styles.matchTime}>{formatMatchTime(matchSecs)}</Text>
-            <TouchableOpacity style={styles.matchCancel} onPress={handleCancelMatch} activeOpacity={0.85}>
-              <Text style={styles.matchCancelText}>Cancel</Text>
+            <View style={styles.radarOuter}>
+              <View style={styles.radarMid}>
+                <View style={[styles.radarInner, { backgroundColor: colors.cardMutedBg }]}>
+                  <PetSvgAvatar breed={petBreed} stage={petStage} size={72} />
+                </View>
+              </View>
+            </View>
+            <Text style={[styles.matchTitle, { color: colors.text }]}>{profile?.pet_name || 'Your zZuPer'} is looking…</Text>
+            <Text style={[styles.matchTimeLabel, { color: colors.tertiaryText }]}>MATCHING</Text>
+            <Text style={[styles.matchTime, { color: colors.brand }]}>{formatMatchTime(matchSecs)}</Text>
+            <TouchableOpacity style={[styles.matchCancel, { backgroundColor: colors.cardMutedBg }]} onPress={handleCancelMatch} activeOpacity={0.85}>
+              <Text style={[styles.matchCancelText, { color: colors.text }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </SafeAreaView>
@@ -181,87 +236,85 @@ export default function TravelModeScreen() {
       {/* Matched popup */}
       <Modal visible={showMatchedModal} transparent animationType="fade">
         <View style={styles.modalBg}>
-          <View style={styles.modalCard}>
-            <View style={styles.successIcon}><Ionicons name="sparkles" size={40} color={light.brand} /></View>
-            <Text style={styles.matchedTitle}>It's a match!</Text>
-            <Text style={styles.matchedDesc}>Jump into the chat and say hi.</Text>
+          <View style={[styles.modalCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+            <View style={[styles.successIcon, { backgroundColor: colors.cardMutedBg }]}><Ionicons name="sparkles" size={40} color={colors.brand} /></View>
+            <Text style={[styles.matchedTitle, { color: colors.text }]}>It's a match!</Text>
+            <Text style={[styles.matchedDesc, { color: colors.subText }]}>Jump into the chat and say hi.</Text>
             <View style={styles.modalRow}>
-              <TouchableOpacity style={styles.modalCancel} onPress={() => { setShowMatchedModal(false); setMatchedGroupId(null); }} activeOpacity={0.8}><Text style={styles.modalCancelText}>Later</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirm} onPress={() => { setShowMatchedModal(false); if (matchedGroupId) navigation.navigate('AgentChat', { groupId: matchedGroupId, groupName: 'Telepathy Chat' }); setMatchedGroupId(null); }} activeOpacity={0.85}><Text style={styles.modalConfirmText}>Join chat</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.modalCancel, { backgroundColor: colors.cardMutedBg }]} onPress={() => { setShowMatchedModal(false); setMatchedGroupId(null); }} activeOpacity={0.8}>
+                <Text style={[styles.modalCancelText, { color: colors.text }]}>Later</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalConfirm, { backgroundColor: colors.brand }]} onPress={() => { setShowMatchedModal(false); if (matchedGroupId) navigation.navigate('AgentChat', { groupId: matchedGroupId, groupName: 'Telepathy Chat' }); setMatchedGroupId(null); }} activeOpacity={0.85}>
+                <Text style={styles.modalConfirmText}>Join chat</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
       {loading && !matching && (
-        <View style={styles.globalLoading}><ActivityIndicator size="large" color={light.brand} /></View>
+        <View style={styles.globalLoading}><ActivityIndicator size="large" color={colors.brand} /></View>
       )}
 
-      {alertConfig.visible && (
-        <Modal transparent visible animationType="fade">
-          <View style={styles.modalBg}>
-            <View style={styles.modalCard}>
-              <View style={[styles.successIcon, { backgroundColor: light.dangerSoft }]}><Ionicons name="alert-circle" size={36} color={light.danger} /></View>
-              <Text style={styles.matchedTitle}>{alertConfig.title}</Text>
-              <Text style={styles.matchedDesc}>{alertConfig.message}</Text>
-              <TouchableOpacity style={[styles.modalConfirm, { width: '100%' }]} onPress={() => setAlertConfig({ visible: false, title: '', message: '' })}><Text style={styles.modalConfirmText}>Got it</Text></TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-      )}
+      {/* Luxury Alert Modal */}
+      <LuxuryAlertModal
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: light.bg },
-  header: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.sm },
-  title: { ...typography.h1, color: light.text },
-  content: { flex: 1, paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.base },
-  sectionLabel: { ...typography.micro, color: light.textTertiary, letterSpacing: 1, marginBottom: spacing.xs },
+  safe: { flex: 1 },
+  header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12 },
+  title: { fontSize: 26, fontWeight: '800' },
+  content: { flex: 1, paddingHorizontal: 20, paddingTop: 16, gap: 14 },
+  sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
 
-  card: { flexDirection: 'row', alignItems: 'center', gap: spacing.base, backgroundColor: light.surface, borderRadius: radius.xl, padding: spacing.lg, borderWidth: 1, borderColor: light.border, ...lightShadow.card },
-  cardIcon: { width: 56, height: 56, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },
+  card: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 20, padding: 16, borderWidth: 0 },
+  cardIcon: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   cardBody: { flex: 1, gap: 4 },
-  cardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  cardTitle: { ...typography.h3, color: light.text },
-  cardDesc: { ...typography.caption, color: light.textSecondary, lineHeight: 18 },
-  badge: { backgroundColor: light.brandSoft, paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.full },
-  badgeText: { ...typography.micro, color: light.brand, fontWeight: '700' },
+  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cardTitle: { fontSize: 17, fontWeight: '700' },
+  cardDesc: { fontSize: 13, lineHeight: 18 },
+  badge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12 },
+  badgeText: { fontSize: 11, fontWeight: '700' },
 
-  modalBg: { flex: 1, backgroundColor: 'rgba(11,11,15,0.45)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
-  modalCard: { width: SCREEN_WIDTH * 0.88, maxWidth: 360, backgroundColor: light.surface, borderRadius: radius.xl, padding: spacing.xl, alignItems: 'center', ...lightShadow.card },
-  modalTitle: { ...typography.h2, color: light.text, marginBottom: spacing.xs, alignSelf: 'flex-start' },
-  modalSub: { ...typography.subtle, color: light.textSecondary, marginBottom: spacing.lg, alignSelf: 'flex-start' },
-  optionBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, width: '100%', backgroundColor: light.bg, borderWidth: 1.5, borderColor: light.border, borderRadius: radius.md, paddingHorizontal: spacing.base, paddingVertical: spacing.base, marginBottom: spacing.md },
-  optionActive: { borderColor: light.brand, backgroundColor: light.brandSoft },
-  optionText: { ...typography.body, color: light.textSecondary, fontWeight: '500' },
-  optionTextActive: { color: light.text, fontWeight: '700' },
-  customWrap: { flexDirection: 'row', alignItems: 'center', width: '100%', backgroundColor: light.bg, borderWidth: 1.5, borderColor: light.brand, borderRadius: radius.md, paddingHorizontal: spacing.base, height: 48, marginBottom: spacing.md },
-  customInput: { flex: 1, ...typography.body, color: light.text },
-  counter: { ...typography.caption, color: light.textTertiary },
-  modalRow: { flexDirection: 'row', gap: spacing.md, width: '100%', marginTop: spacing.sm },
-  modalCancel: { flex: 1, height: 50, borderRadius: radius.full, backgroundColor: light.surfaceHi, alignItems: 'center', justifyContent: 'center' },
-  modalCancelText: { ...typography.body, color: light.text, fontWeight: '700' },
-  modalConfirm: { flex: 1, height: 50, borderRadius: radius.full, backgroundColor: light.text, alignItems: 'center', justifyContent: 'center' },
-  modalConfirmText: { ...typography.body, color: light.white, fontWeight: '700' },
+  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
+  modalCard: { width: SCREEN_WIDTH * 0.88, maxWidth: 360, borderRadius: 24, padding: 24, alignItems: 'center', borderWidth: 1 },
+  modalTitle: { fontSize: 20, fontWeight: '700', marginBottom: 4, alignSelf: 'flex-start' },
+  modalSub: { fontSize: 14, marginBottom: 20, alignSelf: 'flex-start' },
+  optionBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, width: '100%', borderWidth: 1.5, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 12 },
+  optionText: { fontSize: 14, fontWeight: '500' },
+  customWrap: { flexDirection: 'row', alignItems: 'center', width: '100%', borderWidth: 1.5, borderRadius: 16, paddingHorizontal: 16, height: 48, marginBottom: 12 },
+  customInput: { flex: 1, fontSize: 14 },
+  counter: { fontSize: 12 },
+  modalRow: { flexDirection: 'row', gap: 12, width: '100%', marginTop: 8 },
+  modalCancel: { flex: 1, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  modalCancelText: { fontSize: 15, fontWeight: '700' },
+  modalConfirm: { flex: 1, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  modalConfirmText: { fontSize: 15, color: '#ffffff', fontWeight: '700' },
 
-  globalLoading: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.6)', alignItems: 'center', justifyContent: 'center', zIndex: 999 },
+  globalLoading: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', zIndex: 999 },
 
-  matchScreen: { flex: 1, backgroundColor: light.bg },
-  matchHeader: { paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
-  matchBack: { width: 44, height: 44, borderRadius: 22, backgroundColor: light.surfaceHi, alignItems: 'center', justifyContent: 'center' },
-  matchCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing['2xl'] },
-  radarOuter: { width: 170, height: 170, borderRadius: 85, backgroundColor: 'rgba(124,58,237,0.06)', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xl },
-  radarMid: { width: 124, height: 124, borderRadius: 62, backgroundColor: 'rgba(124,58,237,0.10)', alignItems: 'center', justifyContent: 'center' },
-  radarInner: { width: 84, height: 84, borderRadius: 42, backgroundColor: light.brandSoft, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  matchTitle: { ...typography.h3, color: light.text, marginBottom: spacing.xl },
-  matchTimeLabel: { ...typography.micro, color: light.textTertiary, letterSpacing: 2 },
-  matchTime: { fontSize: 44, fontWeight: '800', color: light.brand, marginTop: spacing.xs, marginBottom: spacing['2xl'], letterSpacing: -1 },
-  matchCancel: { height: 52, paddingHorizontal: spacing['2xl'], borderRadius: radius.full, backgroundColor: light.surfaceHi, alignItems: 'center', justifyContent: 'center' },
-  matchCancelText: { ...typography.body, color: light.text, fontWeight: '700' },
+  matchScreen: { flex: 1 },
+  matchHeader: { paddingHorizontal: 16, paddingVertical: 12 },
+  matchBack: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  matchCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+  radarOuter: { width: 170, height: 170, borderRadius: 85, backgroundColor: 'rgba(16,185,129,0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  radarMid: { width: 124, height: 124, borderRadius: 62, backgroundColor: 'rgba(16,185,129,0.12)', alignItems: 'center', justifyContent: 'center' },
+  radarInner: { width: 84, height: 84, borderRadius: 42, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  matchTitle: { fontSize: 18, fontWeight: '700', marginBottom: 24 },
+  matchTimeLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 2 },
+  matchTime: { fontSize: 44, fontWeight: '800', marginTop: 4, marginBottom: 32, letterSpacing: -1 },
+  matchCancel: { height: 50, paddingHorizontal: 32, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
+  matchCancelText: { fontSize: 15, fontWeight: '700' },
 
-  successIcon: { width: 76, height: 76, borderRadius: 38, backgroundColor: light.brandSoft, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.base },
-  matchedTitle: { ...typography.h2, color: light.text, marginBottom: spacing.xs },
-  matchedDesc: { ...typography.subtle, color: light.textSecondary, marginBottom: spacing.lg, textAlign: 'center' },
+  successIcon: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  matchedTitle: { fontSize: 20, fontWeight: '700', marginBottom: 4 },
+  matchedDesc: { fontSize: 14, marginBottom: 20, textAlign: 'center' },
 });

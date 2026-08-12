@@ -6,6 +6,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
+import { StatusBar } from 'expo-status-bar';
 import {
   incrementTravelPostView,
   createTravelComment,
@@ -33,6 +35,7 @@ export default function TravelDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { session } = useAuth();
+  const { colors } = useTheme();
   const user = session?.user;
   const { post } = route.params as { post: TravelPost };
 
@@ -86,13 +89,14 @@ export default function TravelDetailScreen() {
   const breedName = PET_BREEDS[breedKey] || 'zZuPer';
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
+      <StatusBar style={colors.statusBarStyle} />
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.border }]}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#0B0B0F" />
+          <Ionicons name="arrow-back" size={24} color={colors.brand} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>zZuPer Details</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>zZuPer Details</Text>
         <View style={{ width: 40 }} />
       </View>
 
