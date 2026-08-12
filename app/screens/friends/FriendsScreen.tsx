@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 8,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 0,
     gap: 6,
   },
   shortcutIconBg: {
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
     padding: 3,
     width: 240,
     height: 40,
-    borderWidth: 1,
+    borderWidth: 0,
   },
   segmentTab: {
     flex: 1,
@@ -341,7 +341,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 14,
     borderRadius: 18,
-    borderWidth: 1,
+    borderWidth: 0,
     gap: 12,
   },
   avatar: {

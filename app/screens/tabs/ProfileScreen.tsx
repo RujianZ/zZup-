@@ -358,17 +358,17 @@ const styles = StyleSheet.create({
   xpBar: { height: 8, borderRadius: 4, overflow: 'hidden' },
   xpFill: { height: '100%', borderRadius: 4 },
 
-  bioCard: { width: '100%', borderRadius: 18, padding: 16, marginTop: 20, borderWidth: 1 },
+  bioCard: { width: '100%', borderRadius: 18, padding: 16, marginTop: 20 },
   bioLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 6 },
   bioText: { fontSize: 15, lineHeight: 21 },
 
   themeSection: { marginHorizontal: 20, marginTop: 24 },
   sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, marginBottom: 8 },
-  themePillContainer: { flexDirection: 'row', borderRadius: 16, padding: 4, borderWidth: 1, gap: 4 },
+  themePillContainer: { flexDirection: 'row', borderRadius: 16, padding: 4, borderWidth: 0, gap: 4 },
   themeOption: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 40, borderRadius: 12 },
   themeOptionText: { fontSize: 12, fontWeight: '700' },
 
-  actionCard: { marginHorizontal: 20, marginTop: 24, borderRadius: 18, borderWidth: 1, overflow: 'hidden' },
+  actionCard: { marginHorizontal: 20, marginTop: 24, borderRadius: 18, overflow: 'hidden' },
   actionItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 16 },
   actionText: { fontSize: 15, fontWeight: '600', flex: 1 },
 

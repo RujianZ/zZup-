@@ -104,8 +104,8 @@ export default function InboxScreen() {
       <TouchableOpacity
         style={[
           styles.chatItem,
-          { backgroundColor: colors.cardBg, borderColor: colors.border },
-          isMyPet && { borderColor: colors.brandSecondary, backgroundColor: colors.cardMutedBg }
+          { backgroundColor: colors.cardBg },
+          isMyPet && { backgroundColor: colors.cardMutedBg }
         ]}
         onPress={() => {
           closeAllMenus();
@@ -352,7 +352,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 14,
     borderRadius: 18,
-    borderWidth: 1,
     gap: 12,
   },
   avatar: {
