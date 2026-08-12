@@ -118,29 +118,44 @@ export default function ChatScreen() {
     if (isPetTalk) {
       try {
         const { data: petEdgeResp, error: fnErr } = await supabase.functions.invoke('pet-chat', {
-          body: { message: text }
+          body: {
+            message: text,
+            pet_breed: profile?.pet_breed,
+            pet_stage: profile?.pet_stage,
+            pet_name: profile?.pet_name,
+            real_name: profile?.real_name,
+          }
         });
         if (fnErr) throw fnErr;
       } catch (e) {
-        // Intelligent Context-Aware Fallback AI response
+        // Stage-Aware Sound-Word Fallback AI response
         setTimeout(async () => {
           const lower = text.toLowerCase();
           const petName = profile?.pet_name || 'Companion';
           const ownerName = profile?.real_name || 'Owner';
+          const breed = (profile?.pet_breed || 'dog').toLowerCase();
+          const stage = (profile?.pet_stage || 'child').toLowerCase();
+
+          let soundPrefix = 'Woof woof! ';
+          if (breed.includes('cat')) soundPrefix = stage === 'adult' ? 'Purrrrr~ ' : 'Meow~ ';
+          else if (breed.includes('bear')) soundPrefix = 'Hmhm~ Growl~ ';
+          else if (breed.includes('snake')) soundPrefix = 'Hiss~ Sssss~ ';
+          else if (stage === 'adult') soundPrefix = 'Soft woof... ';
+          else if (stage === 'youth') soundPrefix = 'Arf arf! Woof! ';
 
           let reply = '';
           if (lower.includes('sad') || lower.includes('unhappy') || lower.includes('cry') || lower.includes('tired') || lower.includes('bad')) {
-            reply = `*gently rests chin on your knee and whimpers softly* Don't be sad, ${ownerName}... ${petName} is right here with you! 🐾❤️`;
+            reply = `${soundPrefix}Don't be sad, ${ownerName}... ${petName} is right here with you! 🐾❤️`;
           } else if (lower.includes('how r u') || lower.includes('how are you') || lower.includes('sup') || lower.includes('what\'s up')) {
-            reply = `*happy tail wag and eager barks* I'm super great! Just waiting for you! How are you doing today? ✨`;
+            reply = `${soundPrefix}I'm super great! Just waiting for you! How are you doing today? ✨`;
           } else if (lower.includes('love') || lower.includes('miss') || lower.includes('hug')) {
-            reply = `*nuzzles warmly against your sleeve and purrs* I love you so much too, ${ownerName}! 🐾❤️`;
+            reply = `${soundPrefix}I love you so much too, ${ownerName}! 🐾❤️`;
           } else if (lower.includes('hi') || lower.includes('hello') || lower.includes('hey')) {
-            reply = `*bounces excitedly* Woof woof! Hi ${ownerName}! I'm so happy you're talking to me! 🐶`;
+            reply = `${soundPrefix}Hi ${ownerName}! I'm so happy you're talking to me! 🐶`;
           } else if (lower.includes('lol') || lower.includes('haha') || lower.includes('funny')) {
-            reply = `*playful bark and tumbles over* Hehe! Seeing you laugh makes ${petName} so happy! 🐾✨`;
+            reply = `${soundPrefix}Hehe! Seeing you laugh makes ${petName} so happy! 🐾✨`;
           } else {
-            reply = `*tilts head curiously and wags tail* ${petName} is listening! Tell me more, ${ownerName}! 🐾`;
+            reply = `${soundPrefix}${petName} is listening! Tell me more, ${ownerName}! 🐾`;
           }
 
           await sendMessage(realConvId, reply, 'pet');

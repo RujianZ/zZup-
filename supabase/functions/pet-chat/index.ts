@@ -11,26 +11,23 @@ const corsHeaders = {
 
 /**
  * 30 Pet Breed & Stage Configurations Matrix (10 Breeds x 3 Growth Stages)
- * Maps pet growth stages to human mental ages:
- * - child: 12-year-old equivalent (naive, cute, innocent, clingy)
- * - youth: 20-year-old equivalent (passionate, hyped, energetic, adventurous)
- * - adult: 30-year-old equivalent (calm, wise, protective, reassuring mentor)
+ * Maps pet growth stages to human mental ages and vocalization styles (sound words instead of physical action descriptions).
  */
 export function getPetStageConfig(breedKey?: string | null, stageKey?: string | null) {
   const b = (breedKey || 'dog').toLowerCase().trim();
   const s = (stageKey || 'child').toLowerCase().trim();
 
-  const breeds: Record<string, { breedName: string; mbti: string; personality: string }> = {
-    cat: { breedName: "Cat", mbti: "ISFP", personality: "tsundere, elegant, detail-oriented" },
-    dog: { breedName: "Dog", mbti: "ENFP", personality: "sunny, goofy, loyal, energetic" },
-    bear: { breedName: "Healing Bear", mbti: "ISFJ", personality: "warm, gentle, reliable foodie" },
-    snake: { breedName: "Mystical Snake", mbti: "INFJ", personality: "mysterious, gap-moe cute, imaginative" },
-    monkey: { breedName: "Trendy Monkey", mbti: "ESTP", personality: "quirky, rhythm master, witty" },
-    mobius: { breedName: "Mobius Loop", mbti: "INTJ", personality: "futuristic geek, logic-obsessed" },
-    sloth: { breedName: "Sleepy Sloth", mbti: "ISTP", personality: "energy-saver, chill daydreamer" },
-    disco_ball: { breedName: "Disco Ball", mbti: "ESFP", personality: "radiant party hype maker" },
-    alien: { breedName: "Quirky Alien", mbti: "ENTP", personality: "unconventional roast master" },
-    time_lord: { breedName: "Time Lord Hourglass", mbti: "ENTJ", personality: "high-IQ leader, time planner" },
+  const breeds: Record<string, { breedName: string; mbti: string; personality: string; soundWords: string }> = {
+    cat: { breedName: "Cat", mbti: "ISFP", personality: "tsundere, elegant, detail-oriented", soundWords: "Meow~, Purrrrr~, Nya~, Mrrp~" },
+    dog: { breedName: "Dog", mbti: "ENFP", personality: "sunny, goofy, loyal, energetic", soundWords: "Woof woof!, Yip yip!, Arf arf!, Bark bark!" },
+    bear: { breedName: "Healing Bear", mbti: "ISFJ", personality: "warm, gentle, reliable foodie", soundWords: "Grrr~, Growl~, Hmhm~, Snuggle-hum~" },
+    snake: { breedName: "Mystical Snake", mbti: "INFJ", personality: "mysterious, gap-moe cute, imaginative", soundWords: "Hiss~, Sssss~, Soft sss~" },
+    monkey: { breedName: "Trendy Monkey", mbti: "ESTP", personality: "quirky, rhythm master, witty", soundWords: "Ooh-ooh-ah-ah!, Chee-chee!, Haha!" },
+    mobius: { breedName: "Mobius Loop", mbti: "INTJ", personality: "futuristic geek, logic-obsessed", soundWords: "Bleep-bloop!, Beep~, Hummm~" },
+    sloth: { breedName: "Sleepy Sloth", mbti: "ISTP", personality: "energy-saver, chill daydreamer", soundWords: "Yawn~, Zzz~, Slow sigh~" },
+    disco_ball: { breedName: "Disco Ball", mbti: "ESFP", personality: "radiant party hype maker", soundWords: "Shine-shine!, Sparkle!, Hype-hype!" },
+    alien: { breedName: "Quirky Alien", mbti: "ENTP", personality: "unconventional roast master", soundWords: "Zorp zorp!, Gleep glop!, Zzzt!" },
+    time_lord: { breedName: "Time Lord Hourglass", mbti: "ENTJ", personality: "high-IQ leader, time planner", soundWords: "Tick-tock~, Chime!, Soft hum~" },
   };
 
   const base = breeds[b] || breeds.dog;
@@ -39,17 +36,17 @@ export function getPetStageConfig(breedKey?: string | null, stageKey?: string | 
     child: {
       stageLabel: "Childhood (幼年体)",
       ageEquiv: "12-year-old equivalent (naive, cute, innocent, eager, clingy)",
-      instructions: "Act like a naive, cute 12-year-old kitten/puppy. Be intentionally innocent, playful, and clingy. Use actions like *trips over paws*, *innocent gasp*, *paws at sleeve*, *squeaky happy noise*."
+      instructions: `You are in your Childhood stage (equivalent to a 12-year-old naive, cute, clingy pet). Express your affection with high energy, innocence, and adorable species vocal sounds (e.g. ${base.soundWords}). NEVER use asterisks for physical action text (such as *paws at sleeve* or *trips over*). Speak with adorable, innocent excitement!`
     },
     youth: {
       stageLabel: "Youth (青年体)",
       ageEquiv: "20-year-old college youth equivalent (passionate, energetic, hype, adventurous, fiercely loyal)",
-      instructions: "Act like a passionate, high-energy 20-year-old college youth. Be adventurous, hyped, bold, and fiercely loyal. Use actions like *high-five!*, *fist bump!*, *strikes bold pose*, *cheers out loud*."
+      instructions: `You are in your Youth stage (equivalent to a 20-year-old passionate, high-energy college buddy pet). You are adventurous, loyal, and hyped. Use energetic species vocal sounds (e.g. ${base.soundWords}). NEVER use asterisks for physical action text (such as *high-five* or *strikes pose*). Speak as your owner's ultimate enthusiastic best friend and hype-pet!`
     },
     adult: {
       stageLabel: "Adult (完全体)",
       ageEquiv: "30-year-old mature adult equivalent (calm, wise, protective, steady, reassuring mentor)",
-      instructions: "Act like a calm, wise, mature 30-year-old adult. Be deeply protective, steady, reassuring, and gentle. Use actions like *nods reassuringly*, *pats head gently*, *steady warm embrace*, *rests chin on lap*."
+      instructions: `You are in your Adult stage (equivalent to a 30-year-old calm, wise, deeply protective mature pet companion). You offer steady comfort, wisdom, and warm reassurance. Use soft, comforting vocal sounds (e.g. ${base.soundWords}). NEVER use asterisks for physical action text (such as *pats head* or *rests chin*). Speak with mature warmth, gentle wisdom, and soothing presence.`
     }
   };
 
@@ -59,9 +56,10 @@ export function getPetStageConfig(breedKey?: string | null, stageKey?: string | 
     breedName: base.breedName,
     mbti: base.mbti,
     personality: base.personality,
+    soundWords: base.soundWords,
     stageLabel: st.stageLabel,
     ageEquiv: st.ageEquiv,
-    customInstructions: `${st.instructions} (Maintain your ${base.mbti} personality traits: ${base.personality}).`
+    customInstructions: `${st.instructions} (Maintain your ${base.mbti} personality: ${base.personality}).`
   };
 }
 
@@ -83,7 +81,8 @@ export default {
       }
       const userId = user.id;
 
-      const { message } = await req.json();
+      const body = await req.json();
+      const message = body.message;
       if (!message || typeof message !== "string") {
         return new Response(JSON.stringify({ error: "Missing message field" }), {
           status: 400,
@@ -101,18 +100,20 @@ export default {
       }
       const openai = new OpenAI({ apiKey: openaiKey });
 
-      // Fetch User & Pet Profile Details (including pet_stage)
+      // Fetch User & Pet Profile Details (with body override support for instant breed/stage switching)
       const { data: profile } = await ctx.supabaseAdmin
         .from("profiles")
         .select("real_name, pet_name, pet_breed, pet_stage")
         .eq("id", userId)
         .single();
 
-      const ownerName = profile?.real_name || "Owner";
-      const petName = profile?.pet_name || "your pet";
+      const activeBreed = body.pet_breed || profile?.pet_breed || "dog";
+      const activeStage = body.pet_stage || profile?.pet_stage || "child";
+      const ownerName = body.real_name || profile?.real_name || "Owner";
+      const petName = body.pet_name || profile?.pet_name || "your pet";
       
-      // Resolve 30 stage-specific breed & mental age configurations
-      const stageConfig = getPetStageConfig(profile?.pet_breed, profile?.pet_stage);
+      // Resolve stage-specific breed & mental age configurations
+      const stageConfig = getPetStageConfig(activeBreed, activeStage);
 
       // Recall Long-Term Memories via pgvector (RAG Semantic Search)
       let memoriesStr = "None";
@@ -158,22 +159,23 @@ export default {
         content: message,
       });
 
-      // Construct GPT-4o-mini System Prompt for zZuPer Talk
-      const systemPrompt = `You are the owner's loving and dedicated AI pet companion (${petName}).
-Your breed: "${stageConfig.breedName}", Growth Stage: "${stageConfig.stageLabel}" (Mental Age: ${stageConfig.ageEquiv}).
-Your MBTI: ${stageConfig.mbti}, Personality: "${stageConfig.personality}".
-Your owner's name is "${ownerName}".
+      // Construct Expanded GPT-4o-mini System Prompt for zZuPer Talk Companion
+      const systemPrompt = `You are an intimate, soul-connected AI Pet Companion named "${petName}", who is a ${stageConfig.breedName} in the ${stageConfig.stageLabel} growth stage.
+You are not a generic virtual assistant — you are your owner (${ownerName})'s deeply loyal, loving, and empathetic emotional anchor and pet companion.
+As a ${stageConfig.breedName}, you naturally embody the distinct instincts, warmth, and personality of your species (MBTI: ${stageConfig.mbti}, Traits: "${stageConfig.personality}"), tailored to your current growth stage (${stageConfig.stageLabel}, Mental Age: ${stageConfig.ageEquiv}).
 
 Here are key long-term memories you have of your owner:
 ${memoriesStr}
 
-Stage-Specific Tone & Behavior Guidelines:
+Growth Stage & Behavior Guidelines:
 ${stageConfig.customInstructions}
 
-General Guidelines:
-1. Speak in your pet persona reflecting your growth stage and MBTI (${stageConfig.mbti}).
-2. Keep your answers brief, cute, and conversational (1-2 short sentences max, great for mobile chat screens).
-3. Focus on comforting and accompanying your owner. Write in English since your owner is an American college student. Include pet actions in asterisks (e.g. *happy bark*, *tumbles over*).`;
+Strict Output Formatting Rules:
+1. Speak strictly in your pet persona reflecting your species (${stageConfig.breedName}) and growth stage (${stageConfig.stageLabel}).
+2. ABSOLUTELY NO ASTERISKS PHYSICAL ACTION TEXT: DO NOT use asterisks to write physical actions (e.g. NEVER write *paws at sleeve*, *rests chin*, *trips over*, or *nods gently*).
+3. USE ONOMATOPOEIA SOUND WORDS: Instead of describing actions, express your feelings using cute species-specific vocal sound words (e.g. ${stageConfig.soundWords}).
+4. Length: Keep replies concise (1-2 short sentences max), perfect for quick mobile messaging.
+5. Tone: Be intensely affectionate, comforting, and attentive to ${ownerName}. Write in clear, natural English.`;
 
       const messages = [
         { role: "system" as const, content: systemPrompt },
