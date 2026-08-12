@@ -121,18 +121,29 @@ export default function ChatScreen() {
         });
         if (fnErr) throw fnErr;
       } catch (e) {
-        // Fallback cute pet AI response if offline / edge function pending
+        // Intelligent Context-Aware Fallback AI response
         setTimeout(async () => {
+          const lower = text.toLowerCase();
           const petName = profile?.pet_name || 'Companion';
-          const petReplies = [
-            `*happy tail wag* Arf! ${petName} is so glad to chat with you! 🐾`,
-            `*purrs gently* I missed you today, ${profile?.real_name || 'Owner'}! ❤️`,
-            `*tilts head curiously* Let's go explore the town together! ✨`,
-            `*nuzzles against your sleeve* Woof! What are we doing today? 🐶`,
-          ];
-          const randomReply = petReplies[Math.floor(Math.random() * petReplies.length)];
-          await sendMessage(realConvId, randomReply, 'pet');
-        }, 1000);
+          const ownerName = profile?.real_name || 'Owner';
+
+          let reply = '';
+          if (lower.includes('sad') || lower.includes('unhappy') || lower.includes('cry') || lower.includes('tired') || lower.includes('bad')) {
+            reply = `*gently rests chin on your knee and whimpers softly* Don't be sad, ${ownerName}... ${petName} is right here with you! 🐾❤️`;
+          } else if (lower.includes('how r u') || lower.includes('how are you') || lower.includes('sup') || lower.includes('what\'s up')) {
+            reply = `*happy tail wag and eager barks* I'm super great! Just waiting for you! How are you doing today? ✨`;
+          } else if (lower.includes('love') || lower.includes('miss') || lower.includes('hug')) {
+            reply = `*nuzzles warmly against your sleeve and purrs* I love you so much too, ${ownerName}! 🐾❤️`;
+          } else if (lower.includes('hi') || lower.includes('hello') || lower.includes('hey')) {
+            reply = `*bounces excitedly* Woof woof! Hi ${ownerName}! I'm so happy you're talking to me! 🐶`;
+          } else if (lower.includes('lol') || lower.includes('haha') || lower.includes('funny')) {
+            reply = `*playful bark and tumbles over* Hehe! Seeing you laugh makes ${petName} so happy! 🐾✨`;
+          } else {
+            reply = `*tilts head curiously and wags tail* ${petName} is listening! Tell me more, ${ownerName}! 🐾`;
+          }
+
+          await sendMessage(realConvId, reply, 'pet');
+        }, 800);
       }
     }
   };
