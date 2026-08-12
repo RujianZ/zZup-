@@ -237,5 +237,11 @@ export async function removeMember(
   if (USE_MOCK) {
     return { error: null }
   }
-  return { error: 'Removing members is not implemented on backend yet.' }
+  const { error } = await supabase
+    .from('conversation_members')
+    .delete()
+    .eq('conversation_id', conversationId)
+    .eq('account_id', accountId)
+
+  return { error: error?.message ?? null }
 }
