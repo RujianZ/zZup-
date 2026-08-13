@@ -15,6 +15,7 @@ import {
   getFriendshipStatus, sendFriendRequest, removeFriend, blockIdentity, FriendshipStatus
 } from '../../../lib/api/friends';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
+import PetAvatar from '../../components/PetAvatar';
 
 export default function OtherProfileScreen() {
   const navigation = useNavigation<any>();
@@ -251,13 +252,13 @@ export default function OtherProfileScreen() {
           {showPetCard && (
             <View style={styles.card}>
               <View style={styles.petRow}>
-                {profile.pet_avatar_url ? (
-                  <Image source={{ uri: profile.pet_avatar_url }} style={styles.petAvatar} />
-                ) : (
-                  <View style={styles.petAvatarFallback}>
-                    <Text style={{ fontSize: 20 }}>🐾</Text>
-                  </View>
-                )}
+                <PetAvatar
+                  url={profile.pet_avatar_url}
+                  breed={profile.pet_breed}
+                  stage={profile.pet_stage}
+                  size={56}
+                  backgroundColor="rgba(139,92,246,0.15)"
+                />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.petName}>{profile.pet_name}</Text>
                   <Text style={styles.petLevel}>Lv.{profile.pet_level ?? 1} · {profile.pet_xp ?? 0} XP</Text>

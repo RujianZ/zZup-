@@ -22,6 +22,10 @@ export interface ConversationListItem {
   peer_id: string | null
   display_name: string | null
   display_avatar: string | null
+  // 展示身份是宠物时（zZuPer Talk / 对方以宠物身份出现）才有值 —— 迁移 64。
+  // 头像取本地资产 assets/pets/png/{breed}_{stage}.png，见 components/PetAvatar。
+  display_breed: string | null
+  display_stage: string | null
   members_count: number
   last_message: string | null
   last_message_at: string | null

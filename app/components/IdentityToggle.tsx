@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import PetAvatar from './PetAvatar';
 
 interface IdentityToggleProps {
   value: 'real' | 'pet';
@@ -41,13 +42,13 @@ export default function IdentityToggle({ value, onChange }: IdentityToggleProps)
         onPress={() => onChange('pet')}
         activeOpacity={0.7}
       >
-        {profile?.pet_avatar_url ? (
-          <Image source={{ uri: profile.pet_avatar_url }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatarFallback, { backgroundColor: '#7C3AED' }]}>
-            <Ionicons name="paw" size={14} color="#fff" />
-          </View>
-        )}
+        <PetAvatar
+          url={profile?.pet_avatar_url}
+          breed={profile?.pet_breed}
+          stage={profile?.pet_stage}
+          size={24}
+          backgroundColor="#EDE9FE"
+        />
         <Text style={[styles.label, value === 'pet' && styles.labelActivePet]}>
           {profile?.pet_name ?? 'zZuPer'}
         </Text>

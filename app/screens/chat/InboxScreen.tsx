@@ -18,6 +18,7 @@ import { listConversations, ConversationListItem } from '../../../lib/api/conver
 import { getUnreadCounts } from '../../../lib/api/unread';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import PetAvatar from '../../components/PetAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../../lib/supabase';
 
@@ -145,7 +146,16 @@ export default function InboxScreen() {
         }}
         activeOpacity={0.7}
       >
-        {item.display_avatar ? (
+        {item.display_breed ? (
+          // 展示身份是宠物：头像来自本地资产（品种+阶段），不是远程 URL
+          <PetAvatar
+            url={item.display_avatar}
+            breed={item.display_breed}
+            stage={item.display_stage}
+            size={48}
+            backgroundColor={colors.cardMutedBg}
+          />
+        ) : item.display_avatar ? (
           <Image source={{ uri: item.display_avatar }} style={styles.avatar} />
         ) : (
           <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>

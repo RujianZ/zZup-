@@ -21,6 +21,10 @@ export interface Message {
   // 从 profiles 联查（Realtime 推送的消息此字段为 null，再补查）
   author_name: string | null
   author_avatar_url: string | null
+  // 宠物形象标识：头像取本地资产 assets/pets/png/{breed}_{stage}.png，
+  // pet_avatar_url 只是（尚未启用的）自定义头像位。identity_mode='real' 时为 null。
+  author_pet_breed: string | null
+  author_pet_stage: string | null
 }
 
 function mapMessage(m: any): Message {
@@ -38,6 +42,8 @@ function mapMessage(m: any): Message {
     edited_at: m.edited_at,
     author_name: profile ? (isPet ? profile.pet_name : profile.real_name) : null,
     author_avatar_url: profile ? (isPet ? profile.pet_avatar_url : profile.avatar_url) : null,
+    author_pet_breed: profile && isPet ? profile.pet_breed ?? null : null,
+    author_pet_stage: profile && isPet ? profile.pet_stage ?? null : null,
   }
 }
 
@@ -59,7 +65,7 @@ export async function getMessages(
     .select(
       `id, conversation_id, sender_id, identity_mode, content, image_url, attachments, created_at, edited_at,
        profiles!messages_sender_id_fkey (
-         real_name, pet_name, avatar_url, pet_avatar_url
+         real_name, pet_name, avatar_url, pet_avatar_url, pet_breed, pet_stage
        )`
     )
     .eq('conversation_id', conversationId)
@@ -164,17 +170,21 @@ export function subscribeToMessages(
         const msg = payload.new as any
         let author_name: string | null = null
         let author_avatar_url: string | null = null
+        let author_pet_breed: string | null = null
+        let author_pet_stage: string | null = null
 
         if (msg.sender_id) {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('real_name, pet_name, avatar_url, pet_avatar_url')
+            .select('real_name, pet_name, avatar_url, pet_avatar_url, pet_breed, pet_stage')
             .eq('id', msg.sender_id)
             .single()
           if (profile) {
             const isPet = msg.identity_mode === 'pet'
             author_name = isPet ? profile.pet_name : profile.real_name
             author_avatar_url = isPet ? profile.pet_avatar_url : profile.avatar_url
+            author_pet_breed = isPet ? profile.pet_breed ?? null : null
+            author_pet_stage = isPet ? profile.pet_stage ?? null : null
           }
         }
 
@@ -190,6 +200,8 @@ export function subscribeToMessages(
           edited_at: msg.edited_at,
           author_name,
           author_avatar_url,
+          author_pet_breed,
+          author_pet_stage,
         })
       }
     )

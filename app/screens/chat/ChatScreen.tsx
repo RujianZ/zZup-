@@ -17,6 +17,7 @@ import { markConversationRead } from '../../../lib/api/unread';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import IdentityToggle from '../../components/IdentityToggle';
+import PetAvatar from '../../components/PetAvatar';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 import { supabase } from '../../../lib/supabase';
 
@@ -330,6 +331,12 @@ export default function ChatScreen() {
     }
   };
 
+  // 宠物形象取自消息联查；Realtime 补查未回来时，本人发的消息退回自己的 profile。
+  const petBreedOf = (m: Message) =>
+    m.author_pet_breed ?? (m.sender_id === profile?.id ? profile?.pet_breed : null);
+  const petStageOf = (m: Message) =>
+    m.author_pet_stage ?? (m.sender_id === profile?.id ? profile?.pet_stage : null);
+
   const renderMessage = ({ item }: { item: Message }) => {
     const isPetAIResponse = isPetTalk && item.identity_mode === 'pet';
     const isMe = !isPetAIResponse && item.sender_id === profile?.id;
@@ -338,15 +345,22 @@ export default function ChatScreen() {
     return (
       <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
         {!isMe && (
-          item.author_avatar_url ? (
+          isPet ? (
+            // 宠物身份：形象由 品种+阶段 决定（本地资产），不是远程 URL
+            <PetAvatar
+              url={item.author_avatar_url}
+              breed={petBreedOf(item)}
+              stage={petStageOf(item)}
+              size={36}
+              backgroundColor={colors.cardMutedBg}
+              borderColor={colors.borderBrand}
+              borderWidth={1.5}
+            />
+          ) : item.author_avatar_url ? (
             <Image source={{ uri: item.author_avatar_url }} style={styles.peerAvatar} />
           ) : (
             <View style={[styles.peerAvatarFallback, { backgroundColor: colors.cardMutedBg, borderColor: colors.borderBrand, borderWidth: 1.5 }]}>
-              {isPetAIResponse ? (
-                <Text style={{ fontSize: 16 }}>🐾</Text>
-              ) : (
-                <Ionicons name={isPet ? 'paw' : 'person'} size={16} color={colors.brand} />
-              )}
+              <Ionicons name="person" size={16} color={colors.brand} />
             </View>
           )
         )}
@@ -420,13 +434,15 @@ export default function ChatScreen() {
         {isMe && (
           <View style={styles.myAvatarWrapper}>
             {isPet ? (
-              profile?.pet_avatar_url ? (
-                <Image source={{ uri: profile.pet_avatar_url }} style={[styles.myAvatar, { borderColor: colors.brand }]} />
-              ) : (
-                <View style={[styles.myPetAvatarFallback, { backgroundColor: colors.cardMutedBg, borderColor: colors.brand }]}>
-                  <Text style={{ fontSize: 14 }}>🐾</Text>
-                </View>
-              )
+              <PetAvatar
+                url={profile?.pet_avatar_url}
+                breed={profile?.pet_breed}
+                stage={profile?.pet_stage}
+                size={36}
+                backgroundColor={colors.cardMutedBg}
+                borderColor={colors.brand}
+                borderWidth={1.5}
+              />
             ) : (
               profile?.avatar_url ? (
                 <Image source={{ uri: profile.avatar_url }} style={[styles.myAvatar, { borderColor: colors.brand }]} />

@@ -106,6 +106,9 @@ export interface FriendProfile {
   pet_name: string | null
   pet_avatar_url: string | null
   edu_verified: boolean
+  // 宠物形象标识（迁移 64）。real_only 的人这两项为 null。
+  pet_breed?: string | null
+  pet_stage?: string | null
 }
 
 export type FriendItem = FriendProfile
@@ -124,6 +127,9 @@ export interface UserSearchResult {
   pet_name: string | null
   pet_avatar_url: string | null
   edu_verified: boolean
+  // 宠物形象标识（迁移 64）。real_only 的人这两项为 null。
+  pet_breed?: string | null
+  pet_stage?: string | null
 }
 
 export interface BlockedUser {
