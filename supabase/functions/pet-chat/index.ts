@@ -83,6 +83,8 @@ export default {
 
       const body = await req.json();
       const message = body.message;
+      // Optional photo attachment (signed URL) — lets the pet SEE what the owner sent
+      const imageUrl = typeof body.image_url === "string" ? body.image_url : null;
       if (!message || typeof message !== "string") {
         return new Response(JSON.stringify({ error: "Missing message field" }), {
           status: 400,
@@ -177,10 +179,23 @@ Strict Output Formatting Rules:
 4. Length: Keep replies concise (1-2 short sentences max), perfect for quick mobile messaging.
 5. Tone: Be intensely affectionate, comforting, and attentive to ${ownerName}. Write in clear, natural English.`;
 
+      // gpt-4o-mini is vision-capable: attach the photo so the pet can react to its content.
+      // Note appended to the USER message (persona prompt untouched): without it the pet
+      // role-plays "I can't see pictures" even though the vision input works.
+      const userContent: any = imageUrl
+        ? [
+            {
+              type: "text",
+              text: `${message}\n(Note: the photo is attached and you CAN see it — react in-character to what is actually in the picture.)`,
+            },
+            { type: "image_url", image_url: { url: imageUrl } },
+          ]
+        : message;
+
       const messages = [
         { role: "system" as const, content: systemPrompt },
         ...chatHistory,
-        { role: "user" as const, content: message },
+        { role: "user" as const, content: userContent },
       ];
 
       const responseStream = await openai.chat.completions.create({

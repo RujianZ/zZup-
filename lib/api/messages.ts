@@ -1,6 +1,7 @@
 import { supabase, USE_MOCK } from '../supabase'
 import { addXP, getTodayStart, MESSAGE_THRESHOLD, MESSAGE_XP } from './_xp'
 import type { IdentityType } from './friends'
+import type { Attachment } from './uploads'
 
 // Registry to broadcast mock messages in real-time during offline testing
 const mockMessageListeners = new Set<(message: Message) => void>()
@@ -14,6 +15,7 @@ export interface Message {
   identity_mode: IdentityType // 逐条头像渲染依据（pet 段=宠物缩略头像）
   content: string
   image_url: string | null
+  attachments: Attachment[]
   created_at: string
   edited_at: string | null
   // 从 profiles 联查（Realtime 推送的消息此字段为 null，再补查）
@@ -31,6 +33,7 @@ function mapMessage(m: any): Message {
     identity_mode: m.identity_mode,
     content: m.content,
     image_url: m.image_url,
+    attachments: Array.isArray(m.attachments) ? m.attachments : [],
     created_at: m.created_at,
     edited_at: m.edited_at,
     author_name: profile ? (isPet ? profile.pet_name : profile.real_name) : null,
@@ -54,7 +57,7 @@ export async function getMessages(
   let query = supabase
     .from('messages')
     .select(
-      `id, conversation_id, sender_id, identity_mode, content, image_url, created_at, edited_at,
+      `id, conversation_id, sender_id, identity_mode, content, image_url, attachments, created_at, edited_at,
        profiles!messages_sender_id_fkey (
          real_name, pet_name, avatar_url, pet_avatar_url
        )`
@@ -76,7 +79,8 @@ export async function sendMessage(
   conversationId: string,
   content: string,
   identityMode: IdentityType,
-  imageUrl?: string
+  imageUrl?: string,
+  attachments?: Attachment[]
 ): Promise<{ data: Message | null; error: string | null }> {
   const {
     data: { user },
@@ -91,6 +95,7 @@ export async function sendMessage(
       identity_mode: identityMode,
       content,
       image_url: imageUrl ?? null,
+      attachments: attachments ?? [],
     })
     .select()
     .single()
@@ -180,6 +185,7 @@ export function subscribeToMessages(
           identity_mode: msg.identity_mode,
           content: msg.content,
           image_url: msg.image_url,
+          attachments: Array.isArray(msg.attachments) ? msg.attachments : [],
           created_at: msg.created_at,
           edited_at: msg.edited_at,
           author_name,

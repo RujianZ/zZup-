@@ -15,9 +15,11 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { listConversations, ConversationListItem } from '../../../lib/api/conversations';
+import { getUnreadCounts } from '../../../lib/api/unread';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { supabase } from '../../../lib/supabase';
 
 function formatTime(dateStr: string): string {
   const d = new Date(dateStr);
@@ -56,6 +58,7 @@ export default function InboxScreen() {
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [unread, setUnread] = useState<Record<string, number>>({});
 
   // Dropdown Menu state
   const [showAddMenu, setShowAddMenu] = useState(false);
@@ -72,6 +75,9 @@ export default function InboxScreen() {
     }));
     setLoading(false);
     setRefreshing(false);
+    // Unread badges (client-side last-read marks)
+    const counts = await getUnreadCounts(data.map(c => c.conversation_id));
+    setUnread(counts);
   }, []);
 
   useFocusEffect(
@@ -79,6 +85,26 @@ export default function InboxScreen() {
       load();
     }, [load])
   );
+
+  // Update the Lounge tab badge with total unread
+  useEffect(() => {
+    const total = Object.values(unread).reduce((s, n) => s + n, 0);
+    navigation.setOptions({
+      tabBarBadge: total > 0 ? (total > 99 ? '99+' : total) : undefined,
+      tabBarBadgeStyle: { backgroundColor: '#EF4444', color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
+    });
+  }, [unread, navigation]);
+
+  // Live refresh: any new message I'm allowed to see (RLS = my conversations)
+  useEffect(() => {
+    const channel = supabase
+      .channel('inbox-live')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
+        load();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [load]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -138,9 +164,16 @@ export default function InboxScreen() {
           </View>
 
           <View style={styles.lastMsgRow}>
-            <Text style={[styles.lastMsgText, { color: colors.subText }]} numberOfLines={1}>
+            <Text style={[styles.lastMsgText, { color: colors.subText, flex: 1 }]} numberOfLines={1}>
               {item.last_message || 'No messages yet'}
             </Text>
+            {(unread[item.conversation_id] ?? 0) > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadBadgeText}>
+                  {unread[item.conversation_id] > 99 ? '99+' : unread[item.conversation_id]}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </TouchableOpacity>
@@ -389,9 +422,24 @@ const styles = StyleSheet.create({
   lastMsgRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   lastMsgText: {
     fontSize: 13,
+  },
+  unreadBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  unreadBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
   },
   emptyContainer: {
     alignItems: 'center',
