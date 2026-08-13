@@ -483,7 +483,12 @@ export default function ChatScreen() {
       )}
 
       {/* Bottom Input Section */}
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* Android 也必须给 behavior：SDK 54+ 默认 edge-to-edge，窗口不再自动 resize，
+          behavior 为 undefined 时键盘会直接盖住输入框。 */}
+      <KeyboardAvoidingView
+        behavior="padding"
+        keyboardVerticalOffset={0}
+      >
         <View style={[styles.inputArea, { backgroundColor: colors.headerBg, borderTopColor: colors.border }]}>
           {/* Show IdentityToggle ONLY in Pack Chats (!isDM && !isPetTalk) */}
           {!isDM && !isPetTalk && (
@@ -512,6 +517,11 @@ export default function ChatScreen() {
               onFocus={() => setAttachOpen(false)}
               multiline
               maxLength={500}
+              // 回车即发送（微信式）。multiline 默认会把回车当换行，
+              // submitBehavior="submit" 让它改为触发 onSubmitEditing 且不收键盘。
+              submitBehavior="submit"
+              returnKeyType="send"
+              onSubmitEditing={handleSend}
             />
             <TouchableOpacity
               style={[styles.sendBtn, { backgroundColor: colors.brand }, (!input.trim() || sending) && styles.sendDisabled]}

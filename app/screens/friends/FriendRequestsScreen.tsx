@@ -42,28 +42,29 @@ export default function FriendRequestsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleAccept = async (id: string) => {
-    setActionId(id);
-    const { error } = await acceptFriendRequest(id);
+  // 注意：RPC 收的是 friendships 那行的主键 friendship_id，不是对方的 profile id。
+  const handleAccept = async (friendshipId: string) => {
+    setActionId(friendshipId);
+    const { error } = await acceptFriendRequest(friendshipId);
     setActionId(null);
     if (error) showAlert('Error', error, 'error');
-    else { setReceived(prev => prev.filter(x => x.id !== id)); showAlert('Accepted', 'Friend request accepted.', 'success'); }
+    else { setReceived(prev => prev.filter(x => x.friendship_id !== friendshipId)); showAlert('Accepted', 'Friend request accepted.', 'success'); }
   };
 
-  const handleDecline = async (id: string) => {
-    setActionId(id);
-    const { error } = await declineFriendRequest(id);
+  const handleDecline = async (friendshipId: string) => {
+    setActionId(friendshipId);
+    const { error } = await declineFriendRequest(friendshipId);
     setActionId(null);
     if (error) showAlert('Error', error, 'error');
-    else setReceived(prev => prev.filter(x => x.id !== id));
+    else setReceived(prev => prev.filter(x => x.friendship_id !== friendshipId));
   };
 
-  const handleCancel = async (id: string) => {
-    setActionId(id);
-    const { error } = await cancelRequest(id);
+  const handleCancel = async (friendshipId: string) => {
+    setActionId(friendshipId);
+    const { error } = await cancelRequest(friendshipId);
     setActionId(null);
     if (error) showAlert('Error', error, 'error');
-    else setSent(prev => prev.filter(x => x.id !== id));
+    else setSent(prev => prev.filter(x => x.friendship_id !== friendshipId));
   };
 
   const renderReceived = ({ item }: { item: FriendRequest }) => (
@@ -81,10 +82,10 @@ export default function FriendRequestsScreen() {
       </View>
 
       <View style={styles.actions}>
-        <TouchableOpacity style={[styles.acceptBtn, { backgroundColor: colors.brand }]} onPress={() => handleAccept(item.id)} disabled={actionId === item.id} activeOpacity={0.8}>
-          {actionId === item.id ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.acceptText}>Accept</Text>}
+        <TouchableOpacity style={[styles.acceptBtn, { backgroundColor: colors.brand }]} onPress={() => handleAccept(item.friendship_id)} disabled={actionId === item.friendship_id} activeOpacity={0.8}>
+          {actionId === item.friendship_id ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.acceptText}>Accept</Text>}
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.declineBtn, { backgroundColor: colors.cardMutedBg, borderColor: colors.border }]} onPress={() => handleDecline(item.id)} disabled={actionId === item.id} activeOpacity={0.8}>
+        <TouchableOpacity style={[styles.declineBtn, { backgroundColor: colors.cardMutedBg, borderColor: colors.border }]} onPress={() => handleDecline(item.friendship_id)} disabled={actionId === item.friendship_id} activeOpacity={0.8}>
           <Ionicons name="close" size={18} color={colors.subText} />
         </TouchableOpacity>
       </View>
@@ -104,8 +105,8 @@ export default function FriendRequestsScreen() {
         <Text style={[styles.name, { color: colors.text }]}>{item.real_name ?? 'User'}</Text>
         <Text style={[styles.sub, { color: colors.subText }]}>Pending approval</Text>
       </View>
-      <TouchableOpacity style={[styles.cancelBtn, { backgroundColor: colors.cardMutedBg, borderColor: colors.border }]} onPress={() => handleCancel(item.id)} disabled={actionId === item.id} activeOpacity={0.8}>
-        {actionId === item.id ? <ActivityIndicator color={colors.subText} size="small" /> : <Text style={[styles.cancelText, { color: colors.subText }]}>Cancel</Text>}
+      <TouchableOpacity style={[styles.cancelBtn, { backgroundColor: colors.cardMutedBg, borderColor: colors.border }]} onPress={() => handleCancel(item.friendship_id)} disabled={actionId === item.friendship_id} activeOpacity={0.8}>
+        {actionId === item.friendship_id ? <ActivityIndicator color={colors.subText} size="small" /> : <Text style={[styles.cancelText, { color: colors.subText }]}>Cancel</Text>}
       </TouchableOpacity>
     </View>
   );

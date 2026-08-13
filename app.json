@@ -18,18 +18,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.zzup.app",
-      "config": {
-        "googleMapsApiKey": "AIzaSyDuo6iYFQZNM9CV2ksTXqASflkERw4uEHM"
-      }
+      "bundleIdentifier": "com.zzup.app"
     },
     "android": {
       "package": "com.zzup.app",
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyDuo6iYFQZNM9CV2ksTXqASflkERw4uEHM"
-        }
-      },
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -56,13 +48,6 @@
           "locationWhenInUsePermission": "zZuP! needs access to your location to show friend locations.",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true
-        }
-      ],
-      [
-        "react-native-maps",
-        {
-          "androidGoogleMapsApiKey": "AIzaSyDuo6iYFQZNM9CV2ksTXqASflkERw4uEHM",
-          "iosGoogleMapsApiKey": "AIzaSyDuo6iYFQZNM9CV2ksTXqASflkERw4uEHM"
         }
       ]
     ]
