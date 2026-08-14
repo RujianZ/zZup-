@@ -30,12 +30,17 @@ function formatTime(dateStr: string): string {
 export default function ChatScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { groupId, groupName, isDM } = route.params;
+  // 路由参数语义（曾经含糊导致每次从 Lounge 打开私聊都白发一次必失败的 create_dm）：
+  //   conversationId —— 已知的会话 id，直接用
+  //   peerId         —— 只知道对方是谁（如好友列表点聊天），需要先 create_dm 换会话
+  //   groupId        —— 旧别名，等价于 conversationId
+  const { groupId, conversationId, peerId, groupName, isDM, isPetTalk: isPetTalkParam } = route.params;
+  const knownConvId: string | undefined = conversationId ?? groupId;
   const { profile } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const [realConvId, setRealConvId] = useState<string>(groupId);
+  const [realConvId, setRealConvId] = useState<string>(knownConvId ?? '');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -64,7 +69,8 @@ export default function ChatScreen() {
     setAlertConfig({ visible: true, title, message, type });
   };
 
-  const isPetTalk = groupName === 'zZuPer Talk' || groupId === 'zzuper_talk';
+  // kind 由调用方显式传入；沿用名字判断只是旧入口的兜底
+  const isPetTalk = isPetTalkParam ?? (groupName === 'zZuPer Talk' || groupId === 'zzuper_talk');
 
   // Resolve target conversation_id for DMs and zZuPer Talk
   useEffect(() => {
@@ -73,16 +79,17 @@ export default function ChatScreen() {
       if (isPetTalk) {
         const convId = await getOrCreateZzuperTalk();
         if (convId && isMounted) setRealConvId(convId);
-      } else if (isDM) {
-        const convId = await createDM(groupId, identityMode, 'real');
+      } else if (peerId) {
+        // 只知道对方是谁：换/建这一对身份的私聊窗口
+        const convId = await createDM(peerId, identityMode, 'real');
         if (convId && isMounted) setRealConvId(convId);
-      } else {
-        if (isMounted) setRealConvId(groupId);
+      } else if (knownConvId && isMounted) {
+        setRealConvId(knownConvId);
       }
     }
     resolveConversation();
     return () => { isMounted = false; };
-  }, [groupId, isDM, groupName, identityMode, isPetTalk]);
+  }, [knownConvId, peerId, identityMode, isPetTalk]);
 
   const load = useCallback(async () => {
     if (!realConvId) return;

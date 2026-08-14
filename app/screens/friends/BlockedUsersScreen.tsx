@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getBlockedUsers, unblockIdentity, BlockedUser } from '../../../lib/api/friends';
 import { useTheme } from '../../context/ThemeContext';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
+import PetAvatar from '../../components/PetAvatar';
 
 export default function BlockedUsersScreen() {
   const navigation = useNavigation<any>();
@@ -15,7 +16,10 @@ export default function BlockedUsersScreen() {
 
   const [list, setList] = useState<BlockedUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [unblockingId, setUnblockingId] = useState<string | null>(null);
+  // 拉黑是身份级的：同一个人可能有 real 和 pet 两条记录，所以一切按
+  // (blocked_id, identity_type) 复合键区分，不能只用 blocked_id。
+  const [unblockingKey, setUnblockingKey] = useState<string | null>(null);
+  const rowKey = (b: BlockedUser) => `${b.blocked_id}:${b.blocked_identity_type}`;
 
   // Custom Alert Modal State
   const [alertConfig, setAlertConfig] = useState<{
@@ -39,13 +43,20 @@ export default function BlockedUsersScreen() {
   useEffect(() => { load(); }, [load]);
 
   const handleUnblock = async (item: BlockedUser) => {
-    setUnblockingId(item.blocked_id);
+    const key = rowKey(item);
+    setUnblockingKey(key);
     const { error } = await unblockIdentity(item.blocked_id, item.blocked_identity_type);
-    setUnblockingId(null);
+    setUnblockingKey(null);
     if (error) showAlert('Error', error, 'error');
     else {
-      setList(prev => prev.filter(x => x.blocked_id !== item.blocked_id));
-      showAlert('Unblocked', 'User has been unblocked.', 'success');
+      setList(prev => prev.filter(x => rowKey(x) !== key));
+      showAlert(
+        'Unblocked',
+        item.blocked_identity_type === 'pet'
+          ? 'Pet identity has been unblocked.'
+          : 'User has been unblocked.',
+        'success',
+      );
     }
   };
 
@@ -56,19 +67,27 @@ export default function BlockedUsersScreen() {
 
     return (
       <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
-        {avatar ? (
+        {isPet ? (
+          <PetAvatar
+            url={item.pet_avatar_url}
+            breed={item.pet_breed}
+            stage={item.pet_stage}
+            size={48}
+            backgroundColor={colors.cardMutedBg}
+          />
+        ) : avatar ? (
           <Image source={{ uri: avatar }} style={styles.avatar} />
         ) : (
           <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>
-            <Ionicons name={isPet ? 'paw' : 'person'} size={22} color={colors.brand} />
+            <Ionicons name="person" size={22} color={colors.brand} />
           </View>
         )}
         <View style={styles.info}>
           <Text style={[styles.name, { color: colors.text }]}>{name} {isPet ? '🐾' : ''}</Text>
           <Text style={[styles.sub, { color: colors.subText }]}>{isPet ? 'Pet identity blocked' : 'User blocked'}</Text>
         </View>
-        <TouchableOpacity style={[styles.unblockBtn, { backgroundColor: colors.cardMutedBg, borderColor: colors.border }]} onPress={() => handleUnblock(item)} disabled={unblockingId === item.blocked_id} activeOpacity={0.8}>
-          {unblockingId === item.blocked_id ? <ActivityIndicator size="small" color={colors.brand} /> : <Text style={[styles.unblockText, { color: colors.brand }]}>Unblock</Text>}
+        <TouchableOpacity style={[styles.unblockBtn, { backgroundColor: colors.cardMutedBg, borderColor: colors.border }]} onPress={() => handleUnblock(item)} disabled={unblockingKey === rowKey(item)} activeOpacity={0.8}>
+          {unblockingKey === rowKey(item) ? <ActivityIndicator size="small" color={colors.brand} /> : <Text style={[styles.unblockText, { color: colors.brand }]}>Unblock</Text>}
         </TouchableOpacity>
       </View>
     );
@@ -92,7 +111,7 @@ export default function BlockedUsersScreen() {
       ) : (
         <FlatList
           data={list}
-          keyExtractor={i => i.blocked_id}
+          keyExtractor={rowKey}
           renderItem={renderItem}
           contentContainerStyle={styles.list}
           ListEmptyComponent={

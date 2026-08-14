@@ -138,11 +138,12 @@ export default function InboxScreen() {
         ]}
         onPress={() => {
           closeAllMenus();
-          if (item.kind === 'zzuper_talk') {
-            navigation.navigate('Chat', { groupId: item.conversation_id, groupName: 'zZuPer Talk', isDM: true });
-          } else {
-            navigation.navigate('Chat', { groupId: item.conversation_id, groupName: item.display_name, isDM });
-          }
+          navigation.navigate('Chat', {
+            conversationId: item.conversation_id,
+            groupName: item.kind === 'zzuper_talk' ? 'zZuPer Talk' : item.display_name,
+            isDM,
+            isPetTalk: item.kind === 'zzuper_talk',
+          });
         }}
         activeOpacity={0.7}
       >

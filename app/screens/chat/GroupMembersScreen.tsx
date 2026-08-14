@@ -11,6 +11,7 @@ import { getConversationMembers, removeMember, leaveGroup, ConversationMember } 
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
+import PetAvatar from '../../components/PetAvatar';
 
 export default function GroupMembersScreen() {
   const navigation = useNavigation<any>();
@@ -104,11 +105,19 @@ export default function GroupMembersScreen() {
 
     return (
       <View style={[styles.card, { backgroundColor: colors.cardBg }]}>
-        {item.display_avatar ? (
+        {isPet ? (
+          <PetAvatar
+            url={item.display_avatar}
+            breed={item.pet_breed}
+            stage={item.pet_stage}
+            size={48}
+            backgroundColor={colors.cardMutedBg}
+          />
+        ) : item.display_avatar ? (
           <Image source={{ uri: item.display_avatar }} style={styles.avatar} />
         ) : (
           <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>
-            <Ionicons name={isPet ? 'paw' : 'person'} size={24} color={colors.brand} />
+            <Ionicons name="person" size={24} color={colors.brand} />
           </View>
         )}
 

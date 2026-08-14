@@ -76,7 +76,7 @@ export default function FriendsScreen() {
 
       <TouchableOpacity
         style={[styles.actionIconBtn, { backgroundColor: colors.cardMutedBg }]}
-        onPress={() => navigation.navigate('Chat', { groupId: item.id, groupName: item.real_name, isDM: true })}
+        onPress={() => navigation.navigate('Chat', { peerId: item.id, groupName: item.real_name, isDM: true })}
         activeOpacity={0.8}
       >
         <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.brand} />

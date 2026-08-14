@@ -140,6 +140,9 @@ export interface BlockedUser {
   avatar_url: string | null
   pet_name: string | null
   pet_avatar_url: string | null
+  // 宠物形象标识（头像取本地资产，见 components/PetAvatar）
+  pet_breed: string | null
+  pet_stage: string | null
 }
 
 // ─── 好友请求（全部走 SECURITY DEFINER RPC，含拉黑/锁/三态机校验）──────────────
@@ -277,40 +280,19 @@ export async function searchUsers(keyword: string): Promise<UserSearchResult[]> 
     });
   }
 
+  // 搜索失败必须返回空结果。曾经这里会**凭空捏造**一个 id 为 `user-<关键词>`
+  // 的用户（配 Unsplash 头像 + "zZuP University"）—— 网络一抖用户搜什么就"找到"
+  // 什么，点进去加好友必然失败。把故障伪装成数据比直接报错危险得多。
   try {
     const { data, error } = await supabase.rpc('search_users', { p_keyword: keyword });
-    if (error || !data) {
-      if (!kw) return MOCK_RECENT_SEARCHES;
-      return [
-        {
-          id: `user-${kw}`,
-          zzup_id: kw,
-          real_name: keyword,
-          pet_name: 'Companion',
-          avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120',
-          pet_avatar_url: null,
-          profile_visibility: 'real_with_pet',
-          university: 'zZuP University',
-          edu_verified: false
-        }
-      ];
+    if (error) {
+      console.warn('search_users failed:', error.message);
+      return [];
     }
-    return data as UserSearchResult[];
-  } catch (e) {
-    if (!kw) return MOCK_RECENT_SEARCHES;
-    return [
-      {
-        id: `user-${kw}`,
-        zzup_id: kw,
-        real_name: keyword,
-        pet_name: 'Companion',
-        avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120',
-        pet_avatar_url: null,
-        profile_visibility: 'real_with_pet',
-        university: 'zZuP University',
-        edu_verified: false
-      }
-    ];
+    return (data ?? []) as UserSearchResult[];
+  } catch (e: any) {
+    console.warn('search_users threw:', e?.message ?? e);
+    return [];
   }
 }
 
@@ -327,7 +309,7 @@ export async function getBlockedUsers(): Promise<BlockedUser[]> {
     .select(
       `blocked_id, blocked_identity_type,
        blocked:profiles!blocked_users_blocked_id_fkey (
-         zzup_id, real_name, avatar_url, pet_name, pet_avatar_url
+         zzup_id, real_name, avatar_url, pet_name, pet_avatar_url, pet_breed, pet_stage
        )`
     )
     .eq('blocker_id', user.id)
@@ -342,5 +324,7 @@ export async function getBlockedUsers(): Promise<BlockedUser[]> {
     avatar_url: b.blocked.avatar_url,
     pet_name: b.blocked.pet_name,
     pet_avatar_url: b.blocked.pet_avatar_url,
+    pet_breed: b.blocked.pet_breed ?? null,
+    pet_stage: b.blocked.pet_stage ?? null,
   }))
 }
