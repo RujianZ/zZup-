@@ -56,6 +56,7 @@ export default function ChatScreen() {
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);         // fullscreen image viewer
 
   const flatListRef = useRef<FlatList>(null);
+  const sendingRef = useRef(false);   // 同步的发送闸门，见 handleSend
 
   // Custom Alert Modal State
   const [alertConfig, setAlertConfig] = useState<{
@@ -282,7 +283,11 @@ export default function ChatScreen() {
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || sending || !realConvId) return;
+    // 防重入必须用 ref：setSending 是异步的，同一帧内被调用两次时两次都会看到
+    // sending === false 从而双双放行。硬件键盘的回车会在一帧内触发两次
+    // onSubmitEditing（软键盘的发送键只触发一次），双击发送按钮同理。
+    if (!text || sendingRef.current || !realConvId) return;
+    sendingRef.current = true;
     setSending(true);
     setInput('');
 
@@ -293,10 +298,12 @@ export default function ChatScreen() {
     if (error || !data) {
       showAlert('Send Failed', error || 'Please try sending again.', 'error');
       setSending(false);
+      sendingRef.current = false;
       return;
     }
 
     setSending(false);
+    sendingRef.current = false;
 
     // AI Pet Companion Auto Response for zZuPer Talk
     if (isPetTalk) {
