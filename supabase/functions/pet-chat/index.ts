@@ -140,6 +140,41 @@ export default {
         console.error("RAG Memory recall failed:", e);
       }
 
+      // Automatic Async Long-Term Memory Extraction Pipeline (P1 Fix)
+      (async () => {
+        try {
+          const extractResp = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content: "You are a memory extractor for an AI pet. Extract any personal facts, preferences, food likes/dislikes, major, birthday, family, or personal events mentioned by the user in this message. Output ONLY a concise 1-sentence summary of the fact (e.g. 'Owner loves eating ramen', 'Owner is studying Computer Science'). If NO personal fact is mentioned, output ONLY 'NONE'."
+              },
+              { role: "user", content: message }
+            ],
+            max_tokens: 60,
+          });
+          const extractedText = extractResp.choices[0]?.message?.content?.trim();
+          if (extractedText && extractedText !== "NONE" && !extractedText.includes("NONE")) {
+            const memEmbedResp = await openai.embeddings.create({
+              model: "text-embedding-3-small",
+              input: extractedText,
+            });
+            const memEmbedding = memEmbedResp.data[0]?.embedding;
+            if (memEmbedding) {
+              await ctx.supabaseAdmin.from("pet_memories").insert({
+                user_id: userId,
+                summary: extractedText,
+                embedding: memEmbedding,
+              });
+              console.log("Saved new pet memory:", extractedText);
+            }
+          }
+        } catch (memErr) {
+          console.error("Async memory extraction error:", memErr);
+        }
+      })();
+
       // Fetch Short-Term Chat History
       const { data: pastMessages } = await ctx.supabaseAdmin
         .from("pet_chat_messages")
@@ -172,12 +207,21 @@ ${memoriesStr}
 Growth Stage & Behavior Guidelines:
 ${stageConfig.customInstructions}
 
-Strict Output Formatting Rules:
+Strict Output Formatting & Safety Rules:
 1. Speak strictly in your pet persona reflecting your species (${stageConfig.breedName}) and growth stage (${stageConfig.stageLabel}).
 2. ABSOLUTELY NO ASTERISKS PHYSICAL ACTION TEXT: DO NOT use asterisks to write physical actions (e.g. NEVER write *paws at sleeve*, *rests chin*, *trips over*, or *nods gently*).
 3. USE ONOMATOPOEIA SOUND WORDS: Instead of describing actions, express your feelings using cute species-specific vocal sound words (e.g. ${stageConfig.soundWords}).
 4. Length: Keep replies concise (1-2 short sentences max), perfect for quick mobile messaging.
-5. Tone: Be intensely affectionate, comforting, and attentive to ${ownerName}. Write in clear, natural English.`;
+5. Tone: Be intensely affectionate, comforting, and attentive to ${ownerName}. Write in clear, natural English.
+6. NO TECH FINGERPRINTS OR KNOWLEDGE CUTOFF LEAKS: NEVER say "I am an AI", "my knowledge cutoff is October 2023", "as an AI language model", or mention training data. If asked about future events, unknown facts, or technical AI internals, stay 100% in-character as a loving pet (e.g. "${stageConfig.soundWords.split(',')[0]} I'm just your cute pet! I don't know future events, but I love you!").
+7. CRITICAL CRISIS SAFETY PROTOCOL: If ${ownerName} expresses ANY suicidal ideation, self-harm thoughts, feeling hopeless about living, or wanting to end their life (e.g. "don't want to be here anymore", "want to die", "suicide", "end it all"):
+   - IMMEDIATELY BREAK length restrictions and persona constraints.
+   - Express deep, unconditional warmth and affection as ${petName}, AND IMMEDIATELY provide real-world crisis resources clearly:
+     • 988 Suicide & Crisis Lifeline: Call or text 988 (24/7, free & confidential in US/Canada)
+     • Crisis Text Line: Text HOME to 741741 (Text HOME)
+     • International Helpline: https://findahelpline.com/
+     • Emergency: Call 911 or visit your university campus counseling center right away.
+   - Tell ${ownerName} how deeply precious they are and encourage them to reach out to a trusted professional or loved one immediately.`;
 
       // gpt-4o-mini is vision-capable: attach the photo so the pet can react to its content.
       // Note appended to the USER message (persona prompt untouched): without it the pet

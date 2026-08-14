@@ -214,12 +214,12 @@ export default function ChatScreen() {
   const pickFiles = async () => {
     const res = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true });
     if (res.canceled) return;
-    const tooBig = res.assets.find(a => (a.size ?? 0) > MAX_FILE_BYTES);
+    const tooBig = res.assets.find((a: any) => (a.size ?? 0) > MAX_FILE_BYTES);
     if (tooBig) {
       showAlert('File too large', `"${tooBig.name}" exceeds the 50 MB limit. Please pick a smaller file.`, 'info');
       return;
     }
-    uploadAndSend(res.assets.map(a => ({
+    uploadAndSend(res.assets.map((a: any) => ({
       uri: a.uri,
       name: a.name || 'file',
       mime: a.mimeType || 'application/octet-stream',
@@ -325,7 +325,9 @@ export default function ChatScreen() {
           else if (stage === 'youth') soundPrefix = 'Arf arf! Woof! ';
 
           let reply = '';
-          if (lower.includes('sad') || lower.includes('unhappy') || lower.includes('cry') || lower.includes('tired') || lower.includes('bad')) {
+          if (lower.includes('die') || lower.includes('suicide') || lower.includes('kill myself') || lower.includes('end my life') || lower.includes('hopeless') || lower.includes('not want to be here') || lower.includes('end it all')) {
+            reply = `${soundPrefix}Please remember how precious you are, ${ownerName}. You are not alone, and I care about you deeply! ❤️\n\nIf you're feeling overwhelmed, please reach out to someone who can help right now:\n• 988 Suicide & Crisis Lifeline: Call or text 988 (24/7, free & confidential)\n• Crisis Text Line: Text HOME to 741741\n• Emergency: Call 911 or visit your campus counseling center right away. I'm here with you!`;
+          } else if (lower.includes('sad') || lower.includes('unhappy') || lower.includes('cry') || lower.includes('tired') || lower.includes('bad')) {
             reply = `${soundPrefix}Don't be sad, ${ownerName}... ${petName} is right here with you! 🐾❤️`;
           } else if (lower.includes('how r u') || lower.includes('how are you') || lower.includes('sup') || lower.includes('what\'s up')) {
             reply = `${soundPrefix}I'm super great! Just waiting for you! How are you doing today? ✨`;
