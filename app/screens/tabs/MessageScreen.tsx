@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  Modal, Pressable, SafeAreaView,
+  Modal, Pressable,
 } from 'react-native';
+// react-native 自带的 SafeAreaView 在 Android 上不生效，必须用 safe-area-context 的
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 function PlusMenu({ visible, onClose }: { visible: boolean; onClose: () => void }) {
