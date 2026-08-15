@@ -221,17 +221,26 @@ export default function GroupMembersScreen() {
         />
       )}
 
-      {/* Luxury Alert Modal */}
+      {/* Luxury Alert Modal
+          曾经这里把 confirmAction 挂在 onClose 上 —— 点遮罩/按返回键想取消，
+          反而执行了移除成员。现在走 onConfirm，取消路径绝不触发动作。 */}
       <LuxuryAlertModal
         visible={alertConfig.visible}
         title={alertConfig.title}
         message={alertConfig.message}
         type={alertConfig.type}
-        buttonText={alertConfig.confirmText || 'Got it'}
-        onClose={() => {
-          setAlertConfig(prev => ({ ...prev, visible: false }));
-          if (alertConfig.confirmAction) alertConfig.confirmAction();
-        }}
+        onConfirm={
+          alertConfig.confirmAction
+            ? () => {
+                const action = alertConfig.confirmAction;
+                setAlertConfig(prev => ({ ...prev, visible: false }));
+                action?.();
+              }
+            : undefined
+        }
+        confirmText={alertConfig.confirmText}
+        destructive
+        onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
       />
     </SafeAreaView>
   );

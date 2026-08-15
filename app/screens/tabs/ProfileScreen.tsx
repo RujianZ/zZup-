@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  SafeAreaView, Image, ScrollView,
+  Image, ScrollView,
   Modal, TextInput, ActivityIndicator
 } from 'react-native';
+// react-native 自带的 SafeAreaView 在 Android 上不生效，必须用 safe-area-context 的
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -37,9 +39,13 @@ export default function ProfileScreen() {
   const [editName, setEditName] = useState('');
   const [editBio, setEditBio] = useState('');
   const [saving, setSaving] = useState(false);
+  // 换装窗里的「待选」状态：关窗不提交就自动丢弃
+  const [pendingAvatar, setPendingAvatar] = useState<string | null>(null);
+  const [pendingStage, setPendingStage] = useState<'child' | 'youth' | 'adult'>('child');
 
   const [alertConfig, setAlertConfig] = useState<{
     visible: boolean; title: string; message: string; type?: 'error' | 'info' | 'success';
+    onConfirm?: () => void; confirmText?: string; destructive?: boolean;
   }>({ visible: false, title: '', message: '', type: 'info' });
   const showAlert = (title: string, message: string, type: 'error' | 'info' | 'success' = 'info') =>
     setAlertConfig({ visible: true, title, message, type });
@@ -70,23 +76,37 @@ export default function ProfileScreen() {
     finally { setSaving(false); }
   };
 
-  const handleSelectOutfit = async (url: string, name: string) => {
-    setSaving(true);
-    try {
-      const res = await updateProfile({ avatar_url: url });
-      if (res.error) showAlert('Error', res.error, 'error');
-      else { await refreshProfile(); setShowClosetModal(false); showAlert('Outfit changed', `Now wearing ${name}.`, 'success'); }
-    } catch (e) { console.error(e); }
-    finally { setSaving(false); }
+  // 换装是「先选后提交」：点图片只改本地待选状态（可预览、可反悔、可反复点），
+  // 只有按 Done 才真正写库。之前是点一下立即提交并关窗，Done 形同虚设。
+  const openCloset = () => {
+    setPendingAvatar(profile?.avatar_url ?? null);
+    setPendingStage((profile?.pet_stage as 'child' | 'youth' | 'adult') ?? 'child');
+    setShowClosetModal(true);
   };
 
-  const handleSelectPetStage = async (stage: 'child' | 'youth' | 'adult', name: string) => {
+  const handleApplyCloset = async () => {
+    const changed = isHostTab
+      ? pendingAvatar && pendingAvatar !== profile?.avatar_url
+      : pendingStage && pendingStage !== currentPetStage;
+
+    if (!changed) { setShowClosetModal(false); return; }   // 没改动就当取消
+
     setSaving(true);
     try {
-      const res = await updateProfile({ pet_stage: stage });
-      if (res.error) showAlert('Error', res.error, 'error');
-      else { await refreshProfile(); setShowClosetModal(false); showAlert('Transformed!', `${profile?.pet_name || 'Pet'} is now ${name} form.`, 'success'); }
-    } catch (e: any) { showAlert('Error', e.message || 'Failed to update pet form', 'error'); }
+      if (isHostTab) {
+        const res = await updateProfile({ avatar_url: pendingAvatar! });
+        if (res.error) { showAlert('Error', res.error, 'error'); return; }
+        await refreshProfile();
+        setShowClosetModal(false);
+        showAlert('Outfit changed', `Now wearing ${HOST_OUTFITS.find(o => o.url === pendingAvatar)?.name ?? 'your new look'}.`, 'success');
+      } else {
+        const res = await updateProfile({ pet_stage: pendingStage! });
+        if (res.error) { showAlert('Error', res.error, 'error'); return; }
+        await refreshProfile();
+        setShowClosetModal(false);
+        showAlert('Transformed!', `${profile?.pet_name || 'Pet'} is now ${PET_STAGE_ITEMS.find(s => s.stage === pendingStage)?.name ?? 'a new'} form.`, 'success');
+      }
+    } catch (e: any) { showAlert('Error', e.message || 'Failed to update', 'error'); }
     finally { setSaving(false); }
   };
 
@@ -95,20 +115,38 @@ export default function ProfileScreen() {
     await supabase.auth.signOut();
   };
   const handleUnlink = () => showAlert('Unlink account', 'Your account credentials have been unlinked.', 'info');
-  const handleDeleteAccount = async () => {
+
+  // 删号必须二次确认：之前是点一下立即执行，误触就没了。
+  const confirmDeleteAccount = () => {
+    setAlertConfig({
+      visible: true,
+      title: 'Delete account?',
+      message:
+        'This removes your profile, friends and Pack memberships, and cannot be undone.\n\n' +
+        'Messages you already sent stay in other people’s chats, shown as “Deleted user”. ' +
+        'Some records are kept for safety and legal reasons — see our Privacy Policy.',
+      type: 'error',
+      onConfirm: runDeleteAccount,
+      confirmText: 'Delete',
+      destructive: true,
+    });
+  };
+
+  const runDeleteAccount = async () => {
+    setAlertConfig(prev => ({ ...prev, visible: false }));
     try {
       const { error } = await deleteAccount();
       if (error) showAlert('Error', error, 'error');
-      else showAlert('Account deleted', 'Your account has been permanently removed.', 'info');
+      // 成功时不弹框：deleteAccount 内部已 signOut，AuthContext 会把界面切回登录页。
     } catch (e: any) { showAlert('Error', e.message || 'Failed to delete account', 'error'); }
   };
 
   const actions = [
     { icon: 'create-outline', label: 'Edit profile', onPress: openEdit, danger: false },
-    { icon: 'shirt-outline', label: 'Closet', onPress: () => setShowClosetModal(true), danger: false },
+    { icon: 'shirt-outline', label: 'Closet', onPress: openCloset, danger: false },
     { icon: 'link-outline', label: 'Unlink account', onPress: handleUnlink, danger: false },
     { icon: 'log-out-outline', label: 'Sign out', onPress: handleLogout, danger: false },
-    { icon: 'trash-outline', label: 'Delete account', onPress: handleDeleteAccount, danger: true },
+    { icon: 'trash-outline', label: 'Delete account', onPress: confirmDeleteAccount, danger: true },
   ];
 
   return (
@@ -153,7 +191,7 @@ export default function ProfileScreen() {
                 )}
               </View>
             </LinearGradient>
-            <TouchableOpacity style={[styles.closetFab, { backgroundColor: colors.brand, borderColor: colors.bg }]} onPress={() => setShowClosetModal(true)} activeOpacity={0.85}>
+            <TouchableOpacity style={[styles.closetFab, { backgroundColor: colors.brand, borderColor: colors.bg }]} onPress={openCloset} activeOpacity={0.85}>
               <Ionicons name="shirt" size={17} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
@@ -288,9 +326,9 @@ export default function ProfileScreen() {
             <ScrollView style={{ maxHeight: 340 }} contentContainerStyle={styles.closetGrid}>
               {isHostTab
                 ? HOST_OUTFITS.map(item => {
-                    const sel = profile?.avatar_url === item.url;
+                    const sel = pendingAvatar === item.url;   // 待选，不是已保存
                     return (
-                      <TouchableOpacity key={item.id} style={[styles.closetItem, { backgroundColor: colors.bg, borderColor: sel ? colors.brand : colors.border }]} onPress={() => handleSelectOutfit(item.url, item.name)} disabled={saving} activeOpacity={0.85}>
+                      <TouchableOpacity key={item.id} style={[styles.closetItem, { backgroundColor: colors.bg, borderColor: sel ? colors.brand : colors.border }]} onPress={() => setPendingAvatar(item.url)} disabled={saving} activeOpacity={0.85}>
                         <Image source={{ uri: item.url }} style={styles.closetImg} />
                         <Text style={[styles.closetName, { color: sel ? colors.brand : colors.text }]}>{item.name}</Text>
                         {sel && <View style={styles.check}><Ionicons name="checkmark-circle" size={20} color={colors.brand} /></View>}
@@ -298,9 +336,9 @@ export default function ProfileScreen() {
                     );
                   })
                 : PET_STAGE_ITEMS.map(item => {
-                    const sel = currentPetStage === item.stage;
+                    const sel = pendingStage === item.stage;
                     return (
-                      <TouchableOpacity key={item.stage} style={[styles.closetItem, { backgroundColor: colors.bg, borderColor: sel ? colors.brand : colors.border }]} onPress={() => handleSelectPetStage(item.stage, item.name)} disabled={saving} activeOpacity={0.85}>
+                      <TouchableOpacity key={item.stage} style={[styles.closetItem, { backgroundColor: colors.bg, borderColor: sel ? colors.brand : colors.border }]} onPress={() => setPendingStage(item.stage)} disabled={saving} activeOpacity={0.85}>
                         <View style={styles.petBox}><PetSvgAvatar breed={currentPetBreed} stage={item.stage} size={72} /></View>
                         <Text style={[styles.closetName, { color: sel ? colors.brand : colors.text }]}>{item.name}</Text>
                         {sel && <View style={styles.check}><Ionicons name="checkmark-circle" size={20} color={colors.brand} /></View>}
@@ -308,9 +346,26 @@ export default function ProfileScreen() {
                     );
                   })}
             </ScrollView>
-            <TouchableOpacity style={[styles.closetClose, { backgroundColor: colors.brand }]} onPress={() => setShowClosetModal(false)} disabled={saving} activeOpacity={0.8}>
-              <Text style={styles.closetCloseText}>Done</Text>
-            </TouchableOpacity>
+            <View style={styles.closetActions}>
+              <TouchableOpacity
+                style={[styles.closetBtn, { backgroundColor: colors.cardMutedBg, borderColor: colors.border, borderWidth: 1 }]}
+                onPress={() => setShowClosetModal(false)}
+                disabled={saving}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.closetCloseText, { color: colors.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.closetBtn, { backgroundColor: colors.brand }]}
+                onPress={handleApplyCloset}
+                disabled={saving}
+                activeOpacity={0.8}
+              >
+                {saving
+                  ? <ActivityIndicator color="#FFFFFF" size="small" />
+                  : <Text style={styles.closetCloseText}>Done</Text>}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -320,6 +375,9 @@ export default function ProfileScreen() {
         title={alertConfig.title}
         message={alertConfig.message}
         type={alertConfig.type}
+        onConfirm={alertConfig.onConfirm}
+        confirmText={alertConfig.confirmText}
+        destructive={alertConfig.destructive}
         onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
       />
     </SafeAreaView>
@@ -392,5 +450,7 @@ const styles = StyleSheet.create({
   closetName: { fontSize: 13, fontWeight: '600' },
   check: { position: 'absolute', top: 6, right: 6 },
   closetClose: { marginTop: 20, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
+  closetActions: { flexDirection: 'row', gap: 10, marginTop: 20 },
+  closetBtn: { flex: 1, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
   closetCloseText: { fontSize: 15, color: '#FFFFFF', fontWeight: '700' },
 });
