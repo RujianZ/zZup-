@@ -49,6 +49,29 @@ export async function cancelMatching(): Promise<{ success: boolean; error: strin
 }
 
 /**
+ * 主动查询自己的排队状态（Realtime 的兜底）。
+ *
+ * 光靠 subscribeToMatchResult 不够稳：弱网、App 切后台再回来、Realtime 断线重连
+ * 期间的事件都会丢，一丢等待方就永远停在倒计时上。所以等待页要同时轮询这个。
+ */
+export async function getMyMatchStatus(): Promise<{
+  status: 'waiting' | 'matched' | 'cancelled' | null;
+  groupId: string | null;
+}> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { status: null, groupId: null };
+
+  const { data, error } = await supabase
+    .from('match_queue')
+    .select('status, matched_group_id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (error || !data) return { status: null, groupId: null };
+  return { status: data.status, groupId: data.matched_group_id };
+}
+
+/**
  * 订阅匹配结果
  * @param userId 当前用户ID
  * @param onMatchFound 匹配成功回调，参数为 matched_group_id

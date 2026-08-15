@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, FlatList,
+  View, Text, StyleSheet, FlatList,
   TouchableOpacity, Image, ActivityIndicator, TextInput,
   KeyboardAvoidingView, Platform, Alert, Dimensions, Modal
 } from 'react-native';
+// react-native 自带的 SafeAreaView 在 Android 上不生效，必须用 safe-area-context 的
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -567,7 +569,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F2F5',
     borderRadius: 20,
     paddingHorizontal: 16,
-    color: '#FFFFFF',
+    // 曾是深色卡片上的白字，底色改成浅灰后没跟着改 —— 打字看不见
+    color: '#1A1A1F',
     fontSize: 14,
     borderWidth: 1,
     borderColor: '#ECECEF',

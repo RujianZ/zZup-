@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity,
   TextInput, ActivityIndicator, ScrollView, Image, Dimensions, Modal
 } from 'react-native';
+// react-native 自带的 SafeAreaView 在 Android 上不生效，必须用 safe-area-context 的
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -285,16 +287,10 @@ export default function FreeTravelScreen() {
       <StatusBar style={colors.statusBarStyle} />
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.border }]}>
-        <TouchableOpacity 
-          style={styles.backBtn} 
-          onPress={() => {
-            if (activePost && new Date() < new Date(activePost.ends_at)) {
-              navigation.navigate('NearbyTravel');
-            } else {
-              navigation.goBack();
-            }
-          }}
-        >
+        {/* 返回就是返回。曾经这里在「宠物旅行中」时会跳去 NearbyTravel ——
+            那是发现页当时唯一的入口，但没人猜得到「返回」会进一个发现流。
+            入口已改为下方那张显式的卡片。 */}
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={colors.brand} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>zZuPer Roam</Text>
@@ -308,6 +304,24 @@ export default function FreeTravelScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* ─── 进 Roam 的两个选项之一：看看别人 ───
+            另一个选项（把自己的宠物放出去）就是下方的三态内容本身。
+            这张卡片在任何状态下都可见 —— 自己的宠物在不在外面，都能刷别人的。 */}
+        <TouchableOpacity
+          style={styles.browseCard}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('NearbyTravel')}
+        >
+          <View style={styles.browseIcon}>
+            <Ionicons name="compass-outline" size={24} color="#7C3AED" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.browseTitle}>Browse Roamers</Text>
+            <Text style={styles.browseSub}>See which zZuPers are wandering nearby</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#A6A6AF" />
+        </TouchableOpacity>
+
         {/* ─── STATE 1: PET IS NOT TRAVELING ─── */}
         {!activePost && (
           <View style={styles.formContainer}>
@@ -705,14 +719,31 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15, shadowRadius: 10, elevation: 3,
   },
   cardBoxTitle: { fontSize: 14, fontWeight: '700', color: '#7C3AED', marginBottom: 12 },
+
+  // 「看看别人」入口卡片（进 Roam 的两个选项之一）
+  browseCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: '#FFFFFF', borderRadius: 20,
+    paddingHorizontal: 16, paddingVertical: 16,
+    borderWidth: 1.5, borderColor: '#ECECEF',
+    marginBottom: 18,
+  },
+  browseIcon: {
+    width: 46, height: 46, borderRadius: 14,
+    backgroundColor: '#F3EEFF', alignItems: 'center', justifyContent: 'center',
+  },
+  browseTitle: { fontSize: 15, fontWeight: '700', color: '#1A1A1F' },
+  browseSub: { fontSize: 12, color: '#6C6C77', marginTop: 2 },
+  // 注意 color：这几个输入框曾经是深色卡片上的白字，卡片改成白底后文字颜色
+  // 没跟着改，变成白底白字 —— 字打进去了但看不见。
   textArea: {
-    backgroundColor: '#FFFFFF', color: '#FFFFFF', borderRadius: 12,
+    backgroundColor: '#FFFFFF', color: '#1A1A1F', borderRadius: 12,
     padding: 12, fontSize: 14, height: 110, textAlignVertical: 'top',
     borderWidth: 1.5, borderColor: '#ECECEF',
   },
   charCount: { alignSelf: 'flex-end', fontSize: 11, color: '#A6A6AF', marginTop: 4 },
   textInput: {
-    backgroundColor: '#FFFFFF', color: '#FFFFFF', borderRadius: 12,
+    backgroundColor: '#FFFFFF', color: '#1A1A1F', borderRadius: 12,
     paddingHorizontal: 16, paddingVertical: 12, fontSize: 14,
     borderWidth: 1.5, borderColor: '#ECECEF',
   },
@@ -875,7 +906,7 @@ const styles = StyleSheet.create({
   },
   replyTextArea: {
     backgroundColor: '#FFFFFF',
-    color: '#FFFFFF',
+    color: '#1A1A1F',
     borderRadius: 12,
     padding: 12,
     fontSize: 13,

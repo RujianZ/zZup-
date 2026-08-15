@@ -12,6 +12,9 @@ export interface TravelPost {
   remaining_seconds?: number;
   view_count: number;
   status: 'traveling' | 'returned';
+  // 终态标记（迁移 69）：非空 = 主人已迎接，这趟旅行归档，不再占用「当前旅行」槽位。
+  // status 只有 traveling/returned 两个值，没有"已确认收工"的表达，所以单开一列。
+  welcomed_at?: string | null;
   similarity?: number;
   author_profile?: {
     id: string;
@@ -187,6 +190,7 @@ export async function getActiveTravelPost(): Promise<{ post: TravelPost | null; 
       .select('*')
       .eq('user_id', user.id)
       .in('status', ['traveling', 'returned'])
+      .is('welcomed_at', null)   // 已迎接过的旅行不再占用「当前旅行」槽位（迁移 69）
       .order('started_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -259,12 +263,17 @@ export async function getTravelComments(postId: string): Promise<{ comments: Tra
 }
 
 /**
- * 迎回旅行归来的宠物 (更新 status 为 'returned')
+ * 迎回旅行归来的宠物 —— 给这趟旅行盖上终态戳。
+ *
+ * 曾经这里写的是 `update({ status: 'returned' })`，但帖子本来就已经是 'returned'，
+ * 这个更新什么都没改；下次 getActiveTravelPost 又把同一条查出来，界面无限弹回
+ * 「宠物回家了」。status 的 CHECK 只有 traveling/returned 两个值，**没有任何值
+ * 表示"已确认收工"** —— 迁移 69 补的 welcomed_at 就是这个终态。
  */
 export async function welcomePetHome(postId: string): Promise<{ error: string | null }> {
   const { error } = await supabase
     .from('travel_posts')
-    .update({ status: 'returned' })
+    .update({ status: 'returned', welcomed_at: new Date().toISOString() })
     .eq('id', postId);
 
   return { error: error ? error.message : null };

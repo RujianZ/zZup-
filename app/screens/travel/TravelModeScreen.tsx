@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, TextInput,
+  View, Text, StyleSheet, TextInput,
   TouchableOpacity, Dimensions, ActivityIndicator, Modal,
 } from 'react-native';
+// 必须用 safe-area-context 的版本：react-native 自带的 SafeAreaView 只在 iOS 生效，
+// Android 上是个普通 View，刘海/状态栏会直接压住内容。
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { startMatching, cancelMatching, subscribeToMatchResult } from '../../../lib/api/match';
+import { startMatching, cancelMatching, subscribeToMatchResult, getMyMatchStatus } from '../../../lib/api/match';
 import { PetSvgAvatar } from '../../../assets/pets';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 
@@ -51,6 +54,26 @@ export default function TravelModeScreen() {
 
   useEffect(() => () => { if (unsubscribeRef.current) unsubscribeRef.current(); }, []);
 
+  // Realtime 兜底：推送会因弱网/切后台/断线重连丢失，丢一次等待方就永远卡在倒计时。
+  // 等待期间每 3 秒主动查一次自己的排队状态。
+  useEffect(() => {
+    if (!matching) return;
+    let cancelled = false;
+
+    const poll = setInterval(async () => {
+      const { status, groupId } = await getMyMatchStatus();
+      if (cancelled) return;
+      if (status === 'matched' && groupId) {
+        setMatching(false);
+        if (unsubscribeRef.current) { unsubscribeRef.current(); unsubscribeRef.current = null; }
+        setMatchedGroupId(groupId);
+        setShowMatchedModal(true);
+      }
+    }, 3000);
+
+    return () => { cancelled = true; clearInterval(poll); };
+  }, [matching]);
+
   const formatMatchTime = (secs: number) => {
     const mm = Math.floor(secs / 60).toString().padStart(2, '0');
     const ss = (secs % 60).toString().padStart(2, '0');
@@ -84,14 +107,13 @@ export default function TravelModeScreen() {
     }
   };
 
-  const handleCancelMatch = async () => {
-    setLoading(true);
-    try {
-      await cancelMatching();
-      setMatching(false);
-      if (unsubscribeRef.current) { unsubscribeRef.current(); unsubscribeRef.current = null; }
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+  // 取消要**先关界面再发请求**：之前是 await 完网络才 setMatching(false)，
+  // 请求一慢（或函数不可达）用户就以为按钮点不动。取消是纯善意操作，
+  // 即使网络失败也不该把用户困在等待页里。
+  const handleCancelMatch = () => {
+    setMatching(false);
+    if (unsubscribeRef.current) { unsubscribeRef.current(); unsubscribeRef.current = null; }
+    cancelMatching().catch(e => console.warn('cancelMatching failed:', e));
   };
 
   const iconGradientColors: [string, string] = !isDark
