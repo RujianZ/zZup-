@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, SafeAreaView, Pressable, ActivityIndicator,
+  KeyboardAvoidingView, Platform, Pressable, ActivityIndicator,
 } from 'react-native';
+// react-native 自带的 SafeAreaView 在 Android 上不生效，必须用 safe-area-context 的
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
 import { AntDesign, Feather } from '@expo/vector-icons';
@@ -82,7 +84,12 @@ export default function RegisterScreen() {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Already have an account?</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Login')} activeOpacity={0.7}><Text style={styles.footerLink}>Log in</Text></TouchableOpacity>
+            {/* 同 LoginScreen：小字链接必须放大命中区，否则很容易点空 */}
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Login')}
+              activeOpacity={0.7}
+              hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+            ><Text style={styles.footerLink}>Log in</Text></TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>

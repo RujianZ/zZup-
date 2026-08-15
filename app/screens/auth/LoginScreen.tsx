@@ -7,10 +7,11 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   Pressable,
   ActivityIndicator,
 } from 'react-native';
+// react-native 自带的 SafeAreaView 在 Android 上不生效，必须用 safe-area-context 的
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
 import { AntDesign, Feather } from '@expo/vector-icons';
@@ -105,7 +106,12 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity onPress={handleForgot} activeOpacity={0.7} style={styles.forgotWrap}>
+            <TouchableOpacity
+              onPress={handleForgot}
+              activeOpacity={0.7}
+              style={styles.forgotWrap}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
               <Text style={styles.forgot}>Forgot password?</Text>
             </TouchableOpacity>
 
@@ -128,7 +134,13 @@ export default function LoginScreen() {
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>New to zZuP!?</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')} activeOpacity={0.7}>
+            {/* 触摸区默认只有这行小字本身（约 20px 高），手指很容易点空 ——
+                这是新用户注册路径上的第一个障碍，必须放大命中区。 */}
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Register')}
+              activeOpacity={0.7}
+              hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+            >
               <Text style={styles.footerLink}>Create account</Text>
             </TouchableOpacity>
           </View>
