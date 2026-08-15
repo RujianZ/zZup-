@@ -36,6 +36,7 @@ import FreeTravelScreen from '../screens/travel/FreeTravelScreen';
 import TravelDetailScreen from '../screens/travel/TravelDetailScreen';
 import NearbyTravelScreen from '../screens/travel/NearbyTravelScreen';
 import AgentChatScreen from '../screens/chat/AgentChatScreen';
+import ReportScreen from '../screens/settings/ReportScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -108,6 +109,7 @@ function AppStack() {
       <Stack.Screen name="TravelDetail"      component={TravelDetailScreen}      />
       <Stack.Screen name="NearbyTravel"      component={NearbyTravelScreen}      />
       <Stack.Screen name="AgentChat"         component={AgentChatScreen}         />
+      <Stack.Screen name="Report"            component={ReportScreen}            />
     </Stack.Navigator>
   );
 }

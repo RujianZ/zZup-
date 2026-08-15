@@ -145,6 +145,7 @@ export default function ProfileScreen() {
     { icon: 'create-outline', label: 'Edit profile', onPress: openEdit, danger: false },
     { icon: 'shirt-outline', label: 'Closet', onPress: openCloset, danger: false },
     { icon: 'link-outline', label: 'Unlink account', onPress: handleUnlink, danger: false },
+    { icon: 'flag-outline', label: 'Report a problem', onPress: () => navigation.navigate('Report'), danger: false },
     { icon: 'log-out-outline', label: 'Sign out', onPress: handleLogout, danger: false },
     { icon: 'trash-outline', label: 'Delete account', onPress: confirmDeleteAccount, danger: true },
   ];
