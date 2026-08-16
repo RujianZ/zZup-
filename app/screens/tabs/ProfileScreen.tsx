@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Image, ScrollView,
-  Modal, TextInput, ActivityIndicator
+  Modal, TextInput, ActivityIndicator, Switch
 } from 'react-native';
 // react-native 自带的 SafeAreaView 在 Android 上不生效，必须用 safe-area-context 的
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -49,6 +49,35 @@ export default function ProfileScreen() {
   }>({ visible: false, title: '', message: '', type: 'info' });
   const showAlert = (title: string, message: string, type: 'error' | 'info' | 'success' = 'info') =>
     setAlertConfig({ visible: true, title, message, type });
+
+  // 陌生人私信开关（迁移 90）。
+  // 本地状态是为了让开关立刻响应 —— 等 updateProfile + refreshProfile 走完
+  // 再动，中间那半秒开关会「弹回去」，看着像点失败了。写失败再回滚。
+  // null 合并成 true：服务端默认就是 true，读不到时别显示成关着的。
+  const allowStrangerDm = profile?.allow_stranger_dm ?? true;
+  const [strangerDmLocal, setStrangerDmLocal] = useState<boolean | null>(null);
+  const [strangerDmSaving, setStrangerDmSaving] = useState(false);
+  const strangerDmOn = strangerDmLocal ?? allowStrangerDm;
+
+  const toggleStrangerDm = async (next: boolean) => {
+    setStrangerDmLocal(next);
+    setStrangerDmSaving(true);
+    try {
+      const { error } = await updateProfile({ allow_stranger_dm: next });
+      if (error) {
+        setStrangerDmLocal(null);          // 回滚到服务端的值
+        showAlert('Error', error, 'error');
+        return;
+      }
+      await refreshProfile();
+      setStrangerDmLocal(null);            // 服务端已是新值，交回它当权威
+    } catch (e: any) {
+      setStrangerDmLocal(null);
+      showAlert('Error', e.message || 'Failed to update', 'error');
+    } finally {
+      setStrangerDmSaving(false);
+    }
+  };
 
   const isHostTab = activeSubTab === 'zZuPer';
   const xp = profile?.pet_xp ?? 0;
@@ -285,6 +314,43 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Privacy */}
+        <View style={styles.privacySection}>
+          <Text style={[styles.sectionTitle, { color: colors.subText }]}>PRIVACY</Text>
+          <View style={[styles.settingRow, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+            <View style={styles.settingLabelRow}>
+              <Ionicons
+                name={strangerDmOn ? 'chatbubbles-outline' : 'lock-closed-outline'}
+                size={20}
+                color={colors.brand}
+              />
+              <View style={styles.settingTextWrap}>
+                <Text style={[styles.settingText, { color: colors.text }]}>Allow stranger DMs</Text>
+                <Text style={[styles.settingSub, { color: colors.subText }]}>
+                  {strangerDmOn
+                    ? 'Anyone can message you, and you can use Pulse and Roam.'
+                    : 'Only your friends can message you. Everyone else is blocked, and Pulse and Roam are off.'}
+                </Text>
+              </View>
+            </View>
+            {strangerDmSaving ? (
+              <ActivityIndicator size="small" color={colors.brand} />
+            ) : (
+              <Switch
+                value={strangerDmOn}
+                onValueChange={toggleStrangerDm}
+                trackColor={{ false: colors.border, true: colors.brand }}
+                thumbColor="#FFFFFF"
+              />
+            )}
+          </View>
+          <Text style={[styles.settingFootnote, { color: colors.tertiaryText }]}>
+            Turning this off opts you out of strangers entirely: nobody but a friend can send you a
+            message — including in chats you already have — and Pulse and Roam stop. Remove someone
+            as a friend and they can no longer reach you.
+          </Text>
+        </View>
+
         {/* Actions */}
         <View style={[styles.actionCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
           {actions.map((a, i) => (
@@ -426,6 +492,18 @@ const styles = StyleSheet.create({
   themePillContainer: { flexDirection: 'row', borderRadius: 16, padding: 4, borderWidth: 0, gap: 4 },
   themeOption: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 40, borderRadius: 12 },
   themeOptionText: { fontSize: 12, fontWeight: '700' },
+
+  privacySection: { marginHorizontal: 20, marginTop: 24 },
+  settingRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    gap: 12, borderRadius: 16, borderWidth: 0, paddingHorizontal: 16, paddingVertical: 14,
+  },
+  // flex:1 + minWidth:0 —— 少了它，副标题那两行长文案会把 Switch 挤出屏幕
+  settingLabelRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, flex: 1, minWidth: 0 },
+  settingTextWrap: { flex: 1, minWidth: 0, gap: 2 },
+  settingText: { fontSize: 15, fontWeight: '600' },
+  settingSub: { fontSize: 12, lineHeight: 16 },
+  settingFootnote: { fontSize: 11, lineHeight: 15, marginTop: 8, marginHorizontal: 4 },
 
   actionCard: { marginHorizontal: 20, marginTop: 24, borderRadius: 18, overflow: 'hidden' },
   actionItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 16 },

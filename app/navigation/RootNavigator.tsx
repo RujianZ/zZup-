@@ -29,7 +29,6 @@ import ChatScreen from '../screens/chat/ChatScreen';
 import GroupListScreen from '../screens/chat/GroupListScreen';
 import CreateGroupScreen from '../screens/chat/CreateGroupScreen';
 import GroupMembersScreen from '../screens/chat/GroupMembersScreen';
-import PetChatScreen from '../screens/chat/PetChatScreen';
 
 // Travel Mode
 import TravelModeScreen from '../screens/travel/TravelModeScreen';
@@ -100,11 +99,14 @@ function AppStack() {
       <Stack.Screen name="BlockedUsers"     component={BlockedUsersScreen}     />
 
       {/* Chat */}
+      {/* zZuPer Talk 没有独立屏：它就是 Chat，由 InboxScreen 传 isPetTalk=true
+          （见 InboxScreen:220）。曾经有个 PetChatScreen 注册成 'PetChat'，
+          但全仓库没有一处 navigate 到它，是死代码，2026-08-16 删除。
+          要改 zZuPer Talk 的界面，改 ChatScreen 的 isPetTalk 分支。 */}
       <Stack.Screen name="Chat"             component={ChatScreen}             />
       <Stack.Screen name="GroupList"        component={GroupListScreen}        />
       <Stack.Screen name="CreateGroup"      component={CreateGroupScreen}      />
       <Stack.Screen name="GroupMembers"     component={GroupMembersScreen}     />
-      <Stack.Screen name="PetChat"          component={PetChatScreen}          />
 
       {/* Travel Mode */}
       <Stack.Screen name="FreeTravel"        component={FreeTravelScreen}        />

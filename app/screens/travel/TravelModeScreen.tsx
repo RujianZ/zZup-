@@ -37,10 +37,36 @@ export default function TravelModeScreen() {
   const [showTopicModal, setShowTopicModal] = useState(false);
   const [topicChoice, setTopicChoice] = useState<'anything' | 'custom'>('anything');
   const [customTopic, setCustomTopic] = useState('');
-  const [alertConfig, setAlertConfig] = useState<{ visible: boolean; title: string; message: string; type?: 'error' | 'info' | 'success' }>({ visible: false, title: '', message: '' });
+  const [alertConfig, setAlertConfig] = useState<{
+    visible: boolean; title: string; message: string;
+    type?: 'error' | 'info' | 'success';
+    onConfirm?: () => void; confirmText?: string;
+  }>({ visible: false, title: '', message: '' });
 
   const petBreed = profile?.pet_breed || 'dog';
   const petStage = profile?.pet_stage || 'child';
+
+  // 关掉「允许陌生人私信」= 整个退出陌生人场景，Pulse 和 Roam 都用不了（迁移 91）。
+  // 服务端那边入队/发帖会直接被触发器拒掉，但让用户一路点进去再撞报错是反的 ——
+  // 在入口就锁住，并且告诉他是哪个开关、去哪儿开。
+  // 只认 === false：profile 还没加载回来时是 undefined，那时候不该显示成锁住的。
+  const strangersOff = profile?.allow_stranger_dm === false;
+
+  const showLockedAlert = (feature: 'Pulse' | 'Roam') =>
+    setAlertConfig({
+      visible: true,
+      title: `${feature} is off`,
+      message:
+        `You turned off “Allow stranger DMs”, which also turns off Pulse and Roam — ` +
+        `both of them work by putting you in front of people you have not met.\n\n` +
+        `Turn it back on in Profile to use ${feature}.`,
+      type: 'info',
+      confirmText: 'Open Profile',
+      onConfirm: () => {
+        setAlertConfig(prev => ({ ...prev, visible: false }));
+        navigation.navigate('Profile');
+      },
+    });
 
   useEffect(() => {
     if (matching) {
@@ -137,9 +163,9 @@ export default function TravelModeScreen() {
 
         {/* zZuPer Roam Card */}
         <TouchableOpacity
-          style={[styles.card, { backgroundColor: colors.cardBg }]}
+          style={[styles.card, { backgroundColor: colors.cardBg }, strangersOff && styles.cardLocked]}
           activeOpacity={0.85}
-          onPress={() => navigation.navigate('FreeTravel')}
+          onPress={() => (strangersOff ? showLockedAlert('Roam') : navigation.navigate('FreeTravel'))}
         >
           <LinearGradient colors={iconGradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardIcon}>
             <Ionicons name="paper-plane" size={26} color="#ffffff" />
@@ -148,21 +174,25 @@ export default function TravelModeScreen() {
             <View style={styles.cardHead}>
               <Text style={[styles.cardTitle, { color: colors.text }]}>zZuPer Roam</Text>
               <View style={[styles.badge, { backgroundColor: colors.cardMutedBg }]}>
-                <Text style={[styles.badgeText, { color: colors.brand }]}>6 hours</Text>
+                <Text style={[styles.badgeText, { color: colors.brand }]}>{strangersOff ? 'Off' : '6 hours'}</Text>
               </View>
             </View>
             <Text style={[styles.cardDesc, { color: colors.subText }]}>
-              Send your zZuPer out to roam campus and meet new friends.
+              {strangersOff
+                ? 'Turned off while “Allow stranger DMs” is off.'
+                : 'Send your zZuPer out to roam campus and meet new friends.'}
             </Text>
           </View>
-          <Feather name="chevron-right" size={20} color={colors.tertiaryText} />
+          {strangersOff
+            ? <Ionicons name="lock-closed" size={18} color={colors.tertiaryText} />
+            : <Feather name="chevron-right" size={20} color={colors.tertiaryText} />}
         </TouchableOpacity>
 
         {/* zZuPer Pulse Card */}
         <TouchableOpacity
-          style={[styles.card, { backgroundColor: colors.cardBg }]}
+          style={[styles.card, { backgroundColor: colors.cardBg }, strangersOff && styles.cardLocked]}
           activeOpacity={0.85}
-          onPress={handleOpenMatchModal}
+          onPress={() => (strangersOff ? showLockedAlert('Pulse') : handleOpenMatchModal())}
         >
           <View style={[styles.cardIcon, { backgroundColor: pulseIconBg }]}>
             <Ionicons name="pulse" size={26} color="#ffffff" />
@@ -171,14 +201,18 @@ export default function TravelModeScreen() {
             <View style={styles.cardHead}>
               <Text style={[styles.cardTitle, { color: colors.text }]}>zZuPer Pulse</Text>
               <View style={[styles.badge, { backgroundColor: colors.cardMutedBg }]}>
-                <Text style={[styles.badgeText, { color: colors.brand }]}>Live</Text>
+                <Text style={[styles.badgeText, { color: colors.brand }]}>{strangersOff ? 'Off' : 'Live'}</Text>
               </View>
             </View>
             <Text style={[styles.cardDesc, { color: colors.subText }]}>
-              Let AI break the ice and match you with someone new, instantly.
+              {strangersOff
+                ? 'Turned off while “Allow stranger DMs” is off.'
+                : 'Let AI break the ice and match you with someone new, instantly.'}
             </Text>
           </View>
-          <Feather name="chevron-right" size={20} color={colors.tertiaryText} />
+          {strangersOff
+            ? <Ionicons name="lock-closed" size={18} color={colors.tertiaryText} />
+            : <Feather name="chevron-right" size={20} color={colors.tertiaryText} />}
         </TouchableOpacity>
       </View>
 
@@ -285,6 +319,8 @@ export default function TravelModeScreen() {
         title={alertConfig.title}
         message={alertConfig.message}
         type={alertConfig.type}
+        onConfirm={alertConfig.onConfirm}
+        confirmText={alertConfig.confirmText}
         onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
       />
     </SafeAreaView>
@@ -301,6 +337,9 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   sectionLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1, marginBottom: 4 },
 
   card: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 20, padding: 16, borderWidth: 0 },
+  // 锁住时压暗，但**仍然可点** —— 点了要弹出「为什么锁住 / 去哪儿开」，
+  // 直接 disabled 的话用户点了没反应，只会以为是坏了。
+  cardLocked: { opacity: 0.55 },
   cardIcon: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   cardBody: { flex: 1, gap: 4 },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },

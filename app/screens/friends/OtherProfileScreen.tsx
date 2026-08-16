@@ -135,10 +135,11 @@ export default function OtherProfileScreen() {
 
   const handleSendDM = async () => {
     setActionLoading(true);
-    const conversationId = await createDM(userId, 'real', 'real');
+    const { conversationId, error } = await createDM(userId, 'real', 'real');
     setActionLoading(false);
     if (!conversationId) {
-      showAlert('Error', 'Unable to start chat.', 'error');
+      // 服务端的拒绝原因直接给用户看（对方关了陌生人私信 / 拉黑 / …）。
+      showAlert('Can’t start this chat', error || 'Unable to start chat.', 'error');
       return;
     }
     navigation.navigate('Chat', {

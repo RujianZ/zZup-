@@ -35,6 +35,10 @@ export interface Profile {
   allow_add_via_search: boolean | null
   allow_add_via_qr: boolean | null
   allow_add_via_profile: boolean | null
+  // 迁移 90：false 时非好友无法**新建**与你的私聊（已存在的会话照常）。
+  // 只有读自己（get_my_profile）才有值；读别人恒为 null —— 这是有意的，
+  // 别人的设置可探测就等于把设置本身泄露出去。
+  allow_stranger_dm: boolean | null
   notify_driftbottle: boolean | null
   notify_petchat: boolean | null
   notify_friend: boolean | null
@@ -71,6 +75,7 @@ export type ProfileUpdate = Partial<
     | 'allow_add_via_search'
     | 'allow_add_via_qr'
     | 'allow_add_via_profile'
+    | 'allow_stranger_dm'
     | 'notify_driftbottle'
     | 'notify_petchat'
     | 'notify_friend'
@@ -152,6 +157,9 @@ export async function getProfile(userId?: string): Promise<Profile | null> {
     allow_add_via_search: null,
     allow_add_via_qr: null,
     allow_add_via_profile: null,
+    // 读别人时恒为 null。get_other_profile 故意不返回它 ——
+    // 能读到就能扫出谁开了谁没开，那等于把这个设置本身泄露掉。
+    allow_stranger_dm: null,
     notify_driftbottle: null,
     notify_petchat: null,
     notify_friend: null,

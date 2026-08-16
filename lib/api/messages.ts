@@ -32,6 +32,21 @@ export interface Message {
   author_pet_stage: string | null
   /** 会话内代号，仅宠物消息有。跨会话不同，串联不了。 */
   author_alias: string | null
+  /**
+   * 这条是谁说的（迁移 94，写入时定死，不是读的时候猜的）：
+   *   human      真人真身
+   *   human_pet  真人顶着宠物马甲
+   *   ai_pet     zZuPer Talk 里你自己的宠物 AI
+   *   ai_proxy   Pulse 接管前的 AI 代聊
+   * 举报时用它区分「举报一个人」和「举报 AI 输出」——
+   * 后者没有人可以封，处置是改 prompt。
+   */
+  author_kind: 'human' | 'human_pet' | 'ai_pet' | 'ai_proxy' | null
+}
+
+/** 这条消息是不是机器说的（两种 AI 都算）。 */
+export function isAiMessage(m: Message): boolean {
+  return m.author_kind === 'ai_pet' || m.author_kind === 'ai_proxy'
 }
 
 function mapMessage(m: any): Message {
@@ -51,7 +66,22 @@ function mapMessage(m: any): Message {
     author_pet_breed: m.author_pet_breed ?? null,
     author_pet_stage: m.author_pet_stage ?? null,
     author_alias: m.author_alias ?? null,
+    author_kind: m.author_kind ?? null,
   }
+}
+
+/**
+ * 「Remove for me」——**只把这条消息从我的视图里移除**，不删任何东西。
+ *
+ * 消息永久保留是这个产品的核心设计（privacy / terms / safety 三份文书都写了
+ * "nobody can delete a sent message"），所以这里写的是 hidden_messages，
+ * 消息行原样留着，举报时服务端照样抓得到原文。
+ *
+ * 界面上**不要**把它叫成 Delete —— 用户会以为自己删掉了对方的消息。
+ */
+export async function hideMessageForMe(messageId: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('hide_message_for_me', { p_message: messageId })
+  return { error: error?.message ?? null }
 }
 
 // ─── getMessages ──────────────────────────────────────────────────────────────

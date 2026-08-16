@@ -10,9 +10,10 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { getMessages, sendMessage, subscribeToMessages, Message } from '../../../lib/api/messages';
+import * as Clipboard from 'expo-clipboard';
+import { getMessages, sendMessage, subscribeToMessages, hideMessageForMe, isAiMessage, Message } from '../../../lib/api/messages';
 import {
-  createDM, getOrCreateZzuperTalk, clearConversationHistory, isConversationFrozen,
+  createDM, getOrCreateZzuperTalk, clearConversationHistory, isConversationFrozen, touchAiDisclosure,
 } from '../../../lib/api/conversations';
 import { uploadChatMedia, getSignedUrls, formatBytes, normalizeImage, Attachment, MAX_FILE_BYTES } from '../../../lib/api/uploads';
 import { markConversationRead } from '../../../lib/api/unread';
@@ -113,8 +114,12 @@ export default function ChatScreen() {
         if (convId && isMounted) setRealConvId(convId);
       } else if (peerId) {
         // 只知道对方是谁：换/建这一对身份的私聊窗口
-        const convId = await createDM(peerId, identityMode, 'real');
-        if (convId && isMounted) setRealConvId(convId);
+        const { conversationId, error } = await createDM(peerId, identityMode, 'real');
+        if (!isMounted) return;
+        if (conversationId) setRealConvId(conversationId);
+        // 失败时以前是静默的：realConvId 一直为 null，用户对着一个空白聊天页。
+        // 迁移 90 之后这里会正常地拒绝（对方关了陌生人私信），必须说清楚。
+        else showAlert('Can’t start this chat', error || 'Unable to start chat.', 'error');
       } else if (knownConvId && isMounted) {
         setRealConvId(knownConvId);
       }
@@ -122,6 +127,21 @@ export default function ChatScreen() {
     resolveConversation();
     return () => { isMounted = false; };
   }, [knownConvId, peerId, identityMode, isPetTalk]);
+
+  // ── AI 披露（纽约 GBL §1700）─────────────────────────────────────────────
+  // 「会话开始时」+「持续会话每 3 小时」由服务端一条规则统一判定
+  // （距上次披露超过 3 小时就该再说一次），客户端只负责问和渲染。
+  // 判定不能锚在「距上一条消息」：连着聊 4 小时的话消息间隔永远不超过 3 小时，
+  // 一次都不会触发，而那恰恰是最该提醒的场景。详见迁移 93。
+  const [showAiNotice, setShowAiNotice] = useState(false);
+
+  const checkAiDisclosure = useCallback(async () => {
+    if (!isPetTalk || !realConvId) return;
+    if (await touchAiDisclosure(realConvId)) setShowAiNotice(true);
+  }, [isPetTalk, realConvId]);
+
+  // 进入会话时查一次（覆盖「会话开始时」和「隔了很久再回来」）
+  useEffect(() => { checkAiDisclosure(); }, [checkAiDisclosure]);
 
   const load = useCallback(async () => {
     if (!realConvId) return;
@@ -327,6 +347,10 @@ export default function ChatScreen() {
 
     const { data, error } = await sendMessage(realConvId, text, currentSendMode);
     if (error || !data) {
+      // 把刚清掉的输入还回去。以前发送几乎不会失败，所以丢字看不出来；
+      // 迁移 92 之后「对方关了陌生人私信」是一条**正常**的失败路径，
+      // 失败一次就吞掉用户刚打的一段话是不能接受的。
+      setInput(text);
       showAlert('Send Failed', error || 'Please try sending again.', 'error');
       setSending(false);
       sendingRef.current = false;
@@ -335,6 +359,10 @@ export default function ChatScreen() {
 
     setSending(false);
     sendingRef.current = false;
+
+    // 每次发言后再查一次：覆盖「一直待在这一屏连续聊几小时」的情况 ——
+    // 那种情况下上面那个 useEffect 不会再跑，只有这里能触发到 3 小时那一条。
+    checkAiDisclosure();
 
     // AI Pet Companion Auto Response for zZuPer Talk
     if (isPetTalk) {
@@ -403,6 +431,54 @@ export default function ChatScreen() {
     }
   };
 
+  // ── 长按气泡菜单：Copy / Remove for me / Report ───────────────────────────
+  // 自己的消息只给 Copy —— 「移除」和「举报」对自己说的话没意义。
+  const [msgMenu, setMsgMenu] = useState<Message | null>(null);
+
+  /**
+   * 「这条真的是我说的吗」。
+   *
+   * **不能只看 is_mine**：zZuPer Talk 的宠物回复是客户端用用户自己的身份
+   * 写进库的（invokePetReply → sendMessage(...,'pet')），所以服务端算出来的
+   * `is_mine` 对 AI 回复也是 true。只看它的话，用户永远举报不了自己的宠物 ——
+   * 而那正是 Google Play 要求必须能举报的东西。
+   * 渲染那边早就为这个特例写了 isPetAIResponse，这里用 author_kind 表达同一件事。
+   */
+  const isReallyMine = (m: Message) => m.is_mine && !isAiMessage(m);
+
+  const copyMessage = async (m: Message) => {
+    setMsgMenu(null);
+    await Clipboard.setStringAsync(m.content ?? '');
+    showAlert('Copied', 'Message copied to your clipboard.', 'success');
+  };
+
+  /**
+   * **不是删除**：只往 hidden_messages 写一行，消息本体一行不动。
+   * 所以文案叫 "Remove for me" —— 叫 Delete 的话用户会以为自己删掉了
+   * 对方的消息，而三份法律文书都写着"谁也删不掉已发送的消息"。
+   */
+  const removeMessageForMe = async (m: Message) => {
+    setMsgMenu(null);
+    const { error } = await hideMessageForMe(m.id);
+    if (error) { showAlert('Couldn’t remove', error, 'error'); return; }
+    setMessages(prev => prev.filter(x => x.id !== m.id));
+  };
+
+  /**
+   * 只传 message_id，**不传被举报人是谁** —— 服务端自己按消息解析。
+   * 这样匿名宠物马甲也能被举报，而客户端从头到尾不知道背后是谁（迁移 95）。
+   */
+  const reportMessage = (m: Message) => {
+    setMsgMenu(null);
+    navigation.navigate('Report', {
+      messageId: m.id,
+      conversationId: m.conversation_id,
+      isAiMessage: isAiMessage(m),
+      quotedText: m.content,
+      quotedAuthor: isAiMessage(m) ? (isPetTalk ? 'Your zZuPer' : 'AI proxy') : (m.author_name ?? 'User'),
+    });
+  };
+
   const renderMessage = ({ item }: { item: Message }) => {
     const isPetAIResponse = isPetTalk && item.identity_mode === 'pet';
     const isMe = !isPetAIResponse && item.is_mine;
@@ -450,7 +526,13 @@ export default function ChatScreen() {
                     const w = single ? Math.min(SCREEN_W * 0.55, 240) : (SCREEN_W * 0.78 - 8) / (arr.length === 2 ? 2 : 3) - 4;
                     const h = single ? w / ratio : w;
                     return (
-                      <TouchableOpacity key={idx} activeOpacity={0.85} onPress={() => url && setViewerUrl(url)}>
+                      <TouchableOpacity
+                        key={idx}
+                        activeOpacity={0.85}
+                        delayLongPress={320}
+                        onLongPress={() => setMsgMenu(item)}
+                        onPress={() => url && setViewerUrl(url)}
+                      >
                         {url ? (
                           <Image source={{ uri: url }} style={{ width: w, height: h, borderRadius: 12, backgroundColor: colors.cardMutedBg }} />
                         ) : (
@@ -469,6 +551,8 @@ export default function ChatScreen() {
                   key={`f${idx}`}
                   style={[styles.fileCard, { backgroundColor: isMe ? colors.bubbleMe : colors.bubbleOther, borderColor: colors.bubbleOtherBorder, borderWidth: isMe ? 0 : 1 }]}
                   activeOpacity={0.8}
+                  delayLongPress={320}
+                  onLongPress={() => setMsgMenu(item)}
                   onPress={() => openFile(a.path)}
                 >
                   <View style={[styles.fileIcon, { backgroundColor: isMe ? 'rgba(255,255,255,0.22)' : colors.cardMutedBg }]}>
@@ -483,14 +567,19 @@ export default function ChatScreen() {
               ))}
             </View>
           ) : (
-            <View style={[
-              styles.bubble,
-              isMe
-                ? { backgroundColor: colors.bubbleMe }
-                : { backgroundColor: colors.bubbleOther, borderWidth: 1, borderColor: colors.bubbleOtherBorder }
-            ]}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              delayLongPress={320}
+              onLongPress={() => setMsgMenu(item)}
+              style={[
+                styles.bubble,
+                isMe
+                  ? { backgroundColor: colors.bubbleMe }
+                  : { backgroundColor: colors.bubbleOther, borderWidth: 1, borderColor: colors.bubbleOtherBorder }
+              ]}
+            >
               <Text style={[styles.content, { color: isMe ? '#FFFFFF' : colors.text }]}>{item.content}</Text>
-            </View>
+            </TouchableOpacity>
           )}
 
           <Text style={[styles.time, { color: colors.tertiaryText }, isMe && { textAlign: 'right' }]}>
@@ -543,7 +632,14 @@ export default function ChatScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn} activeOpacity={0.7}>
           <Feather name="chevron-left" size={26} color={colors.brand} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{groupName || 'Chat'}</Text>
+        {/* 常驻 AI 标识（加州 SB 243：合理人会误认时须 clear and conspicuous 告知）。
+            和 Pulse 那边的 `AI proxy · anonymous` 保持同一个语感。 */}
+        <View style={styles.headerTitleWrap}>
+          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{groupName || 'Chat'}</Text>
+          {isPetTalk && (
+            <Text style={[styles.headerSub, { color: colors.subText }]} numberOfLines={1}>AI companion</Text>
+          )}
+        </View>
         <View style={styles.headerActions}>
           {!isDM && !isPetTalk && (
             <TouchableOpacity
@@ -559,6 +655,83 @@ export default function ChatScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* 长按某条消息的菜单 */}
+      <Modal visible={!!msgMenu} transparent animationType="fade" onRequestClose={() => setMsgMenu(null)}>
+        <TouchableOpacity
+          style={[styles.menuBg, { backgroundColor: colors.isDark ? 'rgba(11,7,19,0.75)' : 'rgba(15,23,42,0.35)' }]}
+          activeOpacity={1}
+          onPress={() => setMsgMenu(null)}
+        >
+          <View style={[styles.menuCard, { backgroundColor: colors.headerBg, borderColor: colors.border }]}>
+            {!!msgMenu && (
+              <>
+                {/* 被长按的那条，引用出来，免得手滑选错还不知道 */}
+                <View style={[styles.menuQuote, { backgroundColor: colors.cardMutedBg, borderColor: colors.border }]}>
+                  <Text style={[styles.menuQuoteWho, { color: colors.brand }]} numberOfLines={1}>
+                    {isAiMessage(msgMenu)
+                      ? (isPetTalk ? 'Your zZuPer · AI' : 'AI proxy · AI')
+                      : (isReallyMine(msgMenu) ? 'You' : (msgMenu.author_name ?? 'User'))}
+                  </Text>
+                  <Text style={[styles.menuQuoteText, { color: colors.subText }]} numberOfLines={3}>
+                    {msgMenu.content || '(attachment)'}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.menuItem, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+                  onPress={() => copyMessage(msgMenu)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="copy-outline" size={20} color={colors.text} />
+                  <Text style={[styles.menuItemText, { color: colors.text }]}>Copy</Text>
+                </TouchableOpacity>
+
+                {/* 自己的消息不给「移除」和「举报」 —— 对自己说的话没意义。
+                    但宠物 AI 的回复**不算自己说的**，见 isReallyMine。 */}
+                {!isReallyMine(msgMenu) && (
+                  <>
+                    <TouchableOpacity
+                      style={[styles.menuItem, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+                      onPress={() => removeMessageForMe(msgMenu)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="eye-off-outline" size={20} color={colors.text} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.menuItemText, { color: colors.text }]}>Remove</Text>
+                        {/* 这一行不能省：不说清楚的话，用户会以为自己删掉了对方的消息，
+                            而实际上消息一行没动（只是对他隐藏）。 */}
+                        <Text style={[styles.menuItemSub, { color: colors.tertiaryText }]}>
+                          Hides it for you only.
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.menuItem, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+                      onPress={() => reportMessage(msgMenu)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="flag-outline" size={20} color="#EF4444" />
+                      <Text style={[styles.menuItemText, { color: '#EF4444' }]}>
+                        {isAiMessage(msgMenu) ? 'Report this AI reply' : 'Report this message'}
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                <TouchableOpacity
+                  style={[styles.menuItem, styles.menuCancel, { backgroundColor: colors.cardMutedBg, borderColor: colors.border }]}
+                  onPress={() => setMsgMenu(null)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.menuItemText, { color: colors.subText, textAlign: 'center' }]}>Cancel</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* 右上角菜单 */}
       <Modal visible={showMoreMenu} transparent animationType="fade" onRequestClose={() => setShowMoreMenu(false)}>
@@ -612,6 +785,21 @@ export default function ChatScreen() {
           contentContainerStyle={styles.list}
           inverted
           renderItem={renderMessage}
+          // 列表是 inverted 的，ListHeaderComponent 渲染在**视觉最下方** ——
+          // 也就是紧贴输入框、最新消息之下，正是这句话该在的位置。
+          // 刻意不做成气泡、不入 messages 表：进了消息表就会被 pet-chat
+          // 当上下文喂给模型，宠物会开始顺着聊自己是不是 AI（见迁移 93）。
+          ListHeaderComponent={
+            isPetTalk && showAiNotice ? (
+              <View style={styles.aiNotice}>
+                <View style={[styles.aiNoticeLine, { backgroundColor: colors.border }]} />
+                <Text style={[styles.aiNoticeText, { color: colors.tertiaryText }]}>
+                  You’re talking to an AI. It isn’t a person.
+                </Text>
+                <View style={[styles.aiNoticeLine, { backgroundColor: colors.border }]} />
+              </View>
+            ) : null
+          }
           onEndReached={loadMore}
           onEndReachedThreshold={0.3}
           ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.brand} style={{ padding: 16 }} /> : null}
@@ -779,11 +967,66 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
-  headerTitle: {
+  menuItemSub: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  // 长按菜单顶部对被选中消息的引用
+  menuQuote: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 3,
+  },
+  menuQuoteWho: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  menuQuoteText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  // flex:1 从 headerTitle 移到了这里：标题外面包了一层放副标题，
+  // 撑开居中的活得由外层来干，否则标题会被挤成一团。
+  headerTitleWrap: {
     flex: 1,
+    minWidth: 0,
+  },
+  headerTitle: {
     fontSize: 18,
     fontWeight: '700',
     textAlign: 'center',
+  },
+  headerSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 1,
+    letterSpacing: 0.3,
+  },
+
+  // 会话内的 AI 披露（纽约 GBL §1700）。刻意做成一条细分隔线而不是气泡/弹窗：
+  // 这是唯一一个学生愿意开口的地方，不该被合规卡片打断。
+  aiNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 4,
+    // 不要在这里加 scaleY: -1。RN 的 inverted 已经给 ListHeaderComponent
+    // 套了反转样式（和每个消息 cell 一样），再翻一次就上下颠倒了。
+  },
+  aiNoticeLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+  },
+  aiNoticeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   center: {
     flex: 1,

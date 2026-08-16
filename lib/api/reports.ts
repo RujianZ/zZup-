@@ -20,6 +20,8 @@ export type ReportCategory =
   | 'impersonation'
   | 'underage'
   | 'self_harm'
+  /** AI 说了不该说的话。举报的不是人 —— 处置是改 prompt，不是封号。 */
+  | 'ai_output'
   | 'other'
 
 export const REPORT_CATEGORIES: { key: ReportCategory; label: string; hint: string }[] = [
@@ -31,6 +33,18 @@ export const REPORT_CATEGORIES: { key: ReportCategory; label: string; hint: stri
   { key: 'underage',       label: 'Involves a minor',       hint: 'Content involving someone under 18' },
   { key: 'self_harm',      label: 'Concerned for someone',  hint: 'They may be at risk of hurting themselves' },
   { key: 'other',          label: 'Something else',         hint: '' },
+]
+
+/**
+ * 举报 AI 输出时用的分类表。
+ *
+ * 刻意**不**让用户在「色情 / 暴力 / 鼓励自伤」里做选择题 —— 把分类学的负担
+ * 丢给一个刚被冒犯的人是不对的，细节由他自己写的描述 + 服务端消息快照承担。
+ * 只留一个 ai_output，加一个 other 兜底。
+ */
+export const AI_REPORT_CATEGORIES: { key: ReportCategory; label: string; hint: string }[] = [
+  { key: 'ai_output', label: 'The AI said something wrong', hint: 'Harmful, offensive, or disturbing AI reply' },
+  { key: 'other',     label: 'Something else',              hint: '' },
 ]
 
 const BUCKET = 'report-media'
@@ -98,6 +112,14 @@ export async function submitReport(params: {
   conversationId?: string | null
   reportedIdentity?: 'real' | 'pet' | null
   attachments?: ReportAttachment[]
+  /**
+   * 长按某条消息举报时传它（迁移 95）。服务端会：
+   *   · 校验举报人确实在这条消息所在的会话里
+   *   · 按消息的 author_kind 自己判定 subject 是 'user' 还是 'ai'
+   *     —— **不收客户端的判断**，否则可以把真人骚扰标成「AI 说的」来脱罪
+   *   · 人说的话还会自动把消息作者认作被举报人
+   */
+  reportedMessageId?: string | null
 }): Promise<{ reportId: string | null; error: string | null }> {
   const { data, error } = await supabase.rpc('submit_report', {
     p_category: params.category,
@@ -107,6 +129,7 @@ export async function submitReport(params: {
     p_reported_identity: params.reportedIdentity ?? null,
     p_attachments: params.attachments ?? [],
     p_client_info: { platform: Platform.OS, os_version: String(Platform.Version) },
+    p_reported_message_id: params.reportedMessageId ?? null,
   })
 
   if (error) return { reportId: null, error: error.message }

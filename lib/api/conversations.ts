@@ -99,18 +99,39 @@ export async function getOrCreateZzuperTalk(): Promise<string | null> {
 // myIdentity   = 我自选；targetIdentity = 对方呈现的身份。
 // 同一(账号+身份)对复用同一窗口。
 
+// 返回 { conversationId, error }，而不是光一个 id。
+// 原来 error 被整个吞掉、只返回 null，调用方只能显示「Unable to start chat.」——
+// 迁移 90 之后拒绝的原因多了一种（对方关了陌生人私信），再吞就等于让用户
+// 对着一句无意义的报错猜。服务端的话本来就是写给用户看的，照原样带上去。
 export async function createDM(
   targetId: string,
   myIdentity: IdentityType,
   targetIdentity: IdentityType
-): Promise<string | null> {
+): Promise<{ conversationId: string | null; error: string | null }> {
   const { data, error } = await supabase.rpc('create_dm', {
     p_target_id: targetId,
     p_my_identity: myIdentity,
     p_target_identity: targetIdentity,
   })
-  if (error) return null
-  return data as string
+  if (error) return { conversationId: null, error: error.message }
+  return { conversationId: data as string, error: null }
+}
+
+/**
+ * AI 披露（纽约 GBL §1700：会话开始时 + 持续会话每 3 小时）。
+ *
+ * 返回 true = 现在该展示披露了，服务端已经把时间戳推到 now。
+ * 判定完全在服务端，客户端不自己算时间 —— 本地状态出事时举不了证。
+ *
+ * 失败时返回 false（不展示）而不是抛错：这是合规装饰，不该因为
+ * 一次网络抖动就把用户挡在聊天界面外面。漏展示一次的代价远小于聊不了天。
+ */
+export async function touchAiDisclosure(conversationId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('touch_ai_disclosure', {
+    p_conversation: conversationId,
+  })
+  if (error) return false
+  return data === true
 }
 
 // ─── 群聊 ─────────────────────────────────────────────────────────────────────

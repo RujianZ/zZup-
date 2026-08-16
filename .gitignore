@@ -46,3 +46,6 @@ yarn-error.*
 
 # UI mockup prototype (separate Vite+React project, not part of main app)
 mockup/
+
+# local notes
+docs/_local/
