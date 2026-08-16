@@ -98,16 +98,38 @@ export default function GroupMembersScreen() {
     );
   };
 
+  /**
+   * 点成员进主页。
+   *
+   * 真人身份 → 完整主页（那边有加好友、发消息、举报、拉黑）
+   * 宠物身份 → 不给入口：群成员表里没有会话内代号，而裸宠物页是按代号寻址的。
+   *            想看那只宠物，点它在聊天里的头像即可。
+   */
+  const openMember = (item: ConversationMember) => {
+    if (item.account_id === profile?.id) {
+      navigation.navigate('Main', { screen: 'Profile' });
+      return;
+    }
+    if (item.member_identity === 'pet') return;
+    navigation.navigate('OtherProfile', { userId: item.account_id });
+  };
+
   const renderItem = ({ item }: { item: ConversationMember }) => {
     const isMe = item.account_id === profile?.id;
     const isPet = item.member_identity === 'pet';
     const name = item.display_name ?? 'Member';
 
     return (
-      <View style={[styles.card, { backgroundColor: colors.cardBg }]}>
+      <TouchableOpacity
+        style={[styles.card, { backgroundColor: colors.cardBg }]}
+        onPress={() => openMember(item)}
+        disabled={isPet && !isMe}
+        activeOpacity={0.7}
+      >
         {isPet ? (
+          // 以宠物身份出现的成员 = 匿名，裸形态
           <PetAvatar
-            url={item.display_avatar}
+            anonymous
             breed={item.pet_breed}
             stage={item.pet_stage}
             size={48}
@@ -137,6 +159,11 @@ export default function GroupMembersScreen() {
           </Text>
         </View>
 
+        {/* 真人身份的成员可以直接点进主页加好友，所以这里给个指示箭头 */}
+        {!isMe && !isPet && (
+          <Feather name="chevron-right" size={20} color={colors.tertiaryText} />
+        )}
+
         {isAdmin && !isMe && (
           <TouchableOpacity
             style={styles.removeBtn}
@@ -151,7 +178,7 @@ export default function GroupMembersScreen() {
             )}
           </TouchableOpacity>
         )}
-      </View>
+      </TouchableOpacity>
     );
   };
 

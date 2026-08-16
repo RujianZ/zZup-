@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import { StatusBar } from 'expo-status-bar';
 import {
   incrementTravelPostView,
@@ -38,6 +38,7 @@ export default function TravelDetailScreen() {
   const route = useRoute<any>();
   const { session } = useAuth();
   const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const user = session?.user;
   const { post } = route.params as { post: TravelPost };
 
@@ -156,7 +157,7 @@ export default function TravelDetailScreen() {
             <TextInput
               style={styles.commentInput}
               placeholder="Leave a Travel Note..."
-              placeholderTextColor="#6C6C77"
+              placeholderTextColor={colors.subText}
               value={newComment}
               onChangeText={setNewComment}
               maxLength={100}
@@ -177,7 +178,7 @@ export default function TravelDetailScreen() {
           {/* Comments list display */}
           <Text style={styles.commentsListTitle}>Collected Notes ({comments.length})</Text>
           {loadingComments ? (
-            <ActivityIndicator color="#7C3AED" style={{ marginVertical: 20 }} />
+            <ActivityIndicator color={colors.brand} style={{ marginVertical: 20 }} />
           ) : comments.length === 0 ? (
             <Text style={styles.noCommentsText}>No notes left yet. Be the first one to leave a warm message!</Text>
           ) : (
@@ -206,24 +207,26 @@ export default function TravelDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// 颜色改为跟随主题。这一屏之前虽然引了 useTheme，但绝大多数颜色仍写死成紫色，
+// 于是在薄荷主题下整屏都是紫的。
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#F2F2F5',
+    borderBottomWidth: 1, borderBottomColor: c.cardMutedBg,
   },
   backBtn: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: '#F2F2F5', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: c.cardMutedBg, alignItems: 'center', justifyContent: 'center',
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0B0B0F' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: c.text },
 
   scroll: { padding: 20 },
 
   card: {
     backgroundColor: '#FFFFFF', borderRadius: 24,
-    padding: 20, borderWidth: 1, borderColor: '#F2F2F5',
+    padding: 20, borderWidth: 1, borderColor: c.cardMutedBg,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03, shadowRadius: 8, elevation: 2,
     marginBottom: 24,
@@ -233,7 +236,7 @@ const styles = StyleSheet.create({
   petAvatar: { width: 60, height: 60, borderRadius: 16 },
   avatarFallbackRed: {
     width: 60, height: 60, borderRadius: 16,
-    backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: c.brand, alignItems: 'center', justifyContent: 'center',
   },
   ownerAvatarWrap: {
     position: 'absolute', bottom: -4, right: -4,
@@ -242,54 +245,54 @@ const styles = StyleSheet.create({
   ownerAvatar: { width: 20, height: 20, borderRadius: 8 },
   avatarFallbackBlue: {
     width: 20, height: 20, borderRadius: 8,
-    backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: c.brand, alignItems: 'center', justifyContent: 'center',
   },
 
   petMeta: { flex: 1, gap: 4 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  petName: { fontSize: 18, fontWeight: '700', color: '#0B0B0F' },
+  petName: { fontSize: 18, fontWeight: '700', color: c.text },
   breedBadge: {
     backgroundColor: 'rgba(124, 58, 237, 0.08)',
     paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8,
     borderWidth: 1, borderColor: 'rgba(124, 58, 237, 0.15)',
   },
-  breedText: { color: '#7C3AED', fontSize: 10, fontWeight: '700' },
-  ownerMeta: { fontSize: 12, color: '#A6A6AF' },
+  breedText: { color: c.brand, fontSize: 10, fontWeight: '700' },
+  ownerMeta: { fontSize: 12, color: c.tertiaryText },
 
   travelContentBox: { marginVertical: 8, gap: 12 },
-  postBody: { color: '#F2F2F5', fontSize: 15, lineHeight: 22 },
+  postBody: { color: c.cardMutedBg, fontSize: 15, lineHeight: 22 },
   postImage: { width: '100%', height: SCREEN_WIDTH - 80, borderRadius: 16, resizeMode: 'cover' },
 
   disabledBtn: { opacity: 0.6 },
 
   commentsSection: { gap: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#0B0B0F' },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: c.text },
   commentInputBox: {
-    flexDirection: 'row', backgroundColor: '#F9FAFB',
+    flexDirection: 'row', backgroundColor: c.cardBg,
     borderRadius: 20, height: 50, alignItems: 'center',
-    paddingLeft: 16, paddingRight: 6, borderWidth: 1, borderColor: '#F2F2F5',
+    paddingLeft: 16, paddingRight: 6, borderWidth: 1, borderColor: c.cardMutedBg,
   },
-  commentInput: { flex: 1, color: '#0B0B0F', fontSize: 13 },
+  commentInput: { flex: 1, color: c.text, fontSize: 13 },
   sendBtn: {
     width: 38, height: 38, borderRadius: 19,
-    backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: c.brand, alignItems: 'center', justifyContent: 'center',
   },
 
-  commentsListTitle: { fontSize: 14, fontWeight: '700', color: '#A6A6AF', marginTop: 8 },
-  noCommentsText: { color: '#6C6C77', fontSize: 12, textAlign: 'center', marginVertical: 12, lineHeight: 18 },
+  commentsListTitle: { fontSize: 14, fontWeight: '700', color: c.tertiaryText, marginTop: 8 },
+  noCommentsText: { color: c.subText, fontSize: 12, textAlign: 'center', marginVertical: 12, lineHeight: 18 },
 
   commentCard: {
-    backgroundColor: '#F9FAFB', borderRadius: 16,
-    padding: 12, borderWidth: 1, borderColor: '#F2F2F5',
+    backgroundColor: c.cardBg, borderRadius: 16,
+    padding: 12, borderWidth: 1, borderColor: c.cardMutedBg,
     marginBottom: 8,
   },
   commentHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   commentAvatar: { width: 20, height: 20, borderRadius: 6 },
   commentAvatarFallback: {
     width: 20, height: 20, borderRadius: 6,
-    backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: c.brand, alignItems: 'center', justifyContent: 'center',
   },
-  commentAuthor: { flex: 1, fontSize: 12, fontWeight: '600', color: '#0B0B0F' },
-  commentTime: { fontSize: 10, color: '#6C6C77' },
-  commentBody: { fontSize: 13, color: '#F2F2F5', lineHeight: 18 },
+  commentAuthor: { flex: 1, fontSize: 12, fontWeight: '600', color: c.text },
+  commentTime: { fontSize: 10, color: c.subText },
+  commentBody: { fontSize: 13, color: c.cardMutedBg, lineHeight: 18 },
 });

@@ -8,7 +8,6 @@ const MOCK_RECENT_SEARCHES: UserSearchResult[] = [
     pet_name: 'Coco',
     avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120',
     pet_avatar_url: null,
-    profile_visibility: 'real_with_pet',
     university: 'zZuP University',
     edu_verified: true
   },
@@ -19,7 +18,6 @@ const MOCK_RECENT_SEARCHES: UserSearchResult[] = [
     pet_name: null,
     avatar_url: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=120',
     pet_avatar_url: null,
-    profile_visibility: 'real_only',
     university: 'zZuP University',
     edu_verified: true
   },
@@ -30,7 +28,6 @@ const MOCK_RECENT_SEARCHES: UserSearchResult[] = [
     pet_name: null,
     avatar_url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=120',
     pet_avatar_url: null,
-    profile_visibility: 'real_only',
     university: 'zZuP University',
     edu_verified: false
   }
@@ -43,7 +40,6 @@ const MOCK_ALEX_GAN: UserSearchResult = {
   pet_name: 'Mochi',
   avatar_url: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=120',
   pet_avatar_url: null,
-  profile_visibility: 'real_with_pet',
   university: 'zZuP University',
   edu_verified: true
 };
@@ -56,7 +52,6 @@ const MOCK_TYPING_RESULTS: UserSearchResult[] = [
     pet_name: 'Bunny',
     avatar_url: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=120',
     pet_avatar_url: null,
-    profile_visibility: 'real_with_pet',
     university: 'zZuP University',
     edu_verified: true
   },
@@ -68,7 +63,6 @@ const MOCK_TYPING_RESULTS: UserSearchResult[] = [
     pet_name: 'Sparky',
     avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120',
     pet_avatar_url: null,
-    profile_visibility: 'real_with_pet',
     university: 'zZuP University',
     edu_verified: false
   }
@@ -99,14 +93,13 @@ export interface FriendProfile {
   friendship_id: string
   id: string
   zzup_id: string
-  profile_visibility: 'real_only' | 'real_with_pet' | 'pet_only'
   real_name: string | null
   avatar_url: string | null
   university: string | null
   pet_name: string | null
   pet_avatar_url: string | null
   edu_verified: boolean
-  // 宠物形象标识（迁移 64）。real_only 的人这两项为 null。
+  // 宠物形象标识（迁移 64）。头像取本地 assets/pets/png/{breed}_{stage}.png。
   pet_breed?: string | null
   pet_stage?: string | null
 }
@@ -120,14 +113,13 @@ export interface FriendRequest extends FriendProfile {
 export interface UserSearchResult {
   id: string
   zzup_id: string
-  profile_visibility: 'real_only' | 'real_with_pet' | 'pet_only'
   real_name: string | null
   avatar_url: string | null
   university: string | null
   pet_name: string | null
   pet_avatar_url: string | null
   edu_verified: boolean
-  // 宠物形象标识（迁移 64）。real_only 的人这两项为 null。
+  // 宠物形象标识（迁移 64）。头像取本地 assets/pets/png/{breed}_{stage}.png。
   pet_breed?: string | null
   pet_stage?: string | null
 }
@@ -135,14 +127,20 @@ export interface UserSearchResult {
 export interface BlockedUser {
   blocked_id: string
   blocked_identity_type: IdentityType
-  zzup_id: string
-  real_name: string | null
+  /** 宠物身份为 null —— zzup_id 是账号级标识，给出来等于把马甲摘了 */
+  zzup_id: string | null
+  /**
+   * 真人身份 = 真名；**宠物身份 = 代号标签**（如 "A Dog"），不是 pet_name。
+   * 拉黑列表里显示宠物真名等于自己把匿名破了（迁移 83）。
+   */
+  display_name: string | null
   avatar_url: string | null
-  pet_name: string | null
-  pet_avatar_url: string | null
   // 宠物形象标识（头像取本地资产，见 components/PetAvatar）
   pet_breed: string | null
   pet_stage: string | null
+  /** 「在哪拉黑的」，如群名或 "a zZuPer Pulse match"。宠物身份才有。 */
+  via_label: string | null
+  created_at: string
 }
 
 // ─── 好友请求（全部走 SECURITY DEFINER RPC，含拉黑/锁/三态机校验）──────────────
@@ -164,6 +162,34 @@ export async function sendFriendRequest(
     p_source: source ?? null,
   })
   return { error: error?.message ?? null }
+}
+
+/**
+ * Pulse 匹配会话里的加好友：**按会话寻址，不按账号 id**（迁移 86）。
+ *
+ * 客户端在这种会话里根本拿不到对方的账号 id —— conversation_members 的 RLS
+ * 只让你看见自己那一行，而这正是匿名性的地基：拿到 id 就能转手查出真名。
+ * 所以对方是谁在服务端解析，这边只递会话。
+ */
+export async function sendFriendRequestInConversation(
+  conversationId: string
+): Promise<{ error: string | null }> {
+  if (USE_MOCK) return { error: null }
+  const { error } = await supabase.rpc('send_friend_request_in_conversation', {
+    p_conversation: conversationId,
+  })
+  return { error: error?.message ?? null }
+}
+
+/** 同上，按会话取好友状态。friendship_id 只在收到对方请求时有值（用于接受）。 */
+export async function getConversationFriendship(
+  conversationId: string
+): Promise<{ status: FriendshipStatus; friendship_id: string | null }> {
+  const { data, error } = await supabase.rpc('conversation_friendship_state', {
+    p_conversation: conversationId,
+  })
+  if (error || !data) return { status: 'none', friendship_id: null }
+  return data as { status: FriendshipStatus; friendship_id: string | null }
 }
 
 export async function respondFriendRequest(
@@ -270,7 +296,6 @@ export async function searchUsers(keyword: string): Promise<UserSearchResult[]> 
               pet_name: 'Companion',
               avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120',
               pet_avatar_url: null,
-              profile_visibility: 'real_with_pet',
               university: 'zZuP University',
               edu_verified: false
             }
@@ -299,32 +324,24 @@ export async function searchUsers(keyword: string): Promise<UserSearchResult[]> 
 // ─── 我的拉黑列表(blocked_users SELECT 仅 blocker 可见)────────────────────────
 
 export async function getBlockedUsers(): Promise<BlockedUser[]> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return []
+  // 必须走 RPC。原来是 PostgREST 内嵌联查 `blocked:profiles!fk(...)`，
+  // 依赖 profiles 的列级 SELECT 授权 —— 那些授权在迁移 79 里整体撤销了
+  // （全库 PII 可被任意登录用户拖走），于是拉黑列表直接变空。
+  const { data, error } = await supabase.rpc('list_blocked_identities')
+  if (error) {
+    console.warn('list_blocked_identities failed:', error.message)
+    return []
+  }
 
-  const { data } = await supabase
-    .from('blocked_users')
-    .select(
-      `blocked_id, blocked_identity_type,
-       blocked:profiles!blocked_users_blocked_id_fkey (
-         zzup_id, real_name, avatar_url, pet_name, pet_avatar_url, pet_breed, pet_stage
-       )`
-    )
-    .eq('blocker_id', user.id)
-
-  if (!data) return []
-
-  return data.map((b: any) => ({
+  return ((data ?? []) as any[]).map((b: any) => ({
     blocked_id: b.blocked_id,
     blocked_identity_type: b.blocked_identity_type,
-    zzup_id: b.blocked.zzup_id,
-    real_name: b.blocked.real_name,
-    avatar_url: b.blocked.avatar_url,
-    pet_name: b.blocked.pet_name,
-    pet_avatar_url: b.blocked.pet_avatar_url,
-    pet_breed: b.blocked.pet_breed ?? null,
-    pet_stage: b.blocked.pet_stage ?? null,
+    zzup_id: b.zzup_id ?? null,
+    display_name: b.display_name ?? null,
+    avatar_url: b.avatar_url ?? null,
+    pet_breed: b.pet_breed ?? null,
+    pet_stage: b.pet_stage ?? null,
+    via_label: b.via_label ?? null,
+    created_at: b.created_at,
   }))
 }

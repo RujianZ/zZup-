@@ -62,7 +62,6 @@ const MOCK_PROFILE_DEFAULT = {
   pet_breed: 'Golden Retriever',
   pet_level: 5,
   pet_xp: 450,
-  profile_visibility: 'real_with_pet',
   show_date_of_birth: true,
   show_nationality: true,
   show_qr_code: true,
@@ -77,7 +76,6 @@ const MOCK_FRIENDS = [
     pet_name: 'Coco',
     avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120',
     pet_avatar_url: 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=120',
-    profile_visibility: 'real_with_pet',
     university: 'zZuP University'
   },
   {
@@ -87,7 +85,6 @@ const MOCK_FRIENDS = [
     pet_name: 'Neko',
     avatar_url: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=120',
     pet_avatar_url: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=120',
-    profile_visibility: 'real_with_pet',
     university: 'zZuP University'
   },
   {
@@ -97,7 +94,6 @@ const MOCK_FRIENDS = [
     pet_name: 'Panda',
     avatar_url: 'https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=120',
     pet_avatar_url: 'https://images.unsplash.com/photo-1533738363-b7f9aef128ce?w=120',
-    profile_visibility: 'real_with_pet',
     university: 'zZuP University'
   }
 ]

@@ -11,7 +11,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { getMessages, sendMessage, subscribeToMessages, Message } from '../../../lib/api/messages';
-import { createDM, getOrCreateZzuperTalk } from '../../../lib/api/conversations';
+import {
+  createDM, getOrCreateZzuperTalk, clearConversationHistory, isConversationFrozen,
+} from '../../../lib/api/conversations';
 import { uploadChatMedia, getSignedUrls, formatBytes, normalizeImage, Attachment, MAX_FILE_BYTES } from '../../../lib/api/uploads';
 import { markConversationRead } from '../../../lib/api/unread';
 import { useAuth } from '../../context/AuthContext';
@@ -68,6 +70,35 @@ export default function ChatScreen() {
 
   const showAlert = (title: string, message: string, type: 'error' | 'info' | 'success' = 'error') => {
     setAlertConfig({ visible: true, title, message, type });
+  };
+
+  // 右上角「…」菜单 + 清空记录的二次确认
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  /**
+   * 临时会话已到期 = 冻结（迁移 82）。只读：历史可看、可举报可拉黑，但发不出消息。
+   * 真正的拦截在数据库触发器里，这里查一下只是为了**提前禁掉输入框** ——
+   * 让用户打完一段话才收到报错是很糟的体验。
+   */
+  const [frozen, setFrozen] = useState(false);
+  useEffect(() => {
+    if (realConvId) isConversationFrozen(realConvId).then(setFrozen);
+  }, [realConvId]);
+
+  /**
+   * 清空聊天记录：只影响**我这一侧**的可见性，会话保留在列表里。
+   * 消息一条都不删 —— 对方照常看得见（见迁移 76）。
+   */
+  const handleClearHistory = async () => {
+    // LuxuryAlertModal 的确认按钮**只调 onConfirm，不调 onClose** ——
+    // 关弹窗是调用方的责任。漏了这一行就会出现「点了 Clear 没反应，
+    // 非得点 Cancel 才回得去」。
+    setConfirmClear(false);
+    if (!realConvId) return;
+    const { error } = await clearConversationHistory(realConvId);
+    if (error) { showAlert('Failed', error); return; }
+    setMessages([]);
   };
 
   // kind 由调用方显式传入；沿用名字判断只是旧入口的兜底
@@ -347,38 +378,59 @@ export default function ChatScreen() {
     }
   };
 
-  // 宠物形象取自消息联查；Realtime 补查未回来时，本人发的消息退回自己的 profile。
+  // 宠物形象由服务端按 品种+阶段 给出；万一没给，本人发的消息退回自己的 profile。
+  // **不能再用 sender_id 判断是不是自己** —— 宠物身份的消息 sender_id 恒为 null
+  // （迁移 77：匿名马甲背后的账号不给客户端），要用服务端算好的 is_mine。
   const petBreedOf = (m: Message) =>
-    m.author_pet_breed ?? (m.sender_id === profile?.id ? profile?.pet_breed : null);
+    m.author_pet_breed ?? (m.is_mine ? profile?.pet_breed : null);
   const petStageOf = (m: Message) =>
-    m.author_pet_stage ?? (m.sender_id === profile?.id ? profile?.pet_stage : null);
+    m.author_pet_stage ?? (m.is_mine ? profile?.pet_stage : null);
+
+  /**
+   * 点头像看主页 —— **按这条消息自己的身份**决定去哪，不看当前关系。
+   *
+   *   宠物身份 → 裸宠物页（只有种类/阶段/代号，可举报可拉黑）
+   *   真人身份 → 完整主页（真人 + 宠物，含装饰）
+   *
+   * 宠物消息拿不到 sender_id（迁移 77 有意置 null），只能靠 author_alias 寻址。
+   */
+  const openAuthorProfile = (m: Message) => {
+    if (m.identity_mode === 'pet') {
+      if (!m.author_alias || !realConvId) return;
+      navigation.navigate('PetProfile', { conversationId: realConvId, alias: m.author_alias });
+    } else if (m.sender_id) {
+      navigation.navigate('OtherProfile', { userId: m.sender_id });
+    }
+  };
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isPetAIResponse = isPetTalk && item.identity_mode === 'pet';
-    const isMe = !isPetAIResponse && item.sender_id === profile?.id;
+    const isMe = !isPetAIResponse && item.is_mine;
     const isPet = item.identity_mode === 'pet';
 
     return (
       <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
         {!isMe && (
-          isPet ? (
-            // 宠物身份：形象由 品种+阶段 决定（本地资产），不是远程 URL
-            <PetAvatar
-              url={item.author_avatar_url}
-              breed={petBreedOf(item)}
-              stage={petStageOf(item)}
-              size={36}
-              backgroundColor={colors.cardMutedBg}
-              borderColor={colors.borderBrand}
-              borderWidth={1.5}
-            />
-          ) : item.author_avatar_url ? (
-            <Image source={{ uri: item.author_avatar_url }} style={styles.peerAvatar} />
-          ) : (
-            <View style={[styles.peerAvatarFallback, { backgroundColor: colors.cardMutedBg, borderColor: colors.borderBrand, borderWidth: 1.5 }]}>
-              <Ionicons name="person" size={16} color={colors.brand} />
-            </View>
-          )
+          <TouchableOpacity onPress={() => openAuthorProfile(item)} activeOpacity={0.7}>
+            {isPet ? (
+              // 宠物身份 = 匿名发言，一律裸形态（种类 + 阶段的本地图）
+              <PetAvatar
+                anonymous
+                breed={petBreedOf(item)}
+                stage={petStageOf(item)}
+                size={36}
+                backgroundColor={colors.cardMutedBg}
+                borderColor={colors.borderBrand}
+                borderWidth={1.5}
+              />
+            ) : item.author_avatar_url ? (
+              <Image source={{ uri: item.author_avatar_url }} style={styles.peerAvatar} />
+            ) : (
+              <View style={[styles.peerAvatarFallback, { backgroundColor: colors.cardMutedBg, borderColor: colors.borderBrand, borderWidth: 1.5 }]}>
+                <Ionicons name="person" size={16} color={colors.brand} />
+              </View>
+            )}
+          </TouchableOpacity>
         )}
 
         <View style={{ maxWidth: '78%' }}>
@@ -448,10 +500,18 @@ export default function ChatScreen() {
 
         {/* Right-side Avatar for My Sent Messages */}
         {isMe && (
-          <View style={styles.myAvatarWrapper}>
+          <TouchableOpacity
+            style={styles.myAvatarWrapper}
+            // 点自己的头像进自己的主页 —— 那边是**完整形态**（真人 + 宠物 + 装饰），
+            // 跟消息里的裸形态不冲突：两个面，规则不同。
+            onPress={() => navigation.navigate('Main', { screen: 'Profile' })}
+            activeOpacity={0.7}
+          >
             {isPet ? (
+              // 自己的宠物消息也用裸形态 —— 所见即他人所见。
+              // 否则用户会看到自己的装饰、以为别人也看得到，那是误导。
               <PetAvatar
-                url={profile?.pet_avatar_url}
+                anonymous
                 breed={profile?.pet_breed}
                 stage={profile?.pet_stage}
                 size={36}
@@ -468,7 +528,7 @@ export default function ChatScreen() {
                 </View>
               )
             )}
-          </View>
+          </TouchableOpacity>
         )}
       </View>
     );
@@ -484,18 +544,62 @@ export default function ChatScreen() {
           <Feather name="chevron-left" size={26} color={colors.brand} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{groupName || 'Chat'}</Text>
-        {!isDM && !isPetTalk ? (
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={() => navigation.navigate('GroupMembers', { groupId: realConvId, groupName })}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="people-outline" size={24} color={colors.brand} />
+        <View style={styles.headerActions}>
+          {!isDM && !isPetTalk && (
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={() => navigation.navigate('GroupMembers', { groupId: realConvId, groupName })}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="people-outline" size={24} color={colors.brand} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.iconBtn} onPress={() => setShowMoreMenu(true)} activeOpacity={0.7}>
+            <Feather name="more-horizontal" size={24} color={colors.brand} />
           </TouchableOpacity>
-        ) : (
-          <View style={styles.iconBtn} />
-        )}
+        </View>
       </View>
+
+      {/* 右上角菜单 */}
+      <Modal visible={showMoreMenu} transparent animationType="fade" onRequestClose={() => setShowMoreMenu(false)}>
+        <TouchableOpacity
+          style={[styles.menuBg, { backgroundColor: colors.isDark ? 'rgba(11,7,19,0.75)' : 'rgba(15,23,42,0.35)' }]}
+          activeOpacity={1}
+          onPress={() => setShowMoreMenu(false)}
+        >
+          <View style={[styles.menuCard, { backgroundColor: colors.headerBg, borderColor: colors.border }]}>
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+              onPress={() => { setShowMoreMenu(false); setConfirmClear(true); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="trash-bin-outline" size={20} color="#EF4444" />
+              <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Clear chat history</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuItem, styles.menuCancel, { backgroundColor: colors.cardMutedBg, borderColor: colors.border }]}
+              onPress={() => setShowMoreMenu(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.menuItemText, { color: colors.text }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <LuxuryAlertModal
+        visible={confirmClear}
+        title="Clear chat history?"
+        message={
+          'This only clears the messages on your side. The other person still has their copy, and this conversation stays in your list.\n\nThis cannot be undone.'
+        }
+        type="error"
+        confirmText="Clear"
+        destructive
+        onConfirm={handleClearHistory}
+        onClose={() => setConfirmClear(false)}
+      />
 
       {/* Messages List */}
       {loading ? (
@@ -522,6 +626,18 @@ export default function ChatScreen() {
         keyboardVerticalOffset={0}
       >
         <View style={[styles.inputArea, { backgroundColor: colors.headerBg, borderTopColor: colors.border }]}>
+          {frozen ? (
+            /* 冻结的会话：输入区整块换成说明。
+               不是把输入框禁灰就完事 —— 得让人明白「还能读、还能举报」。 */
+            <View style={styles.frozenNotice}>
+              <Ionicons name="lock-closed-outline" size={18} color={colors.tertiaryText} />
+              <Text style={[styles.frozenText, { color: colors.subText }]}>
+                This conversation has ended. You can still read it, and report it if
+                something went wrong.
+              </Text>
+            </View>
+          ) : (
+          <>
           {/* Show IdentityToggle ONLY in Pack Chats (!isDM && !isPetTalk) */}
           {!isDM && !isPetTalk && (
             <IdentityToggle value={identityMode} onChange={setIdentityMode} />
@@ -586,6 +702,8 @@ export default function ChatScreen() {
               ))}
             </View>
           )}
+          </>
+          )}
         </View>
       </KeyboardAvoidingView>
 
@@ -627,6 +745,39 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // 群聊右上角有两个按钮（成员 + 更多），私聊只有一个
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  menuBg: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+  },
+  menuCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    gap: 10,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  menuCancel: {
+    justifyContent: 'center',
+  },
+  menuItemText: {
+    fontSize: 15,
+    fontWeight: '700',
   },
   headerTitle: {
     flex: 1,
@@ -718,6 +869,15 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'ios' ? 24 : 16,
     gap: 12,
   },
+  // 冻结会话的输入区替代内容
+  frozenNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+  },
+  frozenText: { flex: 1, fontSize: 13, lineHeight: 19 },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',

@@ -10,12 +10,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { listConversations, searchGroups, joinGroup, ConversationListItem, GroupSummary } from '../../../lib/api/conversations';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 
 export default function GroupListScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { profile } = useAuth();
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
 
   const [tab, setTab] = useState<'mine' | 'discover'>('mine');
   const [myGroups, setMyGroups] = useState<ConversationListItem[]>([]);
@@ -92,7 +95,7 @@ export default function GroupListScreen() {
           <Image source={{ uri: avatarUrl }} style={styles.avatar} />
         ) : (
           <View style={styles.avatarFallback}>
-            <Ionicons name="people" size={24} color="#C084FC" />
+            <Ionicons name="people" size={24} color={colors.brandSecondary} />
           </View>
         )}
         <View style={styles.groupInfo}>
@@ -138,11 +141,11 @@ export default function GroupListScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.7}>
-          <Ionicons name="chevron-back" size={26} color="#C084FC" />
+          <Ionicons name="chevron-back" size={26} color={colors.brandSecondary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Pack Chats</Text>
         <TouchableOpacity onPress={() => navigation.navigate('CreateGroup')} style={styles.backBtn} activeOpacity={0.7}>
-          <Ionicons name="add" size={28} color="#C084FC" />
+          <Ionicons name="add" size={28} color={colors.brandSecondary} />
         </TouchableOpacity>
       </View>
 
@@ -166,11 +169,11 @@ export default function GroupListScreen() {
       {tab === 'discover' && (
         <View style={styles.searchRow}>
           <View style={styles.searchBox}>
-            <Ionicons name="search-outline" size={18} color="#71717A" />
+            <Ionicons name="search-outline" size={18} color={colors.tertiaryText} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search Pack Chats..."
-              placeholderTextColor="#71717A"
+              placeholderTextColor={colors.tertiaryText}
               value={keyword}
               onChangeText={setKeyword}
               onSubmitEditing={handleSearch}
@@ -185,7 +188,7 @@ export default function GroupListScreen() {
 
       {/* Content */}
       {loading ? (
-        <View style={styles.center}><ActivityIndicator color="#8B5CF6" size="large" /></View>
+        <View style={styles.center}><ActivityIndicator color={colors.brand} size="large" /></View>
       ) : (
         <FlatList
           data={tab === 'mine' ? myGroups : results}
@@ -196,7 +199,7 @@ export default function GroupListScreen() {
           ListEmptyComponent={
             <View style={styles.center}>
               <View style={styles.emptyIconBg}>
-                <Ionicons name="chatbubbles-outline" size={32} color="#C084FC" />
+                <Ionicons name="chatbubbles-outline" size={32} color={colors.brandSecondary} />
               </View>
               <Text style={styles.emptyText}>
                 {tab === 'mine' ? 'No Pack Chats joined yet' : 'Search to discover new Pack Chats'}
@@ -218,10 +221,13 @@ export default function GroupListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// 这一屏原本整套硬编码成深紫，无视用户选的主题（默认薄荷绿）。
+// 硬编码点太多（37 处），逐个加内联覆盖容易漏，所以把整个 StyleSheet
+// 改成 colors 的函数 —— 一处改完，所有样式自动跟随主题。
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0B0713',
+    backgroundColor: c.bg,
   },
   header: {
     height: 56,
@@ -229,9 +235,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    backgroundColor: '#13101E',
+    backgroundColor: c.headerBg,
     borderBottomWidth: 1,
-    borderBottomColor: '#261E38',
+    borderBottomColor: c.border,
   },
   backBtn: {
     padding: 4,
@@ -239,13 +245,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: c.text,
   },
   tabRow: {
     flexDirection: 'row',
-    backgroundColor: '#13101E',
+    backgroundColor: c.headerBg,
     borderBottomWidth: 1,
-    borderBottomColor: '#261E38',
+    borderBottomColor: c.border,
   },
   tabBtn: {
     flex: 1,
@@ -254,15 +260,15 @@ const styles = StyleSheet.create({
   },
   tabBtnActive: {
     borderBottomWidth: 3,
-    borderBottomColor: '#8B5CF6',
+    borderBottomColor: c.brand,
   },
   tabText: {
     fontSize: 14,
-    color: '#71717A',
+    color: c.tertiaryText,
     fontWeight: '600',
   },
   tabTextActive: {
-    color: '#C084FC',
+    color: c.brandSecondary,
     fontWeight: '700',
   },
   searchRow: {
@@ -271,27 +277,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 10,
-    backgroundColor: '#0B0713',
+    backgroundColor: c.bg,
   },
   searchBox: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#161024',
+    backgroundColor: c.cardBg,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: '#261E38',
+    borderColor: c.border,
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: '#FFFFFF',
+    color: c.text,   // 曾是写死的白色 —— 浅色主题下白字白底，输入的内容看不见
   },
   searchBtn: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: c.brand,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
@@ -309,10 +315,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
-    backgroundColor: '#161024',
+    backgroundColor: c.cardBg,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#261E38',
+    borderColor: c.border,
     gap: 12,
   },
   avatar: {
@@ -324,7 +330,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#261E38',
+    backgroundColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -334,33 +340,33 @@ const styles = StyleSheet.create({
   groupName: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: c.text,
   },
   groupMeta: {
     fontSize: 12,
-    color: '#A1A1AA',
+    color: c.subText,
     marginTop: 3,
   },
   groupDesc: {
     fontSize: 13,
-    color: '#71717A',
+    color: c.tertiaryText,
     marginTop: 4,
   },
   openBtn: {
-    backgroundColor: '#261E38',
+    backgroundColor: c.border,
     borderWidth: 1,
-    borderColor: '#3F2A60',
+    borderColor: c.borderBrand,
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 10,
   },
   openBtnText: {
-    color: '#F3E8FF',
+    color: c.cardMutedBg,
     fontSize: 13,
     fontWeight: '600',
   },
   joinBtn: {
-    backgroundColor: '#8B5CF6',
+    backgroundColor: c.brand,
     paddingHorizontal: 16,
     paddingVertical: 7,
     borderRadius: 10,
@@ -381,15 +387,15 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#161024',
+    backgroundColor: c.cardBg,
     borderWidth: 1,
-    borderColor: '#261E38',
+    borderColor: c.border,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
   },
   emptyText: {
-    color: '#A1A1AA',
+    color: c.subText,
     fontSize: 14,
     textAlign: 'center',
   },

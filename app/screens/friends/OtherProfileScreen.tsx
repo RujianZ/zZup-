@@ -16,12 +16,14 @@ import {
 } from '../../../lib/api/friends';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 import PetAvatar from '../../components/PetAvatar';
+import { useTheme } from '../../context/ThemeContext';
 
 export default function OtherProfileScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { userId } = route.params;
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
   const [profile, setProfile] = useState<any>(null);
   const [status, setStatus] = useState<FriendshipStatus>('none');
@@ -133,8 +135,7 @@ export default function OtherProfileScreen() {
 
   const handleSendDM = async () => {
     setActionLoading(true);
-    const isPetOnly = profile?.profile_visibility === 'pet_only';
-    const conversationId = await createDM(userId, 'real', isPetOnly ? 'pet' : 'real');
+    const conversationId = await createDM(userId, 'real', 'real');
     setActionLoading(false);
     if (!conversationId) {
       showAlert('Error', 'Unable to start chat.', 'error');
@@ -142,50 +143,55 @@ export default function OtherProfileScreen() {
     }
     navigation.navigate('Chat', {
       groupId: conversationId,
-      groupName: isPetOnly ? (profile?.pet_name ?? 'Pet') : (profile?.real_name ?? 'Chat'),
+      groupName: profile?.real_name ?? 'Chat',
       isDM: true
     });
   };
 
-  const isPetOnly = profile?.profile_visibility === 'pet_only';
-  const showPetCard = profile?.profile_visibility === 'real_with_pet' && profile?.pet_name;
-  const imageUrl = isPetOnly ? profile?.pet_avatar_url : profile?.avatar_url;
-  const displayName = (isPetOnly ? (profile?.pet_name ?? profile?.real_name) : profile?.real_name) ?? 'zZuP! user';
+  // 完整主页：真人 + 宠物一律展示。原先按 profile_visibility 分三种模式的逻辑
+  // 已随迁移 74 废弃 —— 详见该迁移文件头。宠物强制上主页是有意的：
+  // 匿名保护不靠主页藏宠物，而是靠匿名场景里只渲染裸形态（get_pet_identity）。
+  const showPetCard = !!profile?.pet_name;
+  const imageUrl = profile?.avatar_url;
+  const displayName = profile?.real_name ?? 'zZuP! user';
+
+  const primaryBtn = [styles.primaryBtn, { backgroundColor: colors.brand }];
+  const ghostBtn = [styles.ghostBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }];
 
   const renderAction = () => {
-    if (actionLoading) return <ActivityIndicator color="#8B5CF6" style={{ marginTop: 16 }} />;
+    if (actionLoading) return <ActivityIndicator color={colors.brand} style={{ marginTop: 16 }} />;
     switch (status) {
       case 'none':
         return (
-          <TouchableOpacity style={styles.primaryBtn} onPress={handleAddFriend} activeOpacity={0.8}>
+          <TouchableOpacity style={primaryBtn} onPress={handleAddFriend} activeOpacity={0.8}>
             <Feather name="user-plus" size={18} color="#FFFFFF" />
             <Text style={styles.primaryBtnText}>Add Friend</Text>
           </TouchableOpacity>
         );
       case 'pending_sent':
         return (
-          <View style={styles.ghostBtn}>
-            <Feather name="clock" size={16} color="#A1A1AA" />
-            <Text style={styles.ghostBtnText}>Request Sent</Text>
+          <View style={ghostBtn}>
+            <Feather name="clock" size={16} color={colors.subText} />
+            <Text style={[styles.ghostBtnText, { color: colors.text }]}>Request Sent</Text>
           </View>
         );
       case 'pending_received':
         return (
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.navigate('FriendRequests')} activeOpacity={0.8}>
+          <TouchableOpacity style={primaryBtn} onPress={() => navigation.navigate('FriendRequests')} activeOpacity={0.8}>
             <Feather name="check" size={18} color="#FFFFFF" />
             <Text style={styles.primaryBtnText}>Accept Request</Text>
           </TouchableOpacity>
         );
       case 'accepted':
         return (
-          <TouchableOpacity style={styles.primaryBtn} onPress={handleSendDM} activeOpacity={0.8}>
+          <TouchableOpacity style={primaryBtn} onPress={handleSendDM} activeOpacity={0.8}>
             <Ionicons name="chatbubble-ellipses-outline" size={18} color="#FFFFFF" />
             <Text style={styles.primaryBtnText}>Message</Text>
           </TouchableOpacity>
         );
       case 'blocked':
         return (
-          <View style={styles.ghostBtn}>
+          <View style={ghostBtn}>
             <Feather name="slash" size={16} color="#EF4444" />
             <Text style={[styles.ghostBtnText, { color: '#EF4444' }]}>Blocked</Text>
           </View>
@@ -194,18 +200,22 @@ export default function OtherProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar style="light" />
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
+      <StatusBar style={colors.statusBarStyle} />
 
       {/* Header */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
+      <View style={[styles.header, {
+        paddingTop: Math.max(insets.top, 12),
+        backgroundColor: colors.headerBg,
+        borderBottomColor: colors.border,
+      }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn} activeOpacity={0.7}>
-          <Feather name="chevron-left" size={26} color="#C084FC" />
+          <Feather name="chevron-left" size={26} color={colors.brand} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Profile</Text>
         {status !== 'blocked' ? (
           <TouchableOpacity style={styles.iconBtn} onPress={() => setShowMoreMenu(true)} activeOpacity={0.7}>
-            <Feather name="more-horizontal" size={24} color="#C084FC" />
+            <Feather name="more-horizontal" size={24} color={colors.brand} />
           </TouchableOpacity>
         ) : (
           <View style={styles.iconBtn} />
@@ -213,26 +223,32 @@ export default function OtherProfileScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator color="#8B5CF6" size="large" /></View>
+        <View style={styles.center}><ActivityIndicator color={colors.brand} size="large" /></View>
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* Profile Top Section */}
           <View style={styles.top}>
-            <LinearGradient colors={['#C084FC', '#8B5CF6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ring}>
-              <View style={styles.ringInner}>
+            <LinearGradient
+              colors={[colors.brandSecondary, colors.brand]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={styles.ring}
+            >
+              <View style={[styles.ringInner, { backgroundColor: colors.bg }]}>
                 {imageUrl ? (
                   <Image source={{ uri: imageUrl }} style={styles.avatar} />
                 ) : (
-                  <View style={styles.avatarFallback}>
-                    <Ionicons name="person" size={48} color="#C084FC" />
+                  <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>
+                    <Ionicons name="person" size={48} color={colors.brand} />
                   </View>
                 )}
               </View>
             </LinearGradient>
 
-            <Text style={styles.name}>{displayName}</Text>
-            <Text style={styles.subId}>#{profile?.zzup_id}</Text>
-            {!!profile?.university && <Text style={styles.uni}>{profile.university}</Text>}
+            <Text style={[styles.name, { color: colors.text }]}>{displayName}</Text>
+            <Text style={[styles.subId, { color: colors.brand }]}>#{profile?.zzup_id}</Text>
+            {!!profile?.university && (
+              <Text style={[styles.uni, { color: colors.subText }]}>{profile.university}</Text>
+            )}
           </View>
 
           {/* Single Action Button (Message) */}
@@ -241,30 +257,34 @@ export default function OtherProfileScreen() {
           </View>
 
           {/* Bio Card */}
-          {!!profile?.bio && !isPetOnly && (
-            <View style={styles.card}>
-              <Text style={styles.cardLabel}>BIO</Text>
-              <Text style={styles.cardText}>{profile.bio}</Text>
+          {!!profile?.bio && (
+            <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+              <Text style={[styles.cardLabel, { color: colors.subText }]}>BIO</Text>
+              <Text style={[styles.cardText, { color: colors.text }]}>{profile.bio}</Text>
             </View>
           )}
 
           {/* Pet Info Card */}
           {showPetCard && (
-            <View style={styles.card}>
+            <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
               <View style={styles.petRow}>
                 <PetAvatar
                   url={profile.pet_avatar_url}
                   breed={profile.pet_breed}
                   stage={profile.pet_stage}
                   size={56}
-                  backgroundColor="rgba(139,92,246,0.15)"
+                  backgroundColor={colors.cardMutedBg}
                 />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.petName}>{profile.pet_name}</Text>
-                  <Text style={styles.petLevel}>Lv.{profile.pet_level ?? 1} · {profile.pet_xp ?? 0} XP</Text>
+                  <Text style={[styles.petName, { color: colors.text }]}>{profile.pet_name}</Text>
+                  <Text style={[styles.petLevel, { color: colors.subText }]}>
+                    Lv.{profile.pet_level ?? 1} · {profile.pet_xp ?? 0} XP
+                  </Text>
                 </View>
               </View>
-              {!!profile.pet_bio && <Text style={styles.petBio}>{profile.pet_bio}</Text>}
+              {!!profile.pet_bio && (
+                <Text style={[styles.petBio, { color: colors.subText }]}>{profile.pet_bio}</Text>
+              )}
             </View>
           )}
         </ScrollView>
@@ -272,24 +292,57 @@ export default function OtherProfileScreen() {
 
       {/* More Options Dropdown Sheet Modal */}
       <Modal visible={showMoreMenu} transparent animationType="fade" onRequestClose={() => setShowMoreMenu(false)}>
-        <TouchableOpacity style={styles.modalBg} activeOpacity={1} onPress={() => setShowMoreMenu(false)}>
-          <View style={styles.menuCard}>
-            <Text style={styles.menuTitle}>Options</Text>
+        <TouchableOpacity
+          style={[styles.modalBg, { backgroundColor: colors.isDark ? 'rgba(11,7,19,0.75)' : 'rgba(15,23,42,0.35)' }]}
+          activeOpacity={1}
+          onPress={() => setShowMoreMenu(false)}
+        >
+          <View style={[styles.menuCard, { backgroundColor: colors.headerBg, borderColor: colors.border }]}>
+            <Text style={[styles.menuTitle, { color: colors.subText }]}>Options</Text>
 
             {status === 'accepted' && (
-              <TouchableOpacity style={styles.menuItem} onPress={confirmRemoveFriend} activeOpacity={0.8}>
+              <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+                onPress={confirmRemoveFriend}
+                activeOpacity={0.8}
+              >
                 <Ionicons name="person-remove-outline" size={20} color="#F87171" />
                 <Text style={[styles.menuItemText, { color: '#F87171' }]}>Remove Friend (Unfriend)</Text>
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity style={styles.menuItem} onPress={confirmBlockUser} activeOpacity={0.8}>
+            {/* 举报入口。真人身份走 zzup_id，服务端按 id 解析被举报人 ——
+                跟裸宠物页那条按代号的路径是两套，因为这里对象本来就是公开的。 */}
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+              onPress={() => {
+                setShowMoreMenu(false);
+                navigation.navigate('Report', {
+                  reportedZzupId: profile?.zzup_id,
+                  label: profile?.real_name,
+                });
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="flag-outline" size={20} color="#F59E0B" />
+              <Text style={[styles.menuItemText, { color: '#F59E0B' }]}>Report this user</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+              onPress={confirmBlockUser}
+              activeOpacity={0.8}
+            >
               <Ionicons name="ban-outline" size={20} color="#EF4444" />
               <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Block User</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.menuItem, styles.cancelItem]} onPress={() => setShowMoreMenu(false)} activeOpacity={0.8}>
-              <Text style={styles.cancelItemText}>Cancel</Text>
+            <TouchableOpacity
+              style={[styles.menuItem, styles.cancelItem, { backgroundColor: colors.cardMutedBg, borderColor: colors.border }]}
+              onPress={() => setShowMoreMenu(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.cancelItemText, { color: colors.text }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -311,10 +364,11 @@ export default function OtherProfileScreen() {
   );
 }
 
+// 只留布局。颜色一律在使用处用 useTheme() 的 colors 内联覆盖 ——
+// 这屏原本整套硬编码成深紫，无视用户选的主题（默认是薄荷绿）。
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#0B0713',
   },
   header: {
     flexDirection: 'row',
@@ -322,9 +376,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 12,
-    backgroundColor: '#13101E',
     borderBottomWidth: 1,
-    borderBottomColor: '#261E38',
   },
   iconBtn: {
     width: 40,
@@ -335,7 +387,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
   },
   center: {
     flex: 1,
@@ -362,7 +413,6 @@ const styles = StyleSheet.create({
     width: 108,
     height: 108,
     borderRadius: 54,
-    backgroundColor: '#0B0713',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -376,24 +426,20 @@ const styles = StyleSheet.create({
     width: 108,
     height: 108,
     borderRadius: 54,
-    backgroundColor: '#261E38',
     alignItems: 'center',
     justifyContent: 'center',
   },
   name: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#FFFFFF',
   },
   subId: {
     fontSize: 14,
-    color: '#C084FC',
     fontWeight: '700',
     marginTop: 4,
   },
   uni: {
     fontSize: 12,
-    color: '#A1A1AA',
     marginTop: 4,
   },
   actionSection: {
@@ -406,11 +452,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#8B5CF6',
     width: '100%',
     height: 48,
     borderRadius: 24,
   },
+  // 主按钮是品牌底色，两个主题下文字都是白的
   primaryBtnText: {
     fontSize: 15,
     color: '#FFFFFF',
@@ -421,37 +467,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#161024',
     borderWidth: 1,
-    borderColor: '#261E38',
     width: '100%',
     height: 48,
     borderRadius: 24,
   },
   ghostBtnText: {
     fontSize: 15,
-    color: '#FFFFFF',
     fontWeight: '700',
   },
   card: {
     marginHorizontal: 16,
     marginBottom: 14,
-    backgroundColor: '#161024',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#261E38',
     padding: 16,
   },
   cardLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#A1A1AA',
     letterSpacing: 0.8,
     marginBottom: 8,
   },
   cardText: {
     fontSize: 14,
-    color: '#FFFFFF',
     lineHeight: 21,
   },
   petRow: {
@@ -460,53 +499,33 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 8,
   },
-  petAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-  },
-  petAvatarFallback: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#3B1866',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   petName: {
     fontSize: 16,
-    color: '#FFFFFF',
     fontWeight: '700',
   },
   petLevel: {
     fontSize: 12,
-    color: '#A1A1AA',
     marginTop: 2,
   },
   petBio: {
     fontSize: 13,
-    color: '#D4D4D8',
     lineHeight: 20,
   },
   modalBg: {
     flex: 1,
-    backgroundColor: 'rgba(11, 7, 19, 0.75)',
     justifyContent: 'flex-end',
     paddingHorizontal: 16,
     paddingBottom: 24,
   },
   menuCard: {
-    backgroundColor: '#13101E',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#261E38',
     padding: 16,
     gap: 10,
   },
   menuTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#A1A1AA',
     textAlign: 'center',
     marginBottom: 6,
   },
@@ -514,10 +533,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#161024',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#261E38',
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
@@ -527,12 +544,10 @@ const styles = StyleSheet.create({
   },
   cancelItem: {
     justifyContent: 'center',
-    backgroundColor: '#261E38',
     marginTop: 4,
   },
   cancelItemText: {
     fontSize: 15,
-    color: '#FFFFFF',
     fontWeight: '700',
     textAlign: 'center',
   },

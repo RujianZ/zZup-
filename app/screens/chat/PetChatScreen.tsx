@@ -7,6 +7,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import LottieView from 'lottie-react-native';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
@@ -23,6 +24,8 @@ interface PetMessage {
 
 export default function PetChatScreen() {
   const navigation = useNavigation<any>();
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const { profile } = useAuth();
 
   // Breed mapping matching both backend and ProfileScreen
@@ -276,7 +279,7 @@ export default function PetChatScreen() {
 
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn} hitSlop={8}>
-          <Feather name="chevron-left" size={26} color={light.text} />
+          <Feather name="chevron-left" size={26} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.petMeta}>
           <Text style={styles.headerTitle}>zZuPer Talk</Text>
@@ -293,7 +296,7 @@ export default function PetChatScreen() {
       </View>
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color={light.brand} /></View>
+        <View style={styles.center}><ActivityIndicator size="large" color={colors.brand} /></View>
       ) : (
         <FlatList
           ref={flatListRef}
@@ -309,12 +312,12 @@ export default function PetChatScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.inputArea}>
           <TouchableOpacity style={styles.voiceBtn} onPress={() => Alert.alert('Voice', 'Recording is coming soon!')}>
-            <Ionicons name="mic-outline" size={20} color={light.textSecondary} />
+            <Ionicons name="mic-outline" size={20} color={colors.subText} />
           </TouchableOpacity>
           <TextInput
             style={styles.textInput}
             placeholder={`Message ${petName}`}
-            placeholderTextColor={light.textTertiary}
+            placeholderTextColor={colors.tertiaryText}
             value={input}
             onChangeText={setInput}
             multiline
@@ -333,22 +336,24 @@ export default function PetChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: light.bg },
+// 颜色全部走主题（默认薄荷绿，支持 light/dark/system）。
+// 原本是整套写死的固定配色，无视用户在 Profile 里选的主题。
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: c.bg },
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: spacing.sm, height: 56,
-    borderBottomWidth: 1, borderBottomColor: light.border,
+    borderBottomWidth: 1, borderBottomColor: c.border,
   },
   iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   petMeta: { flex: 1, alignItems: 'center' },
-  headerTitle: { ...typography.h3, color: light.text },
-  petSubText: { ...typography.caption, color: light.textSecondary, marginTop: 1 },
-  levelBadge: { paddingHorizontal: spacing.md, height: 28, borderRadius: radius.full, backgroundColor: light.brandSoft, minWidth: 44, alignItems: 'center', justifyContent: 'center', marginRight: spacing.xs },
-  levelText: { ...typography.micro, color: light.brand, fontWeight: '800' },
+  headerTitle: { ...typography.h3, color: c.text },
+  petSubText: { ...typography.caption, color: c.subText, marginTop: 1 },
+  levelBadge: { paddingHorizontal: spacing.md, height: 28, borderRadius: radius.full, backgroundColor: c.cardMutedBg, minWidth: 44, alignItems: 'center', justifyContent: 'center', marginRight: spacing.xs },
+  levelText: { ...typography.micro, color: c.brand, fontWeight: '800' },
 
-  showcase: { alignItems: 'center', paddingVertical: spacing.base, borderBottomWidth: 1, borderBottomColor: light.border, backgroundColor: light.bgMuted },
-  avatarPulse: { width: 96, height: 96, borderRadius: 48, backgroundColor: light.brandSoft, justifyContent: 'center', alignItems: 'center' },
+  showcase: { alignItems: 'center', paddingVertical: spacing.base, borderBottomWidth: 1, borderBottomColor: c.border, backgroundColor: c.cardMutedBg },
+  avatarPulse: { width: 96, height: 96, borderRadius: 48, backgroundColor: c.cardMutedBg, justifyContent: 'center', alignItems: 'center' },
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list: { paddingHorizontal: spacing.base, paddingVertical: spacing.md },
@@ -356,18 +361,18 @@ const styles = StyleSheet.create({
   msgRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, marginVertical: 5 },
   msgRowMe: { justifyContent: 'flex-end', alignSelf: 'flex-end' },
   msgRowOther: { alignSelf: 'flex-start' },
-  petMsgAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: light.brandSoft, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  author: { ...typography.micro, color: light.brand, marginBottom: 3, marginLeft: spacing.sm },
+  petMsgAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: c.cardMutedBg, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  author: { ...typography.micro, color: c.brand, marginBottom: 3, marginLeft: spacing.sm },
   bubble: { borderRadius: 20, paddingHorizontal: spacing.base, paddingVertical: 10 },
-  bubbleOther: { backgroundColor: light.surfaceHi, borderBottomLeftRadius: 6 },
-  bubbleMe: { backgroundColor: light.brand, borderBottomRightRadius: 6 },
-  content: { ...typography.body, color: light.text, lineHeight: 21 },
-  contentMe: { color: light.white },
-  time: { ...typography.micro, color: light.textTertiary, marginTop: 3, marginHorizontal: spacing.sm },
+  bubbleOther: { backgroundColor: c.cardBg, borderBottomLeftRadius: 6 },
+  bubbleMe: { backgroundColor: c.brand, borderBottomRightRadius: 6 },
+  content: { ...typography.body, color: c.text, lineHeight: 21 },
+  contentMe: { color: c.cardBg },
+  time: { ...typography.micro, color: c.tertiaryText, marginTop: 3, marginHorizontal: spacing.sm },
 
-  inputArea: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, borderTopWidth: 1, borderTopColor: light.border, paddingHorizontal: spacing.base, paddingTop: spacing.md, paddingBottom: spacing.xl },
-  voiceBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: light.surfaceHi, alignItems: 'center', justifyContent: 'center' },
-  textInput: { flex: 1, backgroundColor: light.surfaceHi, borderRadius: 22, paddingHorizontal: spacing.base, paddingVertical: 11, ...typography.body, color: light.text, maxHeight: 110 },
-  sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: light.brand, alignItems: 'center', justifyContent: 'center' },
+  inputArea: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, borderTopWidth: 1, borderTopColor: c.border, paddingHorizontal: spacing.base, paddingTop: spacing.md, paddingBottom: spacing.xl },
+  voiceBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.cardBg, alignItems: 'center', justifyContent: 'center' },
+  textInput: { flex: 1, backgroundColor: c.cardBg, borderRadius: 22, paddingHorizontal: spacing.base, paddingVertical: 11, ...typography.body, color: c.text, maxHeight: 110 },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: c.brand, alignItems: 'center', justifyContent: 'center' },
   sendDisabled: { opacity: 0.35 },
 });

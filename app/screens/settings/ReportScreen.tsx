@@ -7,19 +7,37 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, Feather } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../context/ThemeContext';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 import {
   REPORT_CATEGORIES, ReportCategory, ReportAttachment,
-  uploadReportImage, submitReport,
+  uploadReportImage, submitReport, submitReportByAlias,
 } from '../../../lib/api/reports';
 import { getFriends, FriendProfile } from '../../../lib/api/friends';
 
 export default function ReportScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const { colors } = useTheme();
+
+  /**
+   * 三种入口：
+   *   · Profile → Report a problem        —— 自由填写，可选择举报对象
+   *   · 裸宠物主页 → Report this zZuPer   —— 带 (会话, 代号) 进来
+   *   · 真人主页 → Report this user       —— 带 zzup_id 进来
+   *
+   * 后两种对象已经确定，不显示选择器。区别在于：
+   * 匿名宠物那条**客户端根本不知道对方是谁**，服务端按代号解析（迁移 80）；
+   * 真人那条对象本来就是公开的，直接给 zzup_id。
+   */
+  const params = route.params as
+    | { conversationId?: string; alias?: string; reportedZzupId?: string; label?: string }
+    | undefined;
+  const isPetReport = !!params?.conversationId && !!params?.alias;
+  const isUserReport = !isPetReport && !!params?.reportedZzupId;
+  const hasFixedTarget = isPetReport || isUserReport;
 
   const [category, setCategory] = useState<ReportCategory | null>(null);
   const [description, setDescription] = useState('');
@@ -38,7 +56,10 @@ export default function ReportScreen() {
   const showAlert = (title: string, message: string, type: 'error' | 'info' | 'success' = 'error', onDone?: () => void) =>
     setAlertConfig({ visible: true, title, message, type, onDone });
 
-  useEffect(() => { getFriends().then(setFriends).catch(() => {}); }, []);
+  // 举报匿名宠物时不需要好友列表 —— 对象已经由入口确定了
+  useEffect(() => {
+    if (!hasFixedTarget) getFriends().then(setFriends).catch(() => {});
+  }, [hasFixedTarget]);
 
   const addScreenshot = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -69,12 +90,23 @@ export default function ReportScreen() {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      const { error } = await submitReport({
-        category: category!,
-        description: description.trim(),
-        reportedZzupId: pickedZzupId ?? (manualZzupId.trim() || null),
-        attachments: shots.map(s => s.attachment),
-      });
+      const { error } = isPetReport
+        ? await submitReportByAlias({
+            conversationId: params!.conversationId!,
+            alias: params!.alias!,
+            category: category!,
+            description: description.trim(),
+            attachments: shots.map(s => s.attachment),
+          })
+        : await submitReport({
+            category: category!,
+            description: description.trim(),
+            // 从真人主页进来时对象已固定，不看选择器
+            reportedZzupId: isUserReport
+              ? params!.reportedZzupId!
+              : (pickedZzupId ?? (manualZzupId.trim() || null)),
+            attachments: shots.map(s => s.attachment),
+          });
       if (error) { showAlert('Could not send', error); return; }
 
       showAlert(
@@ -134,7 +166,26 @@ export default function ReportScreen() {
             })}
           </View>
 
-          {/* 被举报人（可选） */}
+          {/* 被举报人。
+              从裸宠物主页进来时对象已经定了，而且**客户端并不知道那是谁** ——
+              这里显示代号标签，实际解析由服务端完成。 */}
+          {hasFixedTarget ? (
+            <>
+              <Text style={[styles.label, { color: colors.subText }]}>WHO IS THIS ABOUT?</Text>
+              <View style={[styles.fixedTarget, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+                <Ionicons name={isPetReport ? 'paw' : 'person'} size={18} color={colors.brand} />
+                <Text style={[styles.fixedTargetText, { color: colors.text }]}>
+                  {params?.label ?? (isPetReport ? 'This zZuPer' : 'This user')}
+                </Text>
+              </View>
+              {isPetReport && (
+                <Text style={[styles.help, { color: colors.tertiaryText }]}>
+                  This zZuPer is anonymous to you. We can still identify it on our side.
+                </Text>
+              )}
+            </>
+          ) : (
+          <>
           <Text style={[styles.label, { color: colors.subText }]}>WHO IS THIS ABOUT?  (optional)</Text>
           <Text style={[styles.help, { color: colors.tertiaryText }]}>
             Skip this if you don't know who it was — just describe it below.
@@ -169,6 +220,8 @@ export default function ReportScreen() {
             onChangeText={t => { setManualZzupId(t); setPickedZzupId(null); }}
             autoCapitalize="none"
           />
+          </>
+          )}
 
           {/* 描述 */}
           <Text style={[styles.label, { color: colors.subText }]}>TELL US WHAT HAPPENED</Text>
@@ -257,6 +310,18 @@ const styles = StyleSheet.create({
 
   label: { fontSize: 11, fontWeight: '800', letterSpacing: 1, marginTop: 22, marginBottom: 8 },
   help: { fontSize: 12, marginBottom: 10, lineHeight: 17 },
+  // 从裸宠物主页进来时，举报对象已固定，显示成只读卡片而不是选择器
+  fixedTarget: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 8,
+  },
+  fixedTargetText: { fontSize: 15, fontWeight: '700' },
 
   catList: { gap: 8 },
   catRow: {

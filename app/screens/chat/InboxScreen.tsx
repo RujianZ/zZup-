@@ -13,8 +13,14 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
-import { listConversations, ConversationListItem } from '../../../lib/api/conversations';
+import {
+  listConversations,
+  hideConversation,
+  setConversationMuted,
+  ConversationListItem,
+} from '../../../lib/api/conversations';
 import { getUnreadCounts } from '../../../lib/api/unread';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -125,10 +131,67 @@ export default function InboxScreen() {
     }
   });
 
+  /**
+   * 左滑菜单：免打扰 / 删除。
+   *
+   * 删除只是把会话从**我的**列表移除并清空我这边的记录 —— 消息一条都不删，
+   * 对方照常看得见（见 lib/api/conversations.ts 的 hideConversation）。
+   */
+  const renderRightActions = (item: ConversationListItem, close: () => void) => (
+    <View style={styles.swipeActions}>
+      <TouchableOpacity
+        style={[styles.swipeBtn, { backgroundColor: colors.tertiaryText }]}
+        onPress={async () => {
+          close();
+          await setConversationMuted(item.conversation_id, !item.is_muted);
+          load();
+        }}
+        activeOpacity={0.8}
+      >
+        <Ionicons
+          name={item.is_muted ? 'notifications-outline' : 'notifications-off-outline'}
+          size={20}
+          color="#FFFFFF"
+        />
+        <Text style={styles.swipeBtnText}>{item.is_muted ? 'Unmute' : 'Mute'}</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.swipeBtn, { backgroundColor: '#EF4444' }]}
+        onPress={async () => {
+          close();
+          await hideConversation(item.conversation_id);
+          load();
+        }}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+        <Text style={styles.swipeBtnText}>Delete</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   const renderItem = ({ item }: { item: ConversationListItem }) => {
     const isDM = item.kind === 'dm' || item.kind === 'zzuper_talk' || item.kind === 'petchat' || item.kind === 'driftbottle';
     const isMyPet = item.kind === 'zzuper_talk';
 
+    // zZuPer Talk 是你自己的宠物，删不掉也没必要静音
+    if (isMyPet) return renderRow(item, isDM, isMyPet);
+
+    let swipeRef: Swipeable | null = null;
+    return (
+      <Swipeable
+        ref={(r) => { swipeRef = r; }}
+        renderRightActions={() => renderRightActions(item, () => swipeRef?.close())}
+        overshootRight={false}
+        friction={2}
+      >
+        {renderRow(item, isDM, isMyPet)}
+      </Swipeable>
+    );
+  };
+
+  const renderRow = (item: ConversationListItem, isDM: boolean, isMyPet: boolean) => {
     return (
       <TouchableOpacity
         style={[
@@ -138,6 +201,20 @@ export default function InboxScreen() {
         ]}
         onPress={() => {
           closeAllMenus();
+          // AI 代理会话进 AgentChatScreen —— 那边才有代理身份、接管状态和加好友入口。
+          // 原来一律跳 ChatScreen，于是退出再进来就退化成普通私聊，加好友的路径消失了。
+          //
+          // 加好友之后 is_agent_chat 被清掉（迁移 87），自然落到下面的普通私聊：
+          // 升级后的会话**就是好友对话**，只是历史里带着一段 AI 代理消息，
+          // 那些消息照样显示宠物头像、照样点得进裸宠物页 —— 那由每条消息自己的
+          // identity_mode 决定，跟会话类型无关。
+          if (item.is_agent_chat) {
+            navigation.navigate('AgentChat', {
+              groupId: item.conversation_id,
+              groupName: item.display_name,
+            });
+            return;
+          }
           navigation.navigate('Chat', {
             conversationId: item.conversation_id,
             groupName: item.kind === 'zzuper_talk' ? 'zZuPer Talk' : item.display_name,
@@ -153,6 +230,9 @@ export default function InboxScreen() {
             url={item.display_avatar}
             breed={item.display_breed}
             stage={item.display_stage}
+            // Pulse 对手接管之前是匿名的：强制本地形态图，
+            // 不给自定义头像留任何渲染路径（服务端也已经不返回它了）。
+            anonymous={item.is_agent_chat}
             size={48}
             backgroundColor={colors.cardMutedBg}
           />
@@ -169,12 +249,27 @@ export default function InboxScreen() {
             <Text style={[styles.chatName, { color: colors.text }]} numberOfLines={1}>
               {item.display_name}
             </Text>
+            {item.is_muted && (
+              <Ionicons
+                name="notifications-off"
+                size={13}
+                color={colors.tertiaryText}
+                style={{ marginLeft: 4, marginRight: 2 }}
+              />
+            )}
             {item.last_message_at && (
               <Text style={[styles.timeText, { color: colors.tertiaryText }]}>{formatTime(item.last_message_at)}</Text>
             )}
           </View>
 
           <View style={styles.lastMsgRow}>
+            {/* 冻结 = 临时会话到期。会话**不消失** —— 否则用户就没有入口举报了，
+                而举报快照取的正是这个会话的消息（见迁移 82）。 */}
+            {item.is_frozen && (
+              <View style={[styles.endedPill, { backgroundColor: colors.cardMutedBg }]}>
+                <Text style={[styles.endedText, { color: colors.tertiaryText }]}>Ended</Text>
+              </View>
+            )}
             <Text style={[styles.lastMsgText, { color: colors.subText, flex: 1 }]} numberOfLines={1}>
               {item.last_message || 'No messages yet'}
             </Text>
@@ -399,6 +494,32 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 18,
     gap: 12,
+  },
+  endedPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginRight: 6,
+  },
+  endedText: { fontSize: 10, fontWeight: '700' },
+  // 左滑露出的操作按钮。跟着卡片的圆角走，不然滑开时右边会露出直角
+  swipeActions: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    borderRadius: 18,
+    overflow: 'hidden',
+    marginLeft: 8,
+  },
+  swipeBtn: {
+    width: 76,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  swipeBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   avatar: {
     width: 48,

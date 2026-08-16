@@ -11,7 +11,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import { startMatching, cancelMatching, subscribeToMatchResult, getMyMatchStatus } from '../../../lib/api/match';
 import { PetSvgAvatar } from '../../../assets/pets';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
@@ -22,6 +22,7 @@ export default function TravelModeScreen() {
   const navigation = useNavigation<any>();
   const { session, profile } = useAuth();
   const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const isDark = colors.isDark;
   const user = session?.user;
 
@@ -117,10 +118,10 @@ export default function TravelModeScreen() {
   };
 
   const iconGradientColors: [string, string] = !isDark
-    ? ['#10B981', '#059669']
-    : ['#8B5CF6', '#7C3AED'];
+    ? [colors.brand, colors.brandSecondary]
+    : [colors.brand, colors.brand];
 
-  const pulseIconBg = !isDark ? '#059669' : '#8B5CF6';
+  const pulseIconBg = !isDark ? colors.brandSecondary : colors.brand;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
@@ -290,7 +291,9 @@ export default function TravelModeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// 颜色改为跟随主题。这一屏之前虽然引了 useTheme，但绝大多数颜色仍写死成紫色，
+// 于是在薄荷主题下整屏都是紫的。
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   safe: { flex: 1 },
   header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12 },
   title: { fontSize: 26, fontWeight: '800' },

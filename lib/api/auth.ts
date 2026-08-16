@@ -30,8 +30,6 @@ export interface Profile {
   pet_xp: number | null
   pet_stage: 'child' | 'youth' | 'adult' | null
   pet_quota: number | null
-  // S_A 展示身份
-  profile_visibility: 'real_only' | 'real_with_pet' | 'pet_only'
   // 隐私 / 加好友途径 / 通知开关
   searchable_by_real_name: boolean | null
   allow_add_via_search: boolean | null
@@ -69,7 +67,6 @@ export type ProfileUpdate = Partial<
     | 'pet_bio'
     | 'pet_breed'
     | 'pet_stage'
-    | 'profile_visibility'
     | 'searchable_by_real_name'
     | 'allow_add_via_search'
     | 'allow_add_via_qr'
@@ -112,21 +109,32 @@ export async function signOut(): Promise<{ error: string | null }> {
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
 // 不传 userId → 读自己（get_my_profile，全字段）
-// 传 userId   → 读别人（get_other_profile，按对方 S_A 过滤，永不含敏感列）
-// 隐私过滤全在 DB 层 SECURITY DEFINER RPC，客户端绕不过。
+// 传 userId   → 读别人（get_other_profile：真人 + 宠物完整，永不含
+//               date_of_birth / personal_email / edu_email，只折算 age）
+//
+// 匿名场景（Pulse 接管前 / 群聊宠物身份）**不走这里** —— 那里用
+// get_pet_identity 返回裸形态（种类 + 形态 + 会话内代号），见迁移 73。
 
 export async function getProfile(userId?: string): Promise<Profile | null> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return null
-
-  const isSelf = !userId || userId === user.id
-
-  if (isSelf) {
+  // 读自己：不要先 getUser()。那是一次网络校验，断网时会返回 no user，
+  // 于是"网络不通"被当成"这个人不存在"，调用方一登出，用户就被无故踢下线。
+  // RPC 本身走 auth.uid()，会话无效时它会报错，不需要额外的前置校验。
+  if (!userId) {
     const { data, error } = await supabase.rpc('get_my_profile')
-    if (error || !data) return null
-    return data as Profile
+    // 抛 vs 返回 null 是有区别的，调用方靠这个区别决定要不要登出：
+    //   抛出   = 没查成（网络 / 服务端故障）→ 该重试
+    //   null   = 查成了，确实没有这一行（如数据库重置）→ 该登出
+    if (error) throw new Error(`get_my_profile failed: ${error.message}`)
+    return (data as Profile) ?? null
+  }
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  if (userId === session?.user?.id) {
+    const { data, error } = await supabase.rpc('get_my_profile')
+    if (error) throw new Error(`get_my_profile failed: ${error.message}`)
+    return (data as Profile) ?? null
   }
 
   const { data, error } = await supabase.rpc('get_other_profile', { target_id: userId })

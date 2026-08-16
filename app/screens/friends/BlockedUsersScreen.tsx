@@ -62,21 +62,22 @@ export default function BlockedUsersScreen() {
 
   const renderItem = ({ item }: { item: BlockedUser }) => {
     const isPet = item.blocked_identity_type === 'pet';
-    const name = (isPet ? (item.pet_name ?? item.real_name) : item.real_name) ?? 'User';
-    const avatar = isPet ? item.pet_avatar_url : item.avatar_url;
+    // 宠物身份显示的是**代号标签**（"A Dog"），不是 pet_name ——
+    // 在自己的拉黑列表里摆出宠物真名，等于自己把匿名破了（迁移 83）。
+    const name = item.display_name ?? (isPet ? 'A zZuPer' : 'User');
 
     return (
       <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
         {isPet ? (
           <PetAvatar
-            url={item.pet_avatar_url}
+            anonymous
             breed={item.pet_breed}
             stage={item.pet_stage}
             size={48}
             backgroundColor={colors.cardMutedBg}
           />
-        ) : avatar ? (
-          <Image source={{ uri: avatar }} style={styles.avatar} />
+        ) : item.avatar_url ? (
+          <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
         ) : (
           <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>
             <Ionicons name="person" size={22} color={colors.brand} />
@@ -84,7 +85,12 @@ export default function BlockedUsersScreen() {
         )}
         <View style={styles.info}>
           <Text style={[styles.name, { color: colors.text }]}>{name} {isPet ? '🐾' : ''}</Text>
-          <Text style={[styles.sub, { color: colors.subText }]}>{isPet ? 'Pet identity blocked' : 'User blocked'}</Text>
+          <Text style={[styles.sub, { color: colors.subText }]}>
+            {isPet
+              // 「在哪拉黑的」是宠物唯一可辨认的出处 —— 代号本身按会话而定
+              ? (item.via_label ? `Pet identity · from ${item.via_label}` : 'Pet identity blocked')
+              : 'User blocked'}
+          </Text>
         </View>
         <TouchableOpacity style={[styles.unblockBtn, { backgroundColor: colors.cardMutedBg, borderColor: colors.border }]} onPress={() => handleUnblock(item)} disabled={unblockingKey === rowKey(item)} activeOpacity={0.8}>
           {unblockingKey === rowKey(item) ? <ActivityIndicator size="small" color={colors.brand} /> : <Text style={[styles.unblockText, { color: colors.brand }]}>Unblock</Text>}

@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons, Feather } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { updateProfile } from '../../../lib/api/auth';
 import { useAuth } from '../../context/AuthContext';
 import { PetSvgAvatar } from '../../../assets/pets';
@@ -35,6 +36,30 @@ const VIRTUAL_HUMAN_PRESETS = [
   { key: 'african_m', name: 'African Male', url: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=300&q=80' },
 ];
 
+/**
+ * 美东「今天」。年龄一律按美东算，不跟随设备时区 —— 运营范围只有美国，
+ * 而且设备时区可以随手改，跟着走等于给了一个绕过门槛的旋钮。
+ *
+ * 权威判定在数据库触发器（迁移 75），这里只是让用户选不出未成年的日期。
+ */
+function easternToday(): Date {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const get = (t: string) => Number(parts.find(p => p.type === t)!.value);
+  return new Date(get('year'), get('month') - 1, get('day'));
+}
+
+/** 满 18 岁所允许的最晚生日（含当天）。*/
+function latestAllowedBirthday(): Date {
+  const t = easternToday();
+  return new Date(t.getFullYear() - 18, t.getMonth(), t.getDate());
+}
+
+const fmtDate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 export default function OnboardingScreen() {
   const navigation = useNavigation<any>();
   const { session, refreshProfile } = useAuth();
@@ -45,35 +70,38 @@ export default function OnboardingScreen() {
   const isEduVerified = user?.email?.toLowerCase().endsWith('.edu') ?? false;
 
   const [realName, setRealName] = useState('');
-  const [birthday, setBirthday] = useState('');
+  // null = 还没选。默认值故意设成「刚好满 18 岁」那天，
+  // 这样 18 岁用户一下就能确认，年长的往回滚即可。
+  const [birthday, setBirthday] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [nationality, setNationality] = useState('');
   const [selectedHumanAvatar, setSelectedHumanAvatar] = useState<string>(VIRTUAL_HUMAN_PRESETS[0].url);
   const [customAvatarUri] = useState<string | null>(null);
   const [petName, setPetName] = useState('');
   const [selectedBreed, setSelectedBreed] = useState<string>('dog');
   const [petAvatarUrl] = useState<string | null>(null);
-  const [profileVisibility, setProfileVisibility] = useState<'real_only' | 'real_with_pet' | 'pet_only'>('real_with_pet');
 
   const handleStep1 = () => {
     if (!realName.trim()) { Alert.alert('Required', 'Please enter your real name.'); return; }
-    if (!birthday.trim()) { Alert.alert('Required', 'Please enter your date of birth (YYYY-MM-DD).'); return; }
+    if (!birthday) { Alert.alert('Required', 'Please select your date of birth.'); return; }
     setStep(2);
   };
-  const handleStep2 = () => {
+
+  // 原本还有第 3 步「How you show up」，选 real_only / real_with_pet / pet_only。
+  // 该设定（profile_visibility）已在迁移 74 里整体废弃 —— 它让用户「藏真身」的代价是
+  // 「公开宠物」，而宠物正是匿名发言时用的身份，自相矛盾。现在宠物一律上主页，
+  // 匿名保护改由 get_pet_identity 的裸形态承担。引导因此从 3 步缩到 2 步。
+  const handleFinish = async () => {
     if (!petName.trim()) { Alert.alert('Required', "Please enter your pet's name."); return; }
-    setStep(3);
-  };
-  const handleStep3 = async () => {
     setLoading(true);
     const { error } = await updateProfile({
       real_name: realName.trim(),
-      date_of_birth: birthday.trim(),
+      date_of_birth: birthday ? fmtDate(birthday) : undefined,
       nationality: nationality.trim() || undefined,
       avatar_url: customAvatarUri || selectedHumanAvatar,
       pet_name: petName.trim(),
       pet_breed: selectedBreed,
       pet_avatar_url: petAvatarUrl || undefined,
-      profile_visibility: profileVisibility,
       onboarded: true,
     });
     setLoading(false);
@@ -83,7 +111,7 @@ export default function OnboardingScreen() {
 
   const Progress = ({ n }: { n: number }) => (
     <View style={styles.progressRow}>
-      {[1, 2, 3].map(i => <View key={i} style={[styles.progressDot, i <= n && styles.progressDotActive]} />)}
+      {[1, 2].map(i => <View key={i} style={[styles.progressDot, i <= n && styles.progressDotActive]} />)}
     </View>
   );
 
@@ -101,7 +129,7 @@ export default function OnboardingScreen() {
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
             <Progress n={1} />
-            <Text style={styles.eyebrow}>STEP 1 OF 3</Text>
+            <Text style={styles.eyebrow}>STEP 1 OF 2</Text>
             <Text style={styles.title}>Pick your look</Text>
 
             {isEduVerified && (
@@ -130,7 +158,33 @@ export default function OnboardingScreen() {
             <Text style={styles.label}>Real name</Text>
             <TextInput style={styles.input} placeholder="e.g. Alex Morgan" placeholderTextColor={light.textTertiary} value={realName} onChangeText={setRealName} />
             <Text style={styles.label}>Date of birth</Text>
-            <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor={light.textTertiary} value={birthday} onChangeText={setBirthday} />
+            <TouchableOpacity
+              style={[styles.input, styles.dateField]}
+              onPress={() => setShowDatePicker(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={birthday ? styles.dateText : styles.datePlaceholder}>
+                {birthday ? fmtDate(birthday) : 'Select your date of birth'}
+              </Text>
+              <Ionicons name="calendar-outline" size={20} color={light.textTertiary} />
+            </TouchableOpacity>
+            <Text style={styles.hint}>You must be 18 or older to use zZuP!.</Text>
+
+            {showDatePicker && (
+              <DateTimePicker
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                value={birthday ?? latestAllowedBirthday()}
+                // 门槛在这里就生效：18 岁以下的日期根本选不中
+                maximumDate={latestAllowedBirthday()}
+                minimumDate={new Date(1920, 0, 1)}
+                onChange={(event, selected) => {
+                  // Android 的原生对话框自己会关；iOS 的 spinner 要留着让用户滚
+                  if (Platform.OS === 'android') setShowDatePicker(false);
+                  if (event.type === 'set' && selected) setBirthday(selected);
+                }}
+              />
+            )}
 
             <CTA label="Continue" onPress={handleStep1} />
           </ScrollView>
@@ -139,15 +193,14 @@ export default function OnboardingScreen() {
     );
   }
 
-  // STEP 2
-  if (step === 2) {
-    return (
+  // STEP 2 —— 最后一步
+  return (
       <SafeAreaView style={styles.safe}>
         <StatusBar style="dark" />
         <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
             <Progress n={2} />
-            <Text style={styles.eyebrow}>STEP 2 OF 3</Text>
+            <Text style={styles.eyebrow}>STEP 2 OF 2</Text>
             <Text style={styles.title}>Meet your zZuPer</Text>
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carousel} snapToInterval={196} decelerationRate="fast">
@@ -168,45 +221,11 @@ export default function OnboardingScreen() {
             <Text style={styles.label}>Pet name</Text>
             <TextInput style={styles.input} placeholder="e.g. Barnaby" placeholderTextColor={light.textTertiary} value={petName} onChangeText={setPetName} />
 
-            <CTA label="Continue" onPress={handleStep2} />
+            <CTA label="Finish setup" onPress={handleFinish} busy={loading} />
             <TouchableOpacity onPress={() => setStep(1)} style={styles.backLink}><Text style={styles.backText}>Back</Text></TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    );
-  }
-
-  // STEP 3
-  return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar style="dark" />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Progress n={3} />
-        <Text style={styles.eyebrow}>STEP 3 OF 3</Text>
-        <Text style={styles.title}>How you show up</Text>
-        <Text style={styles.sub}>Choose what others see on your profile.</Text>
-
-        <View style={{ gap: spacing.md, marginTop: spacing.lg }}>
-          {(['real_with_pet', 'real_only', 'pet_only'] as const).map(mode => {
-            const sel = profileVisibility === mode;
-            const labelText = mode === 'real_with_pet' ? 'Real name & pet' : mode === 'real_only' ? 'Real name only' : 'Pet profile only';
-            const descText = mode === 'real_with_pet' ? 'Show both you and your zZuPer' : mode === 'real_only' ? 'Keep it about you' : 'Stay behind your pet';
-            return (
-              <TouchableOpacity key={mode} style={[styles.optionBtn, sel && styles.optionActive]} onPress={() => setProfileVisibility(mode)} activeOpacity={0.85}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.optionText, sel && { color: light.brand }]}>{labelText}</Text>
-                  <Text style={styles.optionDesc}>{descText}</Text>
-                </View>
-                <Ionicons name={sel ? 'radio-button-on' : 'radio-button-off'} size={22} color={sel ? light.brand : light.textTertiary} />
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <CTA label="Finish setup" onPress={handleStep3} busy={loading} />
-        <TouchableOpacity onPress={() => setStep(2)} style={styles.backLink}><Text style={styles.backText}>Back</Text></TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
   );
 }
 
@@ -219,7 +238,6 @@ const styles = StyleSheet.create({
   progressDotActive: { backgroundColor: light.brand },
   eyebrow: { ...typography.eyebrow, color: light.brand, marginBottom: spacing.sm },
   title: { ...typography.h1, color: light.text },
-  sub: { ...typography.subtle, color: light.textSecondary, marginTop: spacing.xs },
 
   eduBanner: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: light.brandSoft, borderRadius: radius.lg, padding: spacing.base, marginTop: spacing.lg },
   eduTitle: { ...typography.subtle, color: light.brand, fontWeight: '700' },
@@ -239,14 +257,15 @@ const styles = StyleSheet.create({
 
   label: { ...typography.caption, color: light.textSecondary, fontWeight: '600', marginBottom: spacing.sm, marginTop: spacing.md },
   input: { backgroundColor: light.surfaceHi, borderRadius: radius.md, paddingHorizontal: spacing.base, height: 52, ...typography.body, color: light.text },
+  // 日期字段长得跟输入框一样，但它是个按钮 —— 需要自己排版内容
+  dateField: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dateText: { ...typography.body, color: light.text },
+  datePlaceholder: { ...typography.body, color: light.textTertiary },
+  hint: { ...typography.caption, color: light.textTertiary, marginTop: spacing.sm },
 
   cta: { height: 54, borderRadius: radius.full, backgroundColor: light.brand, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: spacing.xl, ...lightShadow.fab },
   ctaText: { ...typography.bodyLg, color: '#fff', fontWeight: '800' },
   backLink: { alignItems: 'center', paddingVertical: spacing.base, marginTop: spacing.xs },
   backText: { ...typography.subtle, color: light.textSecondary, fontWeight: '600' },
 
-  optionBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderWidth: 1.5, borderColor: light.border, borderRadius: radius.lg, padding: spacing.base, backgroundColor: light.surface },
-  optionActive: { borderColor: light.brand, backgroundColor: light.brandSoft },
-  optionText: { ...typography.bodyLg, color: light.text, fontWeight: '700' },
-  optionDesc: { ...typography.caption, color: light.textSecondary, marginTop: 2 },
 });

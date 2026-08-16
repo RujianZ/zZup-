@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +21,7 @@ import FriendsScreen from '../screens/friends/FriendsScreen';
 import FriendRequestsScreen from '../screens/friends/FriendRequestsScreen';
 import UserSearchScreen from '../screens/friends/UserSearchScreen';
 import OtherProfileScreen from '../screens/friends/OtherProfileScreen';
+import PetProfileScreen from '../screens/friends/PetProfileScreen';
 import BlockedUsersScreen from '../screens/friends/BlockedUsersScreen';
 
 // Chat
@@ -95,6 +96,7 @@ function AppStack() {
       <Stack.Screen name="FriendRequests"   component={FriendRequestsScreen}   />
       <Stack.Screen name="UserSearch"       component={UserSearchScreen}       />
       <Stack.Screen name="OtherProfile"     component={OtherProfileScreen}     />
+      <Stack.Screen name="PetProfile"       component={PetProfileScreen}       />
       <Stack.Screen name="BlockedUsers"     component={BlockedUsersScreen}     />
 
       {/* Chat */}
@@ -114,18 +116,31 @@ function AppStack() {
   );
 }
 
-export default function RootNavigator() {
-  const { session, profile, loading } = useAuth();
+function Splash({ offline }: { offline?: boolean }) {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: light.bg }}>
+      <ActivityIndicator size="large" color={light.brand} />
+      {offline && (
+        <Text style={{ marginTop: 16, color: light.textSecondary, fontSize: 14 }}>
+          Can’t reach zZuP! — retrying…
+        </Text>
+      )}
+    </View>
+  );
+}
 
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: light.bg }}>
-        <ActivityIndicator size="large" color={light.brand} />
-      </View>
-    );
-  }
+export default function RootNavigator() {
+  const { session, profile, loading, profileSettledFor, authError } = useAuth();
+
+  if (loading) return <Splash />;
 
   if (!session) return <AuthStack />;
+
+  // 会话已恢复，但这个人的资料还在路上。
+  // 这里**必须**继续显示加载态：此时 profile 还是 null，直接往下走会命中
+  // `!profile?.real_name`，把老用户丢进引导页 —— 也就是启动时闪一下 onboarding
+  // 再跳进主界面的那个 bug。
+  if (session.user.id !== profileSettledFor) return <Splash offline={authError} />;
 
   if (!profile?.real_name) {
     return (

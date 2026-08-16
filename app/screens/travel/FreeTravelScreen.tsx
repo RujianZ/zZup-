@@ -9,7 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 import { PetSvgAvatar } from '../../../assets/pets';
 import {
@@ -28,6 +28,7 @@ export default function FreeTravelScreen() {
   const navigation = useNavigation<any>();
   const { profile } = useAuth();
   const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -80,8 +81,9 @@ export default function FreeTravelScreen() {
       } else if (post && post.id && post.ends_at) {
         setActivePost(post);
         startCountdown(post.ends_at);
-        if (new Date() >= new Date(post.ends_at)) {
-          // Travel ended, fetch comments
+        // 同上：以 status 为准。只看时钟的话，提前召回回来的宠物
+        // 带回来的留言永远不会被加载。
+        if (post.status === 'returned' || new Date() >= new Date(post.ends_at)) {
           loadComments(post.id);
         }
       } else {
@@ -272,15 +274,22 @@ export default function FreeTravelScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingCenter}>
-          <ActivityIndicator size="large" color="#7C3AED" />
+          <ActivityIndicator size="large" color={colors.brand} />
           <Text style={styles.loadingText}>Syncing zZuPer roaming status...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  const isTraveling = activePost && activePost.ends_at && new Date() < new Date(activePost.ends_at);
-  const isReturned = activePost && activePost.ends_at && new Date() >= new Date(activePost.ends_at);
+  // 「宠物回来没有」以 **status** 为准，不能只看时钟。
+  //
+  // 提前召回（recall_travel_pet）把 status 改成 'returned' 并存下剩余秒数，
+  // 但**不改 ends_at** —— 那个时间要留着给续期用。
+  // 原来这里只比较 now 和 ends_at，于是召回之后界面照旧显示「正在漫游 + 倒计时」，
+  // 归来态和收到的留言都出不来。
+  const endedByClock = !!activePost?.ends_at && new Date() >= new Date(activePost.ends_at);
+  const isReturned = !!activePost && (activePost.status === 'returned' || endedByClock);
+  const isTraveling = !!activePost && !isReturned;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -313,13 +322,13 @@ export default function FreeTravelScreen() {
           onPress={() => navigation.navigate('NearbyTravel')}
         >
           <View style={styles.browseIcon}>
-            <Ionicons name="compass-outline" size={24} color="#7C3AED" />
+            <Ionicons name="compass-outline" size={24} color={colors.brand} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.browseTitle}>Browse Roamers</Text>
             <Text style={styles.browseSub}>See which zZuPers are wandering nearby</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#A6A6AF" />
+          <Ionicons name="chevron-forward" size={20} color={colors.tertiaryText} />
         </TouchableOpacity>
 
         {/* ─── STATE 1: PET IS NOT TRAVELING ─── */}
@@ -327,7 +336,7 @@ export default function FreeTravelScreen() {
           <View style={styles.formContainer}>
             {/* Pet Info Card */}
             <View style={styles.petCard}>
-              <View style={[styles.petAvatar, { backgroundColor: '#F2F2F5', justifyContent: 'center', alignItems: 'center', borderRadius: 28, overflow: 'hidden' }]}>
+              <View style={[styles.petAvatar, { backgroundColor: colors.cardMutedBg, justifyContent: 'center', alignItems: 'center', borderRadius: 28, overflow: 'hidden' }]}>
                 <PetSvgAvatar breed={profile?.pet_breed} stage={profile?.pet_stage || 'child'} size={52} />
               </View>
               <View style={styles.petInfo}>
@@ -355,7 +364,7 @@ export default function FreeTravelScreen() {
                   <Ionicons
                     name={method === 'text' ? 'document-text-outline' : method === 'image' ? 'image-outline' : 'mic-outline'}
                     size={18}
-                    color={postMethod === method ? '#FFFFFF' : '#A6A6AF'}
+                    color={postMethod === method ? '#FFFFFF' : colors.tertiaryText}
                   />
                   <Text style={[styles.methodBtnText, postMethod === method && styles.methodBtnTextActive]}>
                     {method.charAt(0).toUpperCase() + method.slice(1)}
@@ -373,7 +382,7 @@ export default function FreeTravelScreen() {
                   multiline
                   numberOfLines={4}
                   placeholder="Share your hobbies, study sessions, or fun thoughts. The recommendation algorithm will match this with fellows who share similar vibes..."
-                  placeholderTextColor="#A6A6AF"
+                  placeholderTextColor={colors.tertiaryText}
                   value={content}
                   onChangeText={setContent}
                   maxLength={200}
@@ -388,7 +397,7 @@ export default function FreeTravelScreen() {
                 <TextInput
                   style={styles.textInput}
                   placeholder="https://example.com/photo.jpg"
-                  placeholderTextColor="#A6A6AF"
+                  placeholderTextColor={colors.tertiaryText}
                   value={imageUrl}
                   onChangeText={setImageUrl}
                 />
@@ -428,7 +437,7 @@ export default function FreeTravelScreen() {
                   style={[styles.durationChip, durationHours === 6 && styles.durationChipActive]}
                   onPress={() => setDurationHours(6)}
                 >
-                  <Ionicons name="flash-outline" size={16} color={durationHours === 6 ? '#fff' : '#7C3AED'} style={{ marginRight: 6 }} />
+                  <Ionicons name="flash-outline" size={16} color={durationHours === 6 ? '#fff' : colors.brand} style={{ marginRight: 6 }} />
                   <Text style={[styles.durationText, durationHours === 6 && styles.durationTextActive]}>6 Hours (Short)</Text>
                 </TouchableOpacity>
 
@@ -436,14 +445,14 @@ export default function FreeTravelScreen() {
                   style={[styles.durationChip, durationHours === 24 && styles.durationChipActive]}
                   onPress={() => setDurationHours(24)}
                 >
-                  <Ionicons name="time-outline" size={16} color={durationHours === 24 ? '#fff' : '#7C3AED'} style={{ marginRight: 6 }} />
+                  <Ionicons name="time-outline" size={16} color={durationHours === 24 ? '#fff' : colors.brand} style={{ marginRight: 6 }} />
                   <Text style={[styles.durationText, durationHours === 24 && styles.durationTextActive]}>24 Hours (Long)</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
             <View style={styles.tipCard}>
-              <Ionicons name="information-circle-outline" size={20} color="#7C3AED" style={styles.tipIcon} />
+              <Ionicons name="information-circle-outline" size={20} color={colors.brand} style={styles.tipIcon} />
               <Text style={styles.tipText}>
                 Roaming lasts for {durationHours} hours. Your zZuPer will match and pass through maps of like-minded fellows who can view and leave notes. All notes will be brought back safely!
               </Text>
@@ -473,7 +482,7 @@ export default function FreeTravelScreen() {
             <View style={styles.radarContainer}>
               <View style={styles.pulseOuter}>
                 <View style={styles.pulseInner}>
-                  <View style={[styles.radarAvatar, { backgroundColor: '#F2F2F5', justifyContent: 'center', alignItems: 'center', borderRadius: 45, overflow: 'hidden' }]}>
+                  <View style={[styles.radarAvatar, { backgroundColor: colors.cardMutedBg, justifyContent: 'center', alignItems: 'center', borderRadius: 45, overflow: 'hidden' }]}>
                     <PetSvgAvatar breed={profile?.pet_breed} stage={profile?.pet_stage || 'child'} size={72} />
                   </View>
                 </View>
@@ -546,7 +555,7 @@ export default function FreeTravelScreen() {
               <Text style={styles.commentsHeading}>Collected Travel Notes ({comments.length})</Text>
               {comments.length === 0 ? (
                 <View style={styles.noCommentsCard}>
-                  <Ionicons name="chatbubble-outline" size={48} color="#7C3AED" />
+                  <Ionicons name="chatbubble-outline" size={48} color={colors.brand} />
                   <Text style={styles.noCommentsText}>
                     No notes collected this time. Try writing a more engaging travel note for the next roam!
                   </Text>
@@ -577,7 +586,7 @@ export default function FreeTravelScreen() {
                           setReplyModalVisible(true);
                         }}
                       >
-                        <Ionicons name="chatbubble-ellipses" size={14} color="#7C3AED" style={{ marginRight: 4 }} />
+                        <Ionicons name="chatbubble-ellipses" size={14} color={colors.brand} style={{ marginRight: 4 }} />
                         <Text style={styles.replyCommentBtnText}>Reply & Chat</Text>
                       </TouchableOpacity>
                     </View>
@@ -617,7 +626,7 @@ export default function FreeTravelScreen() {
               multiline
               numberOfLines={4}
               placeholder="Type your message here..."
-              placeholderTextColor="#6C6C77"
+              placeholderTextColor={colors.subText}
               value={replyText}
               onChangeText={setReplyText}
               maxLength={150}
@@ -670,28 +679,30 @@ export default function FreeTravelScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// 颜色改为跟随主题。这一屏之前虽然引了 useTheme，但绝大多数颜色仍写死成紫色，
+// 于是在薄荷主题下整屏都是紫的。
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#ECECEF',
+    borderBottomWidth: 1, borderBottomColor: c.border,
     backgroundColor: '#FFFFFF',
   },
   backBtn: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: '#F2F2F5', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: '#ECECEF',
+    backgroundColor: c.cardMutedBg, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: c.border,
   },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0B0B0F' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: c.text },
   refreshBtn: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: '#F2F2F5', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: '#ECECEF',
+    backgroundColor: c.cardMutedBg, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: c.border,
   },
 
   loadingCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { color: '#6C6C77', fontSize: 14 },
+  loadingText: { color: c.subText, fontSize: 14 },
 
   scrollContent: { padding: 20 },
 
@@ -699,33 +710,33 @@ const styles = StyleSheet.create({
   formContainer: { gap: 20 },
   petCard: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#F2F2F5', borderRadius: 20,
-    padding: 16, borderWidth: 1.5, borderColor: '#ECECEF',
+    backgroundColor: c.cardMutedBg, borderRadius: 20,
+    padding: 16, borderWidth: 1.5, borderColor: c.border,
   },
   petAvatarWrap: { marginRight: 16 },
-  petAvatar: { width: 56, height: 56, borderRadius: 16, borderWidth: 1, borderColor: '#ECECEF' },
+  petAvatar: { width: 56, height: 56, borderRadius: 16, borderWidth: 1, borderColor: c.border },
   petAvatarFallback: {
     width: 56, height: 56, borderRadius: 16,
-    backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: c.brand, alignItems: 'center', justifyContent: 'center',
   },
   petInfo: { gap: 4 },
-  petName: { fontSize: 16, fontWeight: '700', color: '#0B0B0F' },
-  petLevel: { fontSize: 12, color: '#7C3AED', fontWeight: '600' },
+  petName: { fontSize: 16, fontWeight: '700', color: c.text },
+  petLevel: { fontSize: 12, color: c.brand, fontWeight: '600' },
 
   cardBox: {
-    backgroundColor: '#F2F2F5', borderRadius: 20,
-    padding: 20, borderWidth: 1.5, borderColor: '#ECECEF',
-    shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 4 },
+    backgroundColor: c.cardMutedBg, borderRadius: 20,
+    padding: 20, borderWidth: 1.5, borderColor: c.border,
+    shadowColor: c.brand, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15, shadowRadius: 10, elevation: 3,
   },
-  cardBoxTitle: { fontSize: 14, fontWeight: '700', color: '#7C3AED', marginBottom: 12 },
+  cardBoxTitle: { fontSize: 14, fontWeight: '700', color: c.brand, marginBottom: 12 },
 
   // 「看看别人」入口卡片（进 Roam 的两个选项之一）
   browseCard: {
     flexDirection: 'row', alignItems: 'center', gap: 14,
     backgroundColor: '#FFFFFF', borderRadius: 20,
     paddingHorizontal: 16, paddingVertical: 16,
-    borderWidth: 1.5, borderColor: '#ECECEF',
+    borderWidth: 1.5, borderColor: c.border,
     marginBottom: 18,
   },
   browseIcon: {
@@ -733,31 +744,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3EEFF', alignItems: 'center', justifyContent: 'center',
   },
   browseTitle: { fontSize: 15, fontWeight: '700', color: '#1A1A1F' },
-  browseSub: { fontSize: 12, color: '#6C6C77', marginTop: 2 },
+  browseSub: { fontSize: 12, color: c.subText, marginTop: 2 },
   // 注意 color：这几个输入框曾经是深色卡片上的白字，卡片改成白底后文字颜色
   // 没跟着改，变成白底白字 —— 字打进去了但看不见。
   textArea: {
     backgroundColor: '#FFFFFF', color: '#1A1A1F', borderRadius: 12,
     padding: 12, fontSize: 14, height: 110, textAlignVertical: 'top',
-    borderWidth: 1.5, borderColor: '#ECECEF',
+    borderWidth: 1.5, borderColor: c.border,
   },
-  charCount: { alignSelf: 'flex-end', fontSize: 11, color: '#A6A6AF', marginTop: 4 },
+  charCount: { alignSelf: 'flex-end', fontSize: 11, color: c.tertiaryText, marginTop: 4 },
   textInput: {
     backgroundColor: '#FFFFFF', color: '#1A1A1F', borderRadius: 12,
     paddingHorizontal: 16, paddingVertical: 12, fontSize: 14,
-    borderWidth: 1.5, borderColor: '#ECECEF',
+    borderWidth: 1.5, borderColor: c.border,
   },
   tipCard: {
-    flexDirection: 'row', backgroundColor: '#F2F2F5',
-    borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#F3EEFE',
+    flexDirection: 'row', backgroundColor: c.cardMutedBg,
+    borderRadius: 16, padding: 16, borderWidth: 1, borderColor: c.cardMutedBg,
   },
   tipIcon: { marginRight: 12, marginTop: 2 },
-  tipText: { flex: 1, fontSize: 12, color: '#7C3AED', lineHeight: 18 },
+  tipText: { flex: 1, fontSize: 12, color: c.brand, lineHeight: 18 },
 
   primaryButton: {
-    flexDirection: 'row', backgroundColor: '#7C3AED',
+    flexDirection: 'row', backgroundColor: c.brand,
     height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 6 },
+    shadowColor: c.brand, shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
     marginTop: 10,
   },
@@ -769,88 +780,88 @@ const styles = StyleSheet.create({
   radarContainer: { alignItems: 'center', marginVertical: 20 },
   pulseOuter: {
     width: 140, height: 140, borderRadius: 70,
-    backgroundColor: '#F2F2F5',
+    backgroundColor: c.cardMutedBg,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: '#F3EEFE',
+    borderWidth: 1, borderColor: c.cardMutedBg,
   },
   pulseInner: {
     width: 100, height: 100, borderRadius: 50,
-    backgroundColor: '#F2F2F5',
+    backgroundColor: c.cardMutedBg,
     alignItems: 'center', justifyContent: 'center',
   },
-  radarAvatar: { width: 80, height: 80, borderRadius: 40, borderWidth: 1, borderColor: '#F3EEFE' },
+  radarAvatar: { width: 80, height: 80, borderRadius: 40, borderWidth: 1, borderColor: c.cardMutedBg },
   radarAvatarFallback: {
     width: 80, height: 80, borderRadius: 40,
-    backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: c.brand, alignItems: 'center', justifyContent: 'center',
   },
-  radarStatus: { fontSize: 15, fontWeight: '600', color: '#6C6C77', marginTop: 20 },
+  radarStatus: { fontSize: 15, fontWeight: '600', color: c.subText, marginTop: 20 },
 
   timerCard: {
-    backgroundColor: '#F2F2F5', borderRadius: 20,
+    backgroundColor: c.cardMutedBg, borderRadius: 20,
     width: SCREEN_WIDTH - 40, padding: 20, alignItems: 'center',
-    borderWidth: 1.5, borderColor: '#ECECEF',
+    borderWidth: 1.5, borderColor: c.border,
   },
-  timerTitle: { fontSize: 12, color: '#7C3AED', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 },
-  timerText: { fontSize: 36, fontWeight: '800', color: '#7C3AED', fontVariant: ['tabular-nums'] },
+  timerTitle: { fontSize: 12, color: c.brand, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 },
+  timerText: { fontSize: 36, fontWeight: '800', color: c.brand, fontVariant: ['tabular-nums'] },
 
-  postContent: { color: '#0B0B0F', fontSize: 15, lineHeight: 22 },
+  postContent: { color: c.text, fontSize: 15, lineHeight: 22 },
   postImage: { width: '100%', height: 180, borderRadius: 12, marginTop: 12, resizeMode: 'cover' },
 
   statsCard: {
-    flexDirection: 'row', backgroundColor: '#F2F2F5', borderRadius: 20,
-    width: SCREEN_WIDTH - 40, padding: 18, borderWidth: 1.5, borderColor: '#ECECEF',
+    flexDirection: 'row', backgroundColor: c.cardMutedBg, borderRadius: 20,
+    width: SCREEN_WIDTH - 40, padding: 18, borderWidth: 1.5, borderColor: c.border,
   },
   statItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  statVal: { fontSize: 18, fontWeight: '700', color: '#0B0B0F' },
-  statLabel: { fontSize: 11, color: '#6C6C77' },
-  statDivider: { width: 1, backgroundColor: '#ECECEF' },
+  statVal: { fontSize: 18, fontWeight: '700', color: c.text },
+  statLabel: { fontSize: 11, color: c.subText },
+  statDivider: { width: 1, backgroundColor: c.border },
 
   // State 3: Returned
   returnedContainer: { gap: 20 },
   returnHeading: { alignItems: 'center', textAlign: 'center', marginVertical: 16 },
   returnAvatarWrap: {
     width: 80, height: 80, borderRadius: 24,
-    backgroundColor: '#F2F2F5', borderWidth: 2, borderColor: '#7C3AED',
+    backgroundColor: c.cardMutedBg, borderWidth: 2, borderColor: c.brand,
     alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
     marginBottom: 16,
   },
   returnedAvatar: { width: 80, height: 80 },
   returnedAvatarFallback: {
-    width: 80, height: 80, backgroundColor: '#7C3AED',
+    width: 80, height: 80, backgroundColor: c.brand,
     alignItems: 'center', justifyContent: 'center',
   },
-  returnTitle: { fontSize: 20, fontWeight: '800', color: '#0B0B0F', marginBottom: 8 },
-  returnSub: { fontSize: 13, color: '#6C6C77', textAlign: 'center', paddingHorizontal: 20 },
+  returnTitle: { fontSize: 20, fontWeight: '800', color: c.text, marginBottom: 8 },
+  returnSub: { fontSize: 13, color: c.subText, textAlign: 'center', paddingHorizontal: 20 },
 
   commentsList: { gap: 12 },
-  commentsHeading: { fontSize: 14, fontWeight: '700', color: '#0B0B0F', marginBottom: 4 },
+  commentsHeading: { fontSize: 14, fontWeight: '700', color: c.text, marginBottom: 4 },
   noCommentsCard: {
-    backgroundColor: '#F2F2F5', borderRadius: 20,
+    backgroundColor: c.cardMutedBg, borderRadius: 20,
     padding: 30, alignItems: 'center', justifyContent: 'center', gap: 12,
-    borderWidth: 1.5, borderColor: '#ECECEF',
+    borderWidth: 1.5, borderColor: c.border,
   },
-  noCommentsText: { color: '#6C6C77', fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  noCommentsText: { color: c.subText, fontSize: 13, textAlign: 'center', lineHeight: 20 },
 
   commentCard: {
-    backgroundColor: '#F2F2F5', borderRadius: 16,
-    padding: 16, borderWidth: 1.5, borderColor: '#ECECEF',
-    shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 2 },
+    backgroundColor: c.cardMutedBg, borderRadius: 16,
+    padding: 16, borderWidth: 1.5, borderColor: c.border,
+    shadowColor: c.brand, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1, shadowRadius: 6, elevation: 1,
   },
   commentHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   commentAvatar: { width: 24, height: 24, borderRadius: 8 },
   commentAvatarFallback: {
     width: 24, height: 24, borderRadius: 8,
-    backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: c.brand, alignItems: 'center', justifyContent: 'center',
   },
-  commentAuthor: { flex: 1, fontSize: 13, fontWeight: '600', color: '#0B0B0F' },
-  commentTime: { fontSize: 11, color: '#6C6C77' },
-  commentContent: { fontSize: 13, color: '#0B0B0F', lineHeight: 18 },
+  commentAuthor: { flex: 1, fontSize: 13, fontWeight: '600', color: c.text },
+  commentTime: { fontSize: 11, color: c.subText },
+  commentContent: { fontSize: 13, color: c.text, lineHeight: 18 },
 
   welcomeButton: {
-    flexDirection: 'row', backgroundColor: '#10B981',
+    flexDirection: 'row', backgroundColor: c.brand,
     height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#10B981', shadowOffset: { width: 0, height: 6 },
+    shadowColor: c.brand, shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.3, shadowRadius: 10, elevation: 6,
     marginVertical: 16,
   },
@@ -864,15 +875,15 @@ const styles = StyleSheet.create({
   replyCommentBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3EEFE',
+    backgroundColor: c.cardMutedBg,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#7C3AED',
+    borderColor: c.brand,
   },
   replyCommentBtnText: {
-    color: '#7C3AED',
+    color: c.brand,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -884,23 +895,23 @@ const styles = StyleSheet.create({
   },
   replyModalContent: {
     width: '85%',
-    backgroundColor: '#F2F2F5',
+    backgroundColor: c.cardMutedBg,
     borderRadius: 24,
     padding: 20,
     borderWidth: 1.5,
-    borderColor: '#ECECEF',
-    shadowColor: '#7C3AED', shadowOffset: { width: 0, height: 10 },
+    borderColor: c.border,
+    shadowColor: c.brand, shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3, shadowRadius: 20, elevation: 10,
   },
   replyModalTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0B0B0F',
+    color: c.text,
     marginBottom: 8,
   },
   replyModalSub: {
     fontSize: 11,
-    color: '#6C6C77',
+    color: c.subText,
     lineHeight: 16,
     marginBottom: 16,
   },
@@ -913,12 +924,12 @@ const styles = StyleSheet.create({
     height: 100,
     textAlignVertical: 'top',
     borderWidth: 1.5,
-    borderColor: '#ECECEF',
+    borderColor: c.border,
   },
   replyCharCount: {
     alignSelf: 'flex-end',
     fontSize: 10,
-    color: '#A6A6AF',
+    color: c.tertiaryText,
     marginTop: 4,
     marginBottom: 16,
   },
@@ -931,14 +942,14 @@ const styles = StyleSheet.create({
     height: 40,
     paddingHorizontal: 20,
     borderRadius: 20,
-    backgroundColor: '#ECECEF',
+    backgroundColor: c.border,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E1E1E6',
   },
   replyCancelText: {
-    color: '#0B0B0F',
+    color: c.text,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -946,11 +957,11 @@ const styles = StyleSheet.create({
     height: 40,
     paddingHorizontal: 20,
     borderRadius: 20,
-    backgroundColor: '#7C3AED',
+    backgroundColor: c.brand,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#7C3AED',
+    shadowColor: c.brand,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
@@ -974,21 +985,21 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 12,
     borderWidth: 1.5,
-    borderColor: '#ECECEF',
+    borderColor: c.border,
     borderRadius: 14,
-    backgroundColor: '#F2F2F5',
+    backgroundColor: c.cardMutedBg,
   },
   methodBtnActive: {
-    borderColor: '#7C3AED',
-    backgroundColor: '#F3EEFE',
+    borderColor: c.brand,
+    backgroundColor: c.cardMutedBg,
   },
   methodBtnText: {
     fontSize: 14,
-    color: '#A6A6AF',
+    color: c.tertiaryText,
     fontWeight: '600',
   },
   methodBtnTextActive: {
-    color: '#0B0B0F',
+    color: c.text,
   },
   durationRow: {
     flexDirection: 'row',
@@ -1003,17 +1014,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#ECECEF',
+    borderColor: c.border,
     backgroundColor: '#FFFFFF',
   },
   durationChipActive: {
-    borderColor: '#7C3AED',
-    backgroundColor: '#7C3AED',
+    borderColor: c.brand,
+    backgroundColor: c.brand,
   },
   durationText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#7C3AED',
+    color: c.brand,
   },
   durationTextActive: {
     color: '#FFFFFF',
@@ -1037,13 +1048,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   voiceRecordCard: {
-    backgroundColor: '#F2F2F5',
+    backgroundColor: c.cardMutedBg,
     borderRadius: 20,
     padding: 20,
     borderWidth: 1.5,
-    borderColor: '#ECECEF',
+    borderColor: c.border,
     alignItems: 'center',
-    shadowColor: '#7C3AED',
+    shadowColor: c.brand,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
@@ -1054,7 +1065,7 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: '#7C3AED',
+    backgroundColor: c.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1063,7 +1074,7 @@ const styles = StyleSheet.create({
   },
   voiceRecordText: {
     fontSize: 13,
-    color: '#6C6C77',
+    color: c.subText,
     fontWeight: '600',
   },
 });

@@ -11,72 +11,78 @@ const mockMessageListeners = new Set<(message: Message) => void>()
 export interface Message {
   id: string
   conversation_id: string
+  /**
+   * **宠物身份的消息这里恒为 null** —— 匿名马甲背后的账号 id 不给客户端。
+   * 要指代它请用 author_alias（会话内代号），见迁移 77。
+   */
   sender_id: string | null
-  identity_mode: IdentityType // 逐条头像渲染依据（pet 段=宠物缩略头像）
+  /** 服务端算好的「这条是不是我发的」。宠物消息拿不到 sender_id，只能靠它对齐左右。 */
+  is_mine: boolean
+  identity_mode: IdentityType
   content: string
   image_url: string | null
   attachments: Attachment[]
   created_at: string
   edited_at: string | null
-  // 从 profiles 联查（Realtime 推送的消息此字段为 null，再补查）
+  /** 真人=真名；宠物=代号标签（如 "A Dog"）。**永远不会是 pet_name**。 */
   author_name: string | null
+  /** 宠物消息恒为 null —— 头像走本地 assets/pets/png/{breed}_{stage}.png */
   author_avatar_url: string | null
-  // 宠物形象标识：头像取本地资产 assets/pets/png/{breed}_{stage}.png，
-  // pet_avatar_url 只是（尚未启用的）自定义头像位。identity_mode='real' 时为 null。
   author_pet_breed: string | null
   author_pet_stage: string | null
+  /** 会话内代号，仅宠物消息有。跨会话不同，串联不了。 */
+  author_alias: string | null
 }
 
 function mapMessage(m: any): Message {
-  const profile = m.profiles
-  const isPet = m.identity_mode === 'pet'
   return {
     id: m.id,
     conversation_id: m.conversation_id,
-    sender_id: m.sender_id,
+    sender_id: m.sender_id ?? null,
+    is_mine: !!m.is_mine,
     identity_mode: m.identity_mode,
     content: m.content,
     image_url: m.image_url,
     attachments: Array.isArray(m.attachments) ? m.attachments : [],
     created_at: m.created_at,
     edited_at: m.edited_at,
-    author_name: profile ? (isPet ? profile.pet_name : profile.real_name) : null,
-    author_avatar_url: profile ? (isPet ? profile.pet_avatar_url : profile.avatar_url) : null,
-    author_pet_breed: profile && isPet ? profile.pet_breed ?? null : null,
-    author_pet_stage: profile && isPet ? profile.pet_stage ?? null : null,
+    author_name: m.author_name ?? null,
+    author_avatar_url: m.author_avatar_url ?? null,
+    author_pet_breed: m.author_pet_breed ?? null,
+    author_pet_stage: m.author_pet_stage ?? null,
+    author_alias: m.author_alias ?? null,
   }
 }
 
 // ─── getMessages ──────────────────────────────────────────────────────────────
 // 降序（最新在前）。分页：把当前列表最旧一条的 created_at 作为 before。
 
+/**
+ * 走 RPC，不再直查 messages + 内嵌联查 profiles（迁移 77）。
+ *
+ * 三个原因：
+ *   1. 宠物身份的消息必须裸形态返回 —— 直查会把 pet_name 原样发给客户端，
+ *      而宠物名是自由文本，熵极高，匿名马甲等于直接报出自己是谁
+ *   2. 原来的内嵌联查**依赖 profiles 的列级 SELECT 授权**，
+ *      而那些授权在迁移 78 里被整体撤销了（全库 PII 可被任意登录用户拖走）
+ *   3. 「清空聊天记录」的 cleared_before 过滤挪到服务端，少一次往返
+ */
 export async function getMessages(
   conversationId: string,
   limit = 30,
   before?: string
 ): Promise<Message[]> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return []
+  const { data, error } = await supabase.rpc('list_messages', {
+    p_conversation: conversationId,
+    p_limit: limit,
+    p_before: before ?? null,
+  })
 
-  let query = supabase
-    .from('messages')
-    .select(
-      `id, conversation_id, sender_id, identity_mode, content, image_url, attachments, created_at, edited_at,
-       profiles!messages_sender_id_fkey (
-         real_name, pet_name, avatar_url, pet_avatar_url, pet_breed, pet_stage
-       )`
-    )
-    .eq('conversation_id', conversationId)
-    .order('created_at', { ascending: false })
-    .limit(limit)
-
-  if (before) query = query.lt('created_at', before)
-
-  const { data } = await query
-  if (!data) return []
-  return data.map(mapMessage)
+  if (error) {
+    console.warn('list_messages failed:', error.message)
+    return []
+  }
+  return ((data ?? []) as any[]).map(mapMessage)
 }
 
 // ─── sendMessage ──────────────────────────────────────────────────────────────
@@ -167,42 +173,15 @@ export function subscribeToMessages(
         filter: `conversation_id=eq.${conversationId}`,
       },
       async (payload) => {
-        const msg = payload.new as any
-        let author_name: string | null = null
-        let author_avatar_url: string | null = null
-        let author_pet_breed: string | null = null
-        let author_pet_stage: string | null = null
+        const raw = payload.new as any
 
-        if (msg.sender_id) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('real_name, pet_name, avatar_url, pet_avatar_url, pet_breed, pet_stage')
-            .eq('id', msg.sender_id)
-            .single()
-          if (profile) {
-            const isPet = msg.identity_mode === 'pet'
-            author_name = isPet ? profile.pet_name : profile.real_name
-            author_avatar_url = isPet ? profile.pet_avatar_url : profile.avatar_url
-            author_pet_breed = isPet ? profile.pet_breed ?? null : null
-            author_pet_stage = isPet ? profile.pet_stage ?? null : null
-          }
-        }
+        // Realtime 推来的是**原始行**，带着 sender_id、也不知道该显示真名还是代号。
+        // 所以不直接用它，而是拿 id 回查一次 RPC，让服务端决定这条该以什么身份呈现
+        // （宠物 → 裸形态；已被「清空聊天记录」盖掉的 → 返回 null，直接丢弃）。
+        const { data } = await supabase.rpc('get_message', { p_message: raw.id })
+        if (!data) return
 
-        onMessage({
-          id: msg.id,
-          conversation_id: msg.conversation_id,
-          sender_id: msg.sender_id,
-          identity_mode: msg.identity_mode,
-          content: msg.content,
-          image_url: msg.image_url,
-          attachments: Array.isArray(msg.attachments) ? msg.attachments : [],
-          created_at: msg.created_at,
-          edited_at: msg.edited_at,
-          author_name,
-          author_avatar_url,
-          author_pet_breed,
-          author_pet_stage,
-        })
+        onMessage(mapMessage(data))
       }
     )
     .subscribe()

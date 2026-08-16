@@ -112,3 +112,30 @@ export async function submitReport(params: {
   if (error) return { reportId: null, error: error.message }
   return { reportId: data as string, error: null }
 }
+
+/**
+ * 举报匿名宠物。
+ *
+ * 只传「会话 + 会话内代号」—— 客户端**没有、也不需要**被举报人的身份标识。
+ * 服务端自己把代号解析成账号，并把代号记进 context 顶层，
+ * 运营处理时一眼能看出举的是哪一只（见迁移 80）。
+ */
+export async function submitReportByAlias(params: {
+  conversationId: string
+  alias: string
+  category: ReportCategory
+  description: string
+  attachments?: ReportAttachment[]
+}): Promise<{ reportId: string | null; error: string | null }> {
+  const { data, error } = await supabase.rpc('submit_report_by_alias', {
+    p_conversation: params.conversationId,
+    p_alias: params.alias,
+    p_category: params.category,
+    p_description: params.description,
+    p_attachments: params.attachments ?? [],
+    p_client_info: { platform: Platform.OS, os_version: String(Platform.Version) },
+  })
+
+  if (error) return { reportId: null, error: error.message }
+  return { reportId: data as string, error: null }
+}

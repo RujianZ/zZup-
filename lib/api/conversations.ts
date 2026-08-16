@@ -29,6 +29,31 @@ export interface ConversationListItem {
   members_count: number
   last_message: string | null
   last_message_at: string | null
+  // 每人一份的视图状态（迁移 76）
+  is_muted: boolean
+  // 只显示这个时间之后的消息；null = 从未清空过
+  cleared_before: string | null
+  /**
+   * 临时会话已到期 = **冻结**（迁移 82）。
+   *
+   * 冻结不是删除：会话仍在列表里、历史仍可读、仍可举报和拉黑 ——
+   * 会话消失的话 submit_report 的快照就是空的，举报在最需要它的场景失效。
+   * 只是不能再发言（服务端触发器强制），也不能再加好友（客户端隐藏入口）。
+   */
+  is_frozen: boolean
+  /**
+   * 这是**当下**由 AI 代理在说话的会话（Pulse 匹配出来的）。
+   *
+   * 必须进 AgentChatScreen（有 AI 代理身份、接管提示、加好友入口），
+   * 不能进普通的 ChatScreen —— 否则退出去再进来就变成一个普通私聊界面，
+   * 接管状态和加好友入口全没了。
+   *
+   * 加好友之后 handle_friendship_update 会把它升级成 kind='dm'、
+   * is_temporary=false，并**清掉这个标志**（迁移 87）：升级后的会话就是
+   * 普通好友对话，只是历史里带着一段 AI 代理消息。所以这里判一个标志就够，
+   * 不用再拼 `&& is_temporary`。
+   */
+  is_agent_chat: boolean
 }
 
 export interface GroupSummary {
@@ -196,4 +221,132 @@ export async function removeMember(
   })
 
   return { error: error?.message ?? null }
+}
+
+// ─── 会话视图状态（每人一份，迁移 76）────────────────────────────────────────
+//
+// 这三个操作**都不删任何消息**，只改「我」这一侧的可见性：
+//   · 对方的聊天记录不受影响
+//   · 举报快照（submit_report 取会话最近 50 条）仍然完整
+//   · 涉未成年人内容的保存义务不被破坏
+//
+// 写一律走 RPC —— conversation_members 对客户端只开放 SELECT。
+
+/** 清空聊天记录。**会话仍留在列表里**，只是记录对我不可见。 */
+export async function clearConversationHistory(
+  conversationId: string
+): Promise<{ error: string | null }> {
+  if (USE_MOCK) return { error: null }
+  const { error } = await supabase.rpc('clear_conversation_history', {
+    p_conversation: conversationId,
+  })
+  return { error: error?.message ?? null }
+}
+
+/**
+ * 删除会话：从我的列表移除 + 清空记录。
+ *
+ * 想重新联系只能走好友列表 / 群列表，**新窗口是空的**。
+ * 对方发来新消息时窗口会自动重新出现，同样只有新消息。
+ */
+export async function hideConversation(
+  conversationId: string
+): Promise<{ error: string | null }> {
+  if (USE_MOCK) return { error: null }
+  const { error } = await supabase.rpc('hide_conversation', {
+    p_conversation: conversationId,
+  })
+  return { error: error?.message ?? null }
+}
+
+/** 免打扰。放服务端是因为它要拦的是服务器发出的推送。 */
+export async function setConversationMuted(
+  conversationId: string,
+  muted: boolean
+): Promise<{ error: string | null }> {
+  if (USE_MOCK) return { error: null }
+  const { error } = await supabase.rpc('set_conversation_muted', {
+    p_conversation: conversationId,
+    p_muted: muted,
+  })
+  return { error: error?.message ?? null }
+}
+
+// ─── 匿名宠物身份（迁移 77/78/80）─────────────────────────────────────────────
+//
+// 匿名宠物**只能用「会话 + 代号」指代**。客户端拿不到它背后的账号 id ——
+// 宠物消息的 sender_id 恒为 null，这是有意的：拿得到账号就能转手查出真名。
+//
+// 代号是分配一次、永不改变的（conversation_aliases 表），
+// 且**按会话独立** —— 同一只宠物在不同会话里代号不同，跨会话串联不了。
+
+export interface PetIdentity {
+  alias: string
+  pet_breed: string | null
+  pet_stage: string | null
+  /** 可直接显示的标签，如 "A Dog" */
+  label: string
+}
+
+export async function getPetIdentity(
+  conversationId: string,
+  alias: string
+): Promise<PetIdentity | null> {
+  const { data, error } = await supabase.rpc('get_pet_identity', {
+    p_conversation: conversationId,
+    p_alias: alias,
+  })
+  if (error || !data) return null
+  return data as PetIdentity
+}
+
+/** 拉黑的是**宠物身份**，对方用真人身份仍能联系你。 */
+export async function blockPetByAlias(
+  conversationId: string,
+  alias: string
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('block_pet_by_alias', {
+    p_conversation: conversationId,
+    p_alias: alias,
+  })
+  return { error: error?.message ?? null }
+}
+
+export interface PeerProfile {
+  id: string
+  real_name: string | null
+  avatar_url: string | null
+  pet_breed: string | null
+  pet_stage: string | null
+}
+
+/**
+ * Pulse 匹配会话里对方的真实资料 —— **对方自己揭了面具才有值**，否则返回 null。
+ *
+ * 门槛在服务端（迁移 86）。原来在客户端：先拿到 id，再判断历史里有没有
+ * 对方的真人消息，有才去查 —— 判断是对的，位置是错的，改个客户端就跳过了。
+ */
+export async function getConversationPeerProfile(
+  conversationId: string
+): Promise<PeerProfile | null> {
+  const { data, error } = await supabase.rpc('conversation_peer_profile', {
+    p_conversation: conversationId,
+  })
+  if (error || !data) return null
+  return data as PeerProfile
+}
+
+/**
+ * 这个会话是不是已经冻结（临时会话到期，迁移 82）。
+ *
+ * 冻结 = 只读：历史可读、可举报、可拉黑，但发不了消息。
+ * 发言拦截在数据库触发器里，客户端这个查询只是为了**提前把输入框禁掉**，
+ * 而不是让用户打完字才收到报错。
+ */
+export async function isConversationFrozen(conversationId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('is_conversation_frozen', {
+    p_conversation: conversationId,
+  })
+  if (error) return false
+  return data === true
 }

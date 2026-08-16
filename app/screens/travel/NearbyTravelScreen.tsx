@@ -8,6 +8,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import { getMatchedTravelPosts, TravelPost } from '../../../lib/api/travel';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -28,6 +29,8 @@ const PET_BREEDS: Record<string, string> = {
 
 export default function NearbyTravelScreen() {
   const navigation = useNavigation<any>();
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [posts, setPosts] = useState<TravelPost[]>([]);
@@ -133,7 +136,7 @@ export default function NearbyTravelScreen() {
               🎓 {post.author_profile?.university || 'University'}
             </Text>
             <View style={styles.viewCountBadge}>
-              <Ionicons name="eye-outline" size={12} color="#A6A6AF" style={{ marginRight: 2 }} />
+              <Ionicons name="eye-outline" size={12} color={colors.tertiaryText} style={{ marginRight: 2 }} />
               <Text style={styles.viewCountText}>{post.view_count}</Text>
             </View>
           </View>
@@ -147,7 +150,7 @@ export default function NearbyTravelScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#0B0B0F" />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle}>Campus Roamers</Text>
@@ -158,16 +161,16 @@ export default function NearbyTravelScreen() {
 
       {loading && !refreshing ? (
         <View style={styles.loadingCenter}>
-          <ActivityIndicator size="large" color="#7C3AED" />
+          <ActivityIndicator size="large" color={colors.brand} />
           <Text style={styles.loadingText}>Searching for nearby zZuPers...</Text>
         </View>
       ) : posts.length === 0 ? (
         <ScrollView
           contentContainerStyle={styles.emptyContainer}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#7C3AED" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand} />}
         >
           <View style={styles.emptyIconBg}>
-            <Ionicons name="compass-outline" size={60} color="#7C3AED" />
+            <Ionicons name="compass-outline" size={60} color={colors.brand} />
           </View>
           <Text style={styles.emptyTitle}>All Quiet Nearby...</Text>
           <Text style={styles.emptyText}>
@@ -180,7 +183,7 @@ export default function NearbyTravelScreen() {
       ) : (
         <ScrollView
           contentContainerStyle={styles.scrollContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#7C3AED" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.brand} />}
         >
           <View style={styles.waterfallLayout}>
             {/* Left Column */}
@@ -198,23 +201,25 @@ export default function NearbyTravelScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// 颜色全部走主题（默认薄荷绿，支持 light/dark/system）。
+// 原本是整套写死的固定配色，无视用户在 Profile 里选的主题。
+const makeStyles = (c: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: '#F2F2F5',
+    borderBottomWidth: 1, borderBottomColor: c.cardMutedBg,
   },
   backBtn: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: '#F2F2F5', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: c.cardMutedBg, alignItems: 'center', justifyContent: 'center',
   },
   headerTitleContainer: { alignItems: 'center', gap: 2 },
-  headerTitle: { fontSize: 16, fontWeight: '700', color: '#0B0B0F' },
-  headerSubtitle: { fontSize: 10, color: '#A6A6AF' },
+  headerTitle: { fontSize: 16, fontWeight: '700', color: c.text },
+  headerSubtitle: { fontSize: 10, color: c.tertiaryText },
 
   loadingCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { color: '#A6A6AF', fontSize: 14 },
+  loadingText: { color: c.tertiaryText, fontSize: 14 },
 
   scrollContent: { padding: 16 },
   waterfallLayout: {
@@ -231,7 +236,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#F2F2F5',
+    borderColor: c.cardMutedBg,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -251,21 +256,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderBottomWidth: 1,
-    borderColor: '#F2F2F5',
+    borderColor: c.cardMutedBg,
   },
   cardInfo: {
     padding: 12,
   },
   cardMessage: {
     fontSize: 13,
-    color: '#F2F2F5',
+    color: c.cardMutedBg,
     lineHeight: 18,
     fontWeight: '500',
     marginBottom: 8,
   },
   divider: {
     height: 1,
-    backgroundColor: '#F2F2F5',
+    backgroundColor: c.cardMutedBg,
     marginVertical: 8,
   },
   petRow: {
@@ -283,7 +288,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 10,
-    backgroundColor: '#7C3AED',
+    backgroundColor: c.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -294,11 +299,11 @@ const styles = StyleSheet.create({
   petName: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0B0B0F',
+    color: c.text,
   },
   breedText: {
     fontSize: 9,
-    color: '#7C3AED',
+    color: c.brand,
     fontWeight: '600',
     marginTop: 1,
   },
@@ -310,7 +315,7 @@ const styles = StyleSheet.create({
   },
   universityText: {
     fontSize: 10,
-    color: '#A6A6AF',
+    color: c.tertiaryText,
     maxWidth: COLUMN_WIDTH * 0.55,
   },
   viewCountBadge: {
@@ -319,7 +324,7 @@ const styles = StyleSheet.create({
   },
   viewCountText: {
     fontSize: 10,
-    color: '#A6A6AF',
+    color: c.tertiaryText,
   },
 
   emptyContainer: {
@@ -341,11 +346,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0B0B0F',
+    color: c.text,
   },
   emptyText: {
     fontSize: 13,
-    color: '#A6A6AF',
+    color: c.tertiaryText,
     textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: 16,
@@ -355,10 +360,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#7C3AED',
+    backgroundColor: c.brand,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#7C3AED',
+    shadowColor: c.brand,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,

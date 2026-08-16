@@ -226,38 +226,25 @@ export async function getActiveTravelPost(): Promise<{ post: TravelPost | null; 
  * 获取某个旅行帖子的全部留言
  */
 export async function getTravelComments(postId: string): Promise<{ comments: TravelComment[]; error: string | null }> {
-  const { data, error } = await supabase
-    .from('travel_comments')
-    .select(`
-      id,
-      travel_post_id,
-      author_id,
-      content,
-      created_at,
-      profiles!travel_comments_author_id_fkey (
-        real_name,
-        pet_name,
-        avatar_url,
-        pet_avatar_url
-      )
-    `)
-    .eq('travel_post_id', postId)
-    .order('created_at', { ascending: true });
+  // 必须走 RPC：原来的 PostgREST 内嵌联查依赖 profiles 的列级 SELECT 授权，
+  // 而那些授权在迁移 79 里整体撤销了。
+  //
+  // 顺带修正显示身份：Roam 是**真人发帖**（宠物只充当跑腿的趣味角色），
+  // 所以留言作者显示真名。原来是 `pet_name || real_name`，把真人留言
+  // 显示成了宠物名。
+  const { data, error } = await supabase.rpc('list_travel_comments', { p_post: postId });
 
   if (error) return { comments: [], error: error.message };
 
-  const formatted: TravelComment[] = (data || []).map((c: any) => {
-    const profile = c.profiles;
-    return {
-      id: c.id,
-      travel_post_id: c.travel_post_id,
-      author_id: c.author_id,
-      content: c.content,
-      created_at: c.created_at,
-      author_name: profile?.pet_name || profile?.real_name || '匿名的毛孩子',
-      author_avatar_url: profile?.pet_avatar_url || profile?.avatar_url || null,
-    };
-  });
+  const formatted: TravelComment[] = ((data ?? []) as any[]).map((c: any) => ({
+    id: c.id,
+    travel_post_id: c.travel_post_id,
+    author_id: c.author_id,
+    content: c.content,
+    created_at: c.created_at,
+    author_name: c.author_name || 'zZuPer',
+    author_avatar_url: c.author_avatar_url || null,
+  }));
 
   return { comments: formatted, error: null };
 }
@@ -279,71 +266,16 @@ export async function welcomePetHome(postId: string): Promise<{ error: string | 
   return { error: error ? error.message : null };
 }
 
-/**
- * 发起 3 小时蒸发的临时直聊对话
- */
-export async function createTemporaryDirectMessage(friendId: string): Promise<{ group: any | null; error: string | null }> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { group: null, error: 'Not authenticated' };
-
-  // Check if a direct temporary conversation (petchat) already exists
-  const [{ data: myDMs }, { data: theirDMs }] = await Promise.all([
-    supabase
-      .from('conversation_members')
-      .select('conversation_id, conversations!inner(kind)')
-      .eq('account_id', user.id)
-      .eq('conversations.kind', 'petchat'),
-    supabase
-      .from('conversation_members')
-      .select('conversation_id, conversations!inner(kind)')
-      .eq('account_id', friendId)
-      .eq('conversations.kind', 'petchat'),
-  ]);
-
-  const myDMIds = new Set((myDMs ?? []).map((r: any) => r.conversation_id));
-  const sharedGroupId = (theirDMs ?? []).find((r: any) => myDMIds.has(r.conversation_id))?.conversation_id;
-
-  if (sharedGroupId) {
-    const { data: existing, error: existErr } = await supabase
-      .from('conversations')
-      .select('*')
-      .eq('id', sharedGroupId)
-      .single();
-    if (existErr) return { group: null, error: existErr.message };
-    return { group: existing, error: null };
-  }
-
-  // Calculate expires_at: 3 hours from now
-  const expiresAt = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
-
-  // Create new temporary conversation
-  const { data: conversation, error: insertErr } = await supabase
-    .from('conversations')
-    .insert({
-      kind: 'petchat',
-      name: '',
-      is_searchable: false,
-      created_by: user.id,
-      members_count: 2,
-      is_temporary: true,
-      expires_at: expiresAt,
-    })
-    .select()
-    .single();
-
-  if (insertErr || !conversation) return { group: null, error: insertErr?.message || 'Failed to create conversation' };
-
-  const { error: memberErr } = await supabase.from('conversation_members').insert([
-    { conversation_id: conversation.id, account_id: user.id, member_identity: 'pet', role: 'member' },
-    { conversation_id: conversation.id, account_id: friendId, member_identity: 'pet', role: 'member' },
-  ]);
-
-  if (memberErr) {
-    return { group: null, error: memberErr.message };
-  }
-
-  return { group: conversation, error: null };
-}
+// createTemporaryDirectMessage 已删除（2026-08-15）。
+//
+// 三个理由，任何一个都足够：
+//   1. **零调用者** —— 全仓库没有一处引用
+//   2. **跑不通** —— 它直接 insert conversations，被 RLS 拒（42501）。
+//      与「写只走 RPC」的约定冲突
+//   3. **逻辑上就不成立** —— 它靠查对方的 conversation_members 来找已有会话，
+//      但 RLS 只让你看见自己那一行，那个查询永远返回空
+//
+// 真要做「临时直聊」，照 reply_to_travel_comment 那样写个 SECURITY DEFINER RPC。
 
 /**
  * 回复旅行中的留言，开启 24 小时临时直聊 (蒸发窗口)
