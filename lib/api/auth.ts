@@ -181,22 +181,20 @@ export async function updateProfile(
     }
   }
 
-  // 1. Try update first on authenticated user's profile row
-  const { error: updateErr } = await supabase
+  // `.eq('id', ...)` 看着只是个筛选，但 Postgres 里 **UPDATE ... WHERE 也需要
+  // WHERE 引用列的 SELECT 权限**。迁移 79 逐列撤销 SELECT 之后这里整个失效，
+  // 表现是新用户填完资料保存失败、卡在 onboarding 出不去。
+  // 迁移 89 把 `id` 一列还了回去（只有这一列，敏感列仍然读不到）。
+  const { error } = await supabase
     .from('profiles')
     .update(sanitizedFields)
     .eq('id', user.id)
 
-  if (!updateErr) return { error: null }
-
-  // 2. Try upsert fallback if row does not exist yet
-  const { error: upsertErr } = await supabase
-    .from('profiles')
-    .upsert({ id: user.id, ...sanitizedFields })
-
-  if (!upsertErr) return { error: null }
-
-  return { error: updateErr?.message || upsertErr?.message || 'Update failed' }
+  // 这里原来还有一段 upsert 兜底，注释写着「万一行还不存在」。
+  // 但 auth.users 上的 on_auth_user_created 触发器在注册那一刻就把 profile 建好了，
+  // 行不可能不存在 —— 而且 ON CONFLICT DO UPDATE 需要更多 SELECT 权限，
+  // 真走到那一步只会换一个 42501。已删除。
+  return { error: error?.message ?? null }
 }
 
 export async function deleteAccount(): Promise<{ error: string | null }> {
