@@ -112,6 +112,28 @@ export async function signOut(): Promise<{ error: string | null }> {
   return { error: error?.message ?? null }
 }
 
+/**
+ * 发一封密码重置邮件。
+ *
+ * 用户点邮件里的链接后，Supabase 先验 token，再把带会话的 URL 重定向到
+ * `redirectTo` —— 也就是 zzup.org 上那个重置页，改密码发生在**网页上**，
+ * 所以 App 这边不需要「输入新密码」的界面，只需要触发这一步。
+ * 改完之后用新密码走正常登录流程即可。
+ *
+ * ⚠️ redirectTo 必须出现在 Supabase 后台的
+ *    Authentication → URL Configuration → Redirect URLs 白名单里，
+ *    否则 Supabase 会忽略它、退回 Site URL，用户就落到首页什么也改不了。
+ *
+ * 无论邮箱存不存在，Supabase 都返回成功 —— 这是它防「拿接口探测哪些邮箱注册过」
+ * 的设计。所以 UI 文案不能写「已发送」，要写「如果这个邮箱注册过，就会收到」。
+ */
+export async function sendPasswordReset(email: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: 'https://zzup.org/reset-password',
+  })
+  return { error: error?.message ?? null }
+}
+
 // ─── Profile ──────────────────────────────────────────────────────────────────
 // 不传 userId → 读自己（get_my_profile，全字段）
 // 传 userId   → 读别人（get_other_profile：真人 + 宠物完整，永不含

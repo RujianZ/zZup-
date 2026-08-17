@@ -7,7 +7,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
-import { AntDesign, Feather } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { signUp } from '../../../lib/api/auth';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 import AuroraGlow from '../../components/ui/AuroraGlow';
@@ -34,7 +34,6 @@ export default function RegisterScreen() {
     setLoading(false);
     if (error) showAlert('Sign-up failed', error);
   };
-  const handleGoogle = () => showAlert('Coming soon', 'Google sign-up is being wired up. Use email for now.', 'info');
 
   const field = (key: string, node: React.ReactNode) => (
     <View style={[styles.field, focus === key && styles.fieldFocus]}>{node}</View>
@@ -76,10 +75,6 @@ export default function RegisterScreen() {
               {loading ? <ActivityIndicator color="#000" /> : <><Text style={styles.ctaText}>Create account</Text><Feather name="arrow-right" size={19} color="#000" /></>}
             </Pressable>
 
-            <TouchableOpacity style={styles.ghost} onPress={handleGoogle} activeOpacity={0.7}>
-              <AntDesign name="google" size={16} color={colors.textSecondary} />
-              <Text style={styles.ghostText}>Sign up with Google</Text>
-            </TouchableOpacity>
           </View>
 
           <View style={styles.footer}>
@@ -112,8 +107,7 @@ const styles = StyleSheet.create({
   input: { flex: 1, ...typography.bodyLg, color: colors.textPrimary, height: '100%' },
   cta: { height: 56, borderRadius: radius.full, backgroundColor: '#fff', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: spacing.sm },
   ctaText: { fontSize: 17, fontWeight: '800', color: '#000', letterSpacing: -0.2 },
-  ghost: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48 },
-  ghostText: { ...typography.subtle, color: colors.textSecondary, fontWeight: '600' },
+  // ghost / ghostText 随「Sign up with Google」一起删于 2026-08-18 —— 那个按钮点了只弹「Coming soon」。
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, paddingVertical: spacing.lg },
   footerText: { ...typography.subtle, color: colors.textTertiary },
   footerLink: { ...typography.subtle, color: colors.textPrimary, fontWeight: '700' },

@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
-import { AntDesign, Feather } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import Svg, { Defs, LinearGradient as SvgGrad, Stop, Text as SvgText } from 'react-native-svg';
 import { signIn } from '../../../lib/api/auth';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
@@ -42,8 +42,9 @@ export default function LoginScreen() {
     setLoading(false);
     if (error) showAlert('Login failed', error);
   };
-  const handleGoogleLogin = () => showAlert('Coming soon', 'Google sign-in is being wired up. Use email for now.', 'info');
-  const handleForgot = () => showAlert('Password reset', 'Recovery will be available once the mail service is live.', 'info');
+  // 不要求先填邮箱 —— 直接进独立界面，那里可以填/改。已经填过的带过去当默认值。
+  const handleForgot = () =>
+    navigation.navigate('ForgotPassword', { email: email.trim() });
 
   return (
     <View style={styles.root}>
@@ -126,10 +127,6 @@ export default function LoginScreen() {
                 : <><Text style={styles.ctaText}>Log in</Text><Feather name="arrow-right" size={19} color="#000" /></>}
             </Pressable>
 
-            <TouchableOpacity style={styles.ghost} onPress={handleGoogleLogin} activeOpacity={0.7}>
-              <AntDesign name="google" size={16} color={colors.textSecondary} />
-              <Text style={styles.ghostText}>Continue with Google</Text>
-            </TouchableOpacity>
           </View>
 
           <View style={styles.footer}>
@@ -189,8 +186,8 @@ const styles = StyleSheet.create({
   },
   ctaText: { fontSize: 17, fontWeight: '800', color: '#000', letterSpacing: -0.2 },
 
-  ghost: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48 },
-  ghostText: { ...typography.subtle, color: colors.textSecondary, fontWeight: '600' },
+  // ghost / ghostText 随「Continue with Google」一起删于 2026-08-18 ——
+  // 那个按钮点了只弹「Coming soon」，是提审时审核员看到的第一屏上的假功能。
 
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, paddingVertical: spacing.lg },
   footerText: { ...typography.subtle, color: colors.textTertiary },
