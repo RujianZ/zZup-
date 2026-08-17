@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme, ThemeColors } from '../../context/ThemeContext';
-import { getMatchedTravelPosts, TravelPost } from '../../../lib/api/travel';
+import { getMatchedTravelPosts, recordTravelPostView, TravelPost } from '../../../lib/api/travel';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const COLUMN_WIDTH = (SCREEN_WIDTH - 48) / 2;
@@ -77,9 +77,10 @@ export default function NearbyTravelScreen() {
   };
 
   const handleCardPress = (post: TravelPost) => {
-    import('../../../lib/api/travel').then(({ recordTravelPostView }) => {
-      recordTravelPostView(post.id);
-    });
+    // Static import on purpose: `await import()` of a module that is already in
+    // the bundle buys nothing in RN and breaks under Fast Refresh with
+    // "Cannot read property 'reload' of undefined".
+    recordTravelPostView(post.id);
     navigation.navigate('TravelDetail', { post });
   };
 

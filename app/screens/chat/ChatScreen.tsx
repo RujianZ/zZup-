@@ -15,7 +15,10 @@ import { getMessages, sendMessage, subscribeToMessages, hideMessageForMe, isAiMe
 import {
   createDM, getOrCreateZzuperTalk, clearConversationHistory, isConversationFrozen, touchAiDisclosure,
 } from '../../../lib/api/conversations';
-import { uploadChatMedia, getSignedUrls, formatBytes, normalizeImage, Attachment, MAX_FILE_BYTES } from '../../../lib/api/uploads';
+import {
+  uploadChatMedia, getSignedUrls, formatBytes, normalizeImage, Attachment,
+  MAX_FILE_BYTES, isAllowedChatFile, extensionOf,
+} from '../../../lib/api/uploads';
 import { markConversationRead } from '../../../lib/api/unread';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -265,9 +268,27 @@ export default function ChatScreen() {
   const pickFiles = async () => {
     const res = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true });
     if (res.canceled) return;
+
+    // Extension, not MIME: DocumentPicker hands back application/octet-stream
+    // for plenty of legitimate code files on Android, and the recipient's OS
+    // opens by extension anyway. Enforced for real by the RESTRICTIVE storage
+    // policy in migration 96 — this is just so the user finds out now.
+    const blocked = res.assets.find((a: any) => !isAllowedChatFile(a.name || ''));
+    if (blocked) {
+      const ext = extensionOf(blocked.name || '');
+      showAlert(
+        'Can’t send that file',
+        ext
+          ? `.${ext} files can’t be sent on zZuP!. You can send photos, documents (pdf, docx, xlsx, pptx, txt, csv) and code files.`
+          : `"${blocked.name}" has no file extension, so we can’t tell what it is.`,
+        'info',
+      );
+      return;
+    }
+
     const tooBig = res.assets.find((a: any) => (a.size ?? 0) > MAX_FILE_BYTES);
     if (tooBig) {
-      showAlert('File too large', `"${tooBig.name}" exceeds the 50 MB limit. Please pick a smaller file.`, 'info');
+      showAlert('File too large', `"${tooBig.name}" is over the 40 MB limit. Please pick a smaller file.`, 'info');
       return;
     }
     uploadAndSend(res.assets.map((a: any) => ({

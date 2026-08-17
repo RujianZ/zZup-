@@ -1,4 +1,21 @@
 import { supabase } from '../supabase';
+import { signRoamImages } from './uploads';
+
+/**
+ * travel_posts.image_url holds a **roam-media bucket path**, not a URL
+ * (migration 96). Swap the paths for short-lived signed URLs here so every
+ * screen can keep rendering `post.image_url` directly. Anything that already
+ * looks like a URL is left alone.
+ */
+async function resolveImageUrls<T extends { image_url: string | null }>(posts: T[]): Promise<T[]> {
+  const paths = posts.map((p) => p.image_url).filter((u): u is string => !!u);
+  if (paths.length === 0) return posts;
+  const signed = await signRoamImages(paths);
+  if (Object.keys(signed).length === 0) return posts;
+  return posts.map((p) =>
+    p.image_url && signed[p.image_url] ? { ...p, image_url: signed[p.image_url] } : p,
+  );
+}
 
 export interface TravelPost {
   id: string;
@@ -39,10 +56,19 @@ export interface TravelComment {
 
 /**
  * 启动自由旅行 (发漂流瓶)
+ *
+ * imagePath 是 **roam-media 桶里的路径**（迁移 96），不再是外链。
+ *
+ * ⚠️ travel-mode Edge Function（Ethan 的）里有一段：
+ *      if (image_url && image_url.startsWith("http")) { …gpt-4o-mini vision… }
+ *    传路径进去这一段会静默跳过，Roam 的 embedding 退回纯文本。
+ *    影响仅限「图片不参与匹配」——content 是必填的，文本 embedding 照常。
+ *    他那边加一个「路径就先 signed URL 再送 vision」的分支即可恢复，
+ *    我们这边不用改。改这里之前先看 docs/_local/ 的排查文档。
  */
 export async function createTravelPost(
   content: string,
-  imageUrl?: string,
+  imagePath?: string,
   audioUrl?: string,
   durationHours: number = 6
 ): Promise<{ post: TravelPost | null; error: string | null }> {
@@ -51,7 +77,7 @@ export async function createTravelPost(
       body: {
         action: 'create',
         content,
-        image_url: imageUrl,
+        image_url: imagePath,
         audio_url: audioUrl,
         duration_hours: durationHours
       },
@@ -60,7 +86,11 @@ export async function createTravelPost(
     if (error) return { post: null, error: error.message || 'Failed to start travel' };
     if (data?.error) return { post: null, error: data.error };
 
-    return { post: data.post, error: null };
+    // The edge function echoes back the row as inserted, so image_url is still a
+    // bucket path here. Sign it like the read paths do, or the composer renders
+    // a broken image until the screen is reloaded.
+    const [resolved] = await resolveImageUrls([data.post as TravelPost]);
+    return { post: resolved, error: null };
   } catch (err: any) {
     return { post: null, error: err.message || 'Network error starting travel' };
   }
@@ -129,7 +159,7 @@ export async function getMatchedTravelPosts(): Promise<{ posts: TravelPost[]; er
     if (error) return { posts: [], error: error.message || 'Failed to retrieve travel posts' };
     if (data?.error) return { posts: [], error: data.error };
 
-    return { posts: data.posts || [], error: null };
+    return { posts: await resolveImageUrls(data.posts || []), error: null };
   } catch (err: any) {
     return { posts: [], error: err.message || 'Network error fetching travel posts' };
   }
@@ -138,13 +168,10 @@ export async function getMatchedTravelPosts(): Promise<{ posts: TravelPost[]; er
 /**
  * 浏览旅行帖子 (增加阅读量)
  */
-export async function incrementTravelPostView(postId: string): Promise<{ error: string | null }> {
-  const { error } = await supabase.rpc('increment_travel_post_view', {
-    post_id: postId,
-  });
-
-  return { error: error ? error.message : null };
-}
+// incrementTravelPostView() 删于 2026-08-18。它调的 `increment_travel_post_view`
+// 在数据库里根本不存在，每次打开 Roam 详情都静默失败一次（被 .catch 吞掉）。
+// 浏览数一直是 NearbyTravelScreen 点卡片时调 recordTravelPostView 记录的，
+// 详情页那次是重复调用 —— 所以是删掉，不是改指向真函数（那会变成计数 +2）。
 
 /**
  * 给路过的旅行宠物留言
@@ -204,16 +231,18 @@ export async function getActiveTravelPost(): Promise<{ post: TravelPost | null; 
       if (data.length === 0) return { post: null, error: null };
       const singlePost = data[0];
       if (singlePost && singlePost.id && singlePost.ends_at) {
-        return { post: singlePost as TravelPost, error: null };
+        const [resolved] = await resolveImageUrls([singlePost as TravelPost]);
+        return { post: resolved, error: null };
       }
       return { post: null, error: null };
     }
-    
+
     if (typeof data === 'object') {
       if (!data.id || !data.ends_at) {
         return { post: null, error: null };
       }
-      return { post: data as TravelPost, error: null };
+      const [resolved] = await resolveImageUrls([data as TravelPost]);
+      return { post: resolved, error: null };
     }
     
     return { post: null, error: null };

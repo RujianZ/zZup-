@@ -11,7 +11,6 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import { StatusBar } from 'expo-status-bar';
 import {
-  incrementTravelPostView,
   createTravelComment,
   getTravelComments,
   TravelPost,
@@ -48,10 +47,8 @@ export default function TravelDetailScreen() {
   const [submittingComment, setSubmittingComment] = useState(false);
 
   useEffect(() => {
-    // 1. Increment view count in database (runs in background)
-    incrementTravelPostView(post.id).catch(console.error);
-
-    // 2. Fetch comments
+    // The view is recorded by NearbyTravelScreen when the card is tapped, so
+    // there is nothing to count here — a second call would double the number.
     loadComments();
   }, []);
 

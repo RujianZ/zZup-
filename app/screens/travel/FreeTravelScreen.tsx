@@ -8,6 +8,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
+import { normalizeImage, uploadRoamImage } from '../../../lib/api/uploads';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
@@ -18,6 +20,12 @@ import {
   getTravelComments,
   welcomePetHome,
   replyToTravelComment,
+  // Recall/renew used to be pulled in with `await import(...)` from this very
+  // module — which is already statically imported here, so it bought nothing
+  // and blew up with "Cannot read property 'reload' of undefined" once Metro's
+  // async-require machinery got out of step with Fast Refresh.
+  recallTravelPet,
+  renewTravelPost,
   TravelPost,
   TravelComment
 } from '../../../lib/api/travel';
@@ -49,11 +57,10 @@ export default function FreeTravelScreen() {
 
   // Form Inputs
   const [content, setContent] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [postMethod, setPostMethod] = useState<'text' | 'image' | 'voice'>('text');
+  // Locally picked image, not yet uploaded. Roam images live in the roam-media
+  // bucket (migration 96); we upload on submit and store the bucket path.
+  const [pickedImage, setPickedImage] = useState<{ uri: string; w: number; h: number } | null>(null);
   const [durationHours, setDurationHours] = useState<6 | 24>(6);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordedSecs, setRecordedSecs] = useState(0);
 
   // Reply Modal State
   const [replyModalVisible, setReplyModalVisible] = useState(false);
@@ -127,32 +134,56 @@ export default function FreeTravelScreen() {
     timerRef.current = setInterval(updateTimer, 1000);
   };
 
-  const startMockRecording = () => {
-    setIsRecording(true);
-    setRecordedSecs(0);
-    let count = 0;
-    const interval = setInterval(() => {
-      count += 1;
-      setRecordedSecs(count);
-      if (count >= 3) {
-        clearInterval(interval);
-        setIsRecording(false);
-        setContent('🐾 Sent a voice note (0:03) - "Hello there! My zZuPer is out roaming!"');
-      }
-    }, 1000);
+  // Roam only accepts photos from the device — no pasted links. A link means we
+  // never hold the file, so we cannot check what it is and whoever owns the
+  // domain collects the IP of every person the note reaches.
+  const pickRoamImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      showAlert('Permission needed', 'Allow photo library access to attach a photo.', 'info');
+      return;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: false,
+      quality: 0.7,
+    });
+    if (res.canceled || !res.assets?.length) return;
+    const a = res.assets[0];
+    try {
+      // Re-encode to JPEG ≤2048px. Also strips EXIF/GPS before anything leaves.
+      const n = await normalizeImage(a.uri, a.width);
+      setPickedImage(n);
+    } catch (e: any) {
+      showAlert('Error', e.message || 'Could not read that photo', 'error');
+    }
   };
 
   const handleStartTravel = async () => {
+    // A note always needs words; the photo is an optional extra. This is not a
+    // style choice — the travel-mode edge function rejects an empty `content`
+    // with a 400, so a photo-only post cannot be created.
     if (!content.trim()) {
-      showAlert('Notice', 'Please write a travel note for your zZuPer before starting roaming!', 'info');
+      showAlert('Notice', 'Write a travel note before sending your zZuPer out. A photo on its own is not enough.', 'info');
       return;
     }
 
     setSubmitting(true);
     try {
+      let imagePath: string | undefined;
+      if (pickedImage) {
+        const up = await uploadRoamImage(pickedImage.uri);
+        if (up.error) {
+          showAlert('Upload failed', up.error, 'error');
+          setSubmitting(false);
+          return;
+        }
+        imagePath = up.path ?? undefined;
+      }
+
       const { post, error } = await createTravelPost(
         content.trim(),
-        imageUrl.trim() || undefined,
+        imagePath,
         undefined,
         durationHours
       );
@@ -162,7 +193,7 @@ export default function FreeTravelScreen() {
       } else if (post) {
         setActivePost(post);
         setContent('');
-        setImageUrl('');
+        setPickedImage(null);
         startCountdown(post.ends_at);
         showAlert('Roaming Started!', `${profile?.pet_name || 'Your zZuPer'} has embarked on a ${durationHours}-hour campus roam!`, 'success');
       }
@@ -177,7 +208,6 @@ export default function FreeTravelScreen() {
     if (!activePost) return;
     setSubmitting(true);
     try {
-      const { recallTravelPet } = await import('../../../lib/api/travel');
       const { remainingSeconds, error } = await recallTravelPet(activePost.id);
       if (error) {
         showAlert('Recall Failed', error, 'error');
@@ -196,7 +226,6 @@ export default function FreeTravelScreen() {
     if (!activePost) return;
     setSubmitting(true);
     try {
-      const { renewTravelPost } = await import('../../../lib/api/travel');
       const { error } = await renewTravelPost(activePost.id, durationHours);
       if (error) {
         showAlert('Renewal Failed', error, 'error');
@@ -345,89 +374,53 @@ export default function FreeTravelScreen() {
               </View>
             </View>
 
-            {/* Post Method Switcher (Text / Image / Voice) */}
-            <View style={styles.methodSelector}>
-              {(['text', 'image', 'voice'] as const).map(method => (
+            {/* One composer: write something, attach a photo, or both. */}
+            <View style={styles.cardBox}>
+              <Text style={styles.cardBoxTitle}>Travel Note (For Destined Fellows)</Text>
+              <TextInput
+                style={styles.textArea}
+                multiline
+                numberOfLines={5}
+                placeholder="Share your hobbies, study sessions, or fun thoughts — this is what the algorithm matches on, so it can't be left empty. A photo is optional."
+                placeholderTextColor={colors.tertiaryText}
+                value={content}
+                onChangeText={setContent}
+                maxLength={200}
+              />
+
+              {pickedImage && (
+                <View style={styles.roamImageWrap}>
+                  <Image source={{ uri: pickedImage.uri }} style={styles.roamImagePreview} />
+                  <TouchableOpacity
+                    style={styles.roamImageRemove}
+                    onPress={() => setPickedImage(null)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="close" size={16} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <View style={styles.composerFooter}>
                 <TouchableOpacity
-                  key={method}
-                  style={[styles.methodBtn, postMethod === method && styles.methodBtnActive]}
-                  onPress={() => {
-                    setPostMethod(method);
-                    if (method === 'voice') {
-                      setContent('');
-                    } else if (content.startsWith('🐾 Sent a voice note')) {
-                      setContent('');
-                    }
-                  }}
+                  style={styles.attachBtn}
+                  onPress={pickRoamImage}
                   activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Ionicons
-                    name={method === 'text' ? 'document-text-outline' : method === 'image' ? 'image-outline' : 'mic-outline'}
+                    name={pickedImage ? 'swap-horizontal-outline' : 'image-outline'}
                     size={18}
-                    color={postMethod === method ? '#FFFFFF' : colors.tertiaryText}
+                    color={colors.brand}
                   />
-                  <Text style={[styles.methodBtnText, postMethod === method && styles.methodBtnTextActive]}>
-                    {method.charAt(0).toUpperCase() + method.slice(1)}
+                  <Text style={styles.attachBtnText}>
+                    {pickedImage ? 'Replace photo' : 'Add a photo'}
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Text & Image Mode Form Inputs */}
-            {(postMethod === 'text' || postMethod === 'image') && (
-              <View style={styles.cardBox}>
-                <Text style={styles.cardBoxTitle}>Travel Note (For Destined Fellows)</Text>
-                <TextInput
-                  style={styles.textArea}
-                  multiline
-                  numberOfLines={4}
-                  placeholder="Share your hobbies, study sessions, or fun thoughts. The recommendation algorithm will match this with fellows who share similar vibes..."
-                  placeholderTextColor={colors.tertiaryText}
-                  value={content}
-                  onChangeText={setContent}
-                  maxLength={200}
-                />
                 <Text style={styles.charCount}>{content.length}/200</Text>
               </View>
-            )}
-
-            {postMethod === 'image' && (
-              <View style={styles.cardBox}>
-                <Text style={styles.cardBoxTitle}>Attach Image URL (Optional)</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="https://example.com/photo.jpg"
-                  placeholderTextColor={colors.tertiaryText}
-                  value={imageUrl}
-                  onChangeText={setImageUrl}
-                />
-              </View>
-            )}
-
-            {/* Voice Mode Form Input */}
-            {postMethod === 'voice' && (
-              <View style={styles.voiceRecordCard}>
-                <Text style={styles.cardBoxTitle}>Record Travel Voice Note</Text>
-                
-                <TouchableOpacity
-                  style={[styles.voiceRecordBtn, isRecording && styles.voiceRecordBtnRecording]}
-                  onPress={startMockRecording}
-                  disabled={isRecording}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name={isRecording ? 'stop' : 'mic'} size={32} color="#fff" />
-                </TouchableOpacity>
-                
-                <Text style={styles.voiceRecordText}>
-                  {isRecording 
-                    ? `Recording... 0:0${recordedSecs}` 
-                    : content 
-                      ? 'Voice recorded successfully! (0:03)'
-                      : 'Tap to record 3s voice note'
-                  }
-                </Text>
-              </View>
-            )}
+            </View>
 
             {/* Duration Selector Pill */}
             <View style={styles.cardBox}>
@@ -461,7 +454,7 @@ export default function FreeTravelScreen() {
             <TouchableOpacity
               style={[styles.primaryButton, submitting && styles.disabledButton]}
               onPress={handleStartTravel}
-              disabled={submitting || (postMethod === 'voice' && !content)}
+              disabled={submitting || !content.trim()}
             >
               {submitting ? (
                 <ActivityIndicator color="#fff" />
@@ -758,6 +751,30 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 12, fontSize: 14,
     borderWidth: 1.5, borderColor: c.border,
   },
+
+  // ── Roam photo attachment (replaced the old "paste an image URL" field) ──
+  roamImagePicker: {
+    backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: 22,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: c.border, borderStyle: 'dashed',
+  },
+  roamImagePickerText: {
+    marginTop: 8, fontSize: 14, fontWeight: '600', color: c.brand,
+  },
+  roamImagePickerHint: {
+    marginTop: 4, fontSize: 11, color: c.tertiaryText,
+  },
+  roamImageWrap: { position: 'relative' },
+  roamImagePreview: {
+    width: '100%', height: 180, borderRadius: 12, resizeMode: 'cover',
+    borderWidth: 1.5, borderColor: c.border,
+  },
+  roamImageRemove: {
+    position: 'absolute', top: 8, right: 8,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center', justifyContent: 'center',
+  },
   tipCard: {
     flexDirection: 'row', backgroundColor: c.cardMutedBg,
     borderRadius: 16, padding: 16, borderWidth: 1, borderColor: c.cardMutedBg,
@@ -805,7 +822,14 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
   timerText: { fontSize: 36, fontWeight: '800', color: c.brand, fontVariant: ['tabular-nums'] },
 
   postContent: { color: c.text, fontSize: 15, lineHeight: 22 },
-  postImage: { width: '100%', height: 180, borderRadius: 12, marginTop: 12, resizeMode: 'cover' },
+  // alignSelf:'stretch' matters: this card sits in a centre-aligned column, so
+  // the box is content-sized and a bare width:'100%' collapses to the width of
+  // the text above it. Never rendered before today — Roam had no real images.
+  postImage: {
+    alignSelf: 'stretch', width: undefined, height: 180,
+    borderRadius: 12, marginTop: 12, resizeMode: 'cover',
+    backgroundColor: c.cardMutedBg,
+  },
 
   statsCard: {
     flexDirection: 'row', backgroundColor: c.cardMutedBg, borderRadius: 20,
@@ -972,35 +996,19 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  methodSelector: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
+  // ── Composer footer: attach button on the left, char count on the right ──
+  composerFooter: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: 12,
   },
-  methodBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    borderWidth: 1.5,
-    borderColor: c.border,
-    borderRadius: 14,
-    backgroundColor: c.cardMutedBg,
+  attachBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 8, paddingHorizontal: 12,
+    borderRadius: 12, borderWidth: 1.5, borderColor: c.border,
+    backgroundColor: '#FFFFFF',
   },
-  methodBtnActive: {
-    borderColor: c.brand,
-    backgroundColor: c.cardMutedBg,
-  },
-  methodBtnText: {
-    fontSize: 14,
-    color: c.tertiaryText,
-    fontWeight: '600',
-  },
-  methodBtnTextActive: {
-    color: c.text,
-  },
+  attachBtnText: { fontSize: 13, fontWeight: '600', color: c.brand },
+
   durationRow: {
     flexDirection: 'row',
     gap: 10,
@@ -1046,35 +1054,5 @@ const makeStyles = (c: ThemeColors) => StyleSheet.create({
     color: '#FB7185',
     fontSize: 15,
     fontWeight: '700',
-  },
-  voiceRecordCard: {
-    backgroundColor: c.cardMutedBg,
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1.5,
-    borderColor: c.border,
-    alignItems: 'center',
-    shadowColor: c.brand,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 2,
-    gap: 12,
-  },
-  voiceRecordBtn: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: c.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  voiceRecordBtnRecording: {
-    backgroundColor: '#EF4444',
-  },
-  voiceRecordText: {
-    fontSize: 13,
-    color: c.subText,
-    fontWeight: '600',
   },
 });

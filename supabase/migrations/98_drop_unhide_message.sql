@@ -1,0 +1,25 @@
+-- 98_drop_unhide_message.sql
+--
+-- 2026-08-18。产品决定（Joe）：**隐藏消息是单向的，不提供找回。**
+--
+-- 原话：「用户删了消息，就不可能找的回来（虽然我们后台可以看到）。
+--        但是这是他删消息自己的风险，没有这种还能看回来的道理。」
+--
+-- 迁移 94 当时建了 hide / unhide 一对，但客户端从头到尾只接了 hide
+-- （全项目 grep `unhide` → 0 命中）。既然确定不做，就不留这个死函数。
+--
+-- 保留的部分（不要一起删）：
+--   * hidden_messages 表 —— hide 功能本身在用
+--   * hide_message_for_me() —— 长按菜单的 "Remove for me"
+--   * list_messages() / get_message() 里的 hidden 过滤逻辑
+--
+-- 相关口径（三份法律文书都这么写，别改）：
+--   消息本体谁也删不掉。hide 只往 hidden_messages 写一行，
+--   对方照常看得见，举报时证据还在。所以 UI 文案叫 "Remove for me"
+--   而不是 "Delete" —— 叫 Delete 会让用户以为删掉了对方的消息。
+--
+-- 也不加二次确认（Joe 2026-08-18 决定）：文案已经写明只影响自己这边。
+--
+-- 回滚：db-backups/2026-08-18/ROLLBACK_98.sql
+
+drop function if exists public.unhide_message_for_me(uuid);

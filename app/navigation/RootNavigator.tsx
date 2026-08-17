@@ -67,7 +67,9 @@ function MainTabs() {
         },
         tabBarActiveTintColor: colors.brand,
         tabBarInactiveTintColor: colors.tertiaryText,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600', marginTop: 2 },
+        // Icons only. The labels are still set per-screen so screen readers and
+        // the back/accessibility stack keep a real name for each tab.
+        tabBarShowLabel: false,
         tabBarIcon: ({ focused, color }) => {
           const map: Record<string, [any, any]> = {
             Lounge: ['chatbubble-ellipses', 'chatbubble-ellipses-outline'],
@@ -75,13 +77,13 @@ function MainTabs() {
             Profile: ['person', 'person-outline'],
           };
           const [on, off] = map[route.name] ?? ['ellipse', 'ellipse-outline'];
-          return <Ionicons name={focused ? on : off} size={24} color={color} />;
+          return <Ionicons name={focused ? on : off} size={26} color={color} />;
         },
       })}
     >
-      <Tab.Screen name="Lounge" component={InboxScreen} options={{ tabBarLabel: 'Lounge' }} />
-      <Tab.Screen name="TravelMode" component={TravelModeScreen} options={{ tabBarLabel: 'Explore' }} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Profile' }} />
+      <Tab.Screen name="Lounge" component={InboxScreen} options={{ tabBarAccessibilityLabel: 'Lounge' }} />
+      <Tab.Screen name="TravelMode" component={TravelModeScreen} options={{ tabBarAccessibilityLabel: 'Explore' }} />
+      <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarAccessibilityLabel: 'Profile' }} />
     </Tab.Navigator>
   );
 }
