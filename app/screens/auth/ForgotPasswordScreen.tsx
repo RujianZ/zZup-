@@ -6,9 +6,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 // react-native 自带的 SafeAreaView 在 Android 上不生效，必须用 safe-area-context 的
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -61,7 +61,13 @@ export default function ForgotPasswordScreen() {
       <AuroraGlow />
       <StatusBar style="light" />
       <SafeAreaView style={styles.safe}>
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
 
           <TouchableOpacity
             style={styles.back}
@@ -170,6 +176,7 @@ export default function ForgotPasswordScreen() {
             </TouchableOpacity>
           </View>
 
+          </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
 
@@ -187,11 +194,15 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.black },
   safe: { flex: 1 },
-  flex: { flex: 1, paddingHorizontal: spacing.xl },
+  flex: { flex: 1 },
+  // contentContainer 至少撑满一屏；键盘顶上来后视口变矮，hero 先压缩，
+  // 压不动了再滚动 —— 两种情况下输入框都不会被键盘吃掉。
+  scroll: { flexGrow: 1, paddingHorizontal: spacing.xl },
 
   back: { marginTop: spacing.base, width: 40, height: 40, justifyContent: 'center' },
 
-  hero: { flex: 1, justifyContent: 'flex-end', paddingBottom: spacing.xl },
+  // flexShrink 是关键：没有它，hero 在视口变矮时不肯让位，表单被挤到键盘下面。
+  hero: { flex: 1, flexShrink: 1, justifyContent: 'flex-end', paddingBottom: spacing.xl },
   eyebrow: { ...typography.eyebrow, color: colors.brand, marginBottom: spacing.md },
   headline: { fontSize: 46, lineHeight: 48, fontWeight: '800', color: colors.textPrimary, letterSpacing: -1.4 },
 

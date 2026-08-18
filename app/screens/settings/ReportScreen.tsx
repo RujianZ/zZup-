@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-  ActivityIndicator, Image, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Image, KeyboardAvoidingView,
 } from 'react-native';
 // react-native 自带的 SafeAreaView 在 Android 上不生效，必须用 safe-area-context 的
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -156,7 +156,7 @@ export default function ReportScreen() {
         <View style={styles.iconBtn} />
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 
           {/* 被举报的那条消息。等同于截图，但内容是服务端存的原文，伪造不了。 */}

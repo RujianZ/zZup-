@@ -126,7 +126,7 @@ export default function OnboardingScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <StatusBar style="dark" />
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
           <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
             <Progress n={1} />
             <Text style={styles.eyebrow}>STEP 1 OF 2</Text>
@@ -197,7 +197,7 @@ export default function OnboardingScreen() {
   return (
       <SafeAreaView style={styles.safe}>
         <StatusBar style="dark" />
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
           <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
             <Progress n={2} />
             <Text style={styles.eyebrow}>STEP 2 OF 2</Text>

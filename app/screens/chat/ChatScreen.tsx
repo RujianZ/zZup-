@@ -33,6 +33,31 @@ function formatTime(dateStr: string): string {
   return new Date(dateStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 }
 
+/**
+ * 只渲染 **粗体**，别的 Markdown 一律当普通文字。
+ *
+ * 起因：危机协议触发时，AI 会把热线号码写成 `**988**` / `**741741**`，
+ * 而气泡原来是纯 Text，星号直接显示出来。那是整个产品里最不该有杂讯的一屏。
+ *
+ * 没有引 Markdown 库，因为我们只需要这一个语法 —— 引一个库进来意味着它支持的
+ * 一切（链接、图片、代码块、HTML）都成了 AI 输出能触达的渲染面，
+ * 那是给一段不可控文本开的口子。这里只认 ** 两个星号，其余原样输出。
+ */
+function RichText({ text, style }: { text: string; style?: any }) {
+  // 偶数下标 = 普通文字，奇数下标 = 粗体。split 的天然性质，不用手写状态机。
+  const parts = (text ?? '').split(/\*\*(.+?)\*\*/gs);
+  if (parts.length === 1) return <Text style={style}>{text}</Text>;
+  return (
+    <Text style={style}>
+      {parts.map((p, i) =>
+        i % 2 === 1
+          ? <Text key={i} style={{ fontWeight: '700' }}>{p}</Text>
+          : <Text key={i}>{p}</Text>
+      )}
+    </Text>
+  );
+}
+
 export default function ChatScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -599,7 +624,7 @@ export default function ChatScreen() {
                   : { backgroundColor: colors.bubbleOther, borderWidth: 1, borderColor: colors.bubbleOtherBorder }
               ]}
             >
-              <Text style={[styles.content, { color: isMe ? '#FFFFFF' : colors.text }]}>{item.content}</Text>
+              <RichText text={item.content} style={[styles.content, { color: isMe ? '#FFFFFF' : colors.text }]} />
             </TouchableOpacity>
           )}
 
