@@ -152,9 +152,23 @@ export default {
               },
               { role: "user", content: message }
             ],
-            max_tokens: 60,
+            // gpt-5.6-luna 不接受 max_tokens，传了整个请求 400（不是截断，是拒收）。
+            // 换成 max_completion_tokens 的同时必须把值放大：这个预算**包含推理
+            // token**，照抄 60 的话请求会成功但 content 是空的 —— 那就从"会报错的
+            // 失败"变成"不报错的失败"，比现在更难查。
+            max_completion_tokens: 400,
           });
           const extractedText = extractResp.choices[0]?.message?.content?.trim();
+          if (!extractedText) {
+            // 空输出和"模型判断没有值得记的事"是两回事，必须分得开 ——
+            // 否则记忆再断一次，日志里同样什么都看不到。
+            console.warn(
+              "Memory extraction returned empty content; finish_reason =",
+              extractResp.choices[0]?.finish_reason,
+              "usage =",
+              JSON.stringify(extractResp.usage ?? {}),
+            );
+          }
           if (extractedText && extractedText !== "NONE" && !extractedText.includes("NONE")) {
             const memEmbedResp = await openai.embeddings.create({
               model: "text-embedding-3-small",

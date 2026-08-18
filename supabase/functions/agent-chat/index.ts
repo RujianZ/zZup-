@@ -157,7 +157,10 @@ export default {
             const topicResp = await openai.chat.completions.create({
               model: "gpt-5.6-luna",
               messages: [{ role: "user", content: topicPrompt }],
-              max_tokens: 30,
+              // gpt-5.6-luna 只认 max_completion_tokens，而且这个预算包含推理 token。
+              // 这一句在 join_match 的外层 try 里，抛异常 = 整个匹配请求返回 500，
+              // 所以值宁可给宽（要的只是一个短语，超不了）。
+              max_completion_tokens: 200,
             });
             const commonInterest = topicResp.choices[0]?.message?.content?.trim() || "聊聊天";
 
@@ -176,7 +179,9 @@ Guidelines: ${stageConfig.customInstructions}. ABSOLUTELY NO ASTERISKS PHYSICAL 
             const firstMsgResp = await openai.chat.completions.create({
               model: "gpt-5.6-luna",
               messages: [{ role: "user", content: firstMsgPrompt }],
-              max_tokens: 120,
+              // 同上。开场白只要 30 词以内，但预算要留给推理，否则 content 为空，
+              // 静默退回下面那句写死的 "Hello there!"。
+              max_completion_tokens: 400,
             });
             const firstMsgText = firstMsgResp.choices[0]?.message?.content?.trim() || "Hello there!";
 
@@ -316,7 +321,9 @@ Strict Rules:
         const openaiResp = await openai.chat.completions.create({
           model: "gpt-5.6-luna",
           messages,
-          max_tokens: 150,
+          // 同上。这里空了更隐蔽 —— replyText 为空就直接不插消息，
+          // 表现是"AI 该说话时没说话"，没有任何错误。
+          max_completion_tokens: 400,
         });
 
         const replyText = openaiResp.choices[0]?.message?.content?.trim() || "";

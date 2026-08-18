@@ -64,8 +64,35 @@ export default {
         const duration = (duration_hours === 24) ? 24 : 6;
         let textToEmbed = content.trim();
 
-        // If image_url is provided, call GPT-5.6-Luna Vision to extract multimodal image features
-        if (image_url && typeof image_url === "string" && image_url.startsWith("http")) {
+        // travel_posts.image_url 从 2026-08-18（迁移 96）起存的是 **roam-media 桶里的
+        // 路径**，不再是用户粘贴的外链 —— 外链既审不了（审过之后可以换掉内容），
+        // 也会把每个浏览者的 IP 送给发帖人控制的服务器。
+        //
+        // 原来这里的判据是 `startsWith("http")`，所以改自托管之后这一整段**静默跳过**了，
+        // 带图的 Roam 退回纯文本 embedding。下面按两种形态分别处理：
+        //   路径  → 签一个一小时的 URL 再给模型（私有桶，模型那边要能拉得到）
+        //   http  → 迁移 96 之前的老数据，原样放行
+        let visionUrl: string | null = null;
+        if (image_url && typeof image_url === "string" && image_url.trim().length > 0) {
+          if (/^https?:\/\//i.test(image_url)) {
+            visionUrl = image_url;
+          } else {
+            const { data: signed, error: signErr } = await ctx.supabaseAdmin
+              .storage
+              .from("roam-media")
+              .createSignedUrl(image_url, 3600);
+            if (signErr || !signed?.signedUrl) {
+              // 留日志：签名失败和"这条帖子没图"必须分得开，
+              // 否则又是一个只能靠猜的静默降级。
+              console.error("Roam image sign failed:", signErr?.message ?? "no signed url", image_url);
+            } else {
+              visionUrl = signed.signedUrl;
+            }
+          }
+        }
+
+        // If an image is attached, call GPT-5.6-Luna Vision to extract multimodal image features
+        if (visionUrl) {
           try {
             const visionResp = await openai.chat.completions.create({
               model: "gpt-5.6-luna",
@@ -74,11 +101,13 @@ export default {
                   role: "user",
                   content: [
                     { type: "text", text: "Describe the key visual elements, mood, and objects in 2 short sentences." },
-                    { type: "image_url", image_url: { url: image_url } }
+                    { type: "image_url", image_url: { url: visionUrl } }
                   ]
                 }
               ],
-              max_tokens: 60,
+              // gpt-5.6-luna 只认 max_completion_tokens，而且这个预算包含推理 token；
+              // 照抄 60 会拿到空描述，图片等于白审。
+              max_completion_tokens: 300,
             });
             const imageDesc = visionResp.choices[0]?.message?.content?.trim() || "";
             if (imageDesc) {

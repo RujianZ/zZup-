@@ -59,12 +59,10 @@ export interface TravelComment {
  *
  * imagePath 是 **roam-media 桶里的路径**（迁移 96），不再是外链。
  *
- * ⚠️ travel-mode Edge Function（Ethan 的）里有一段：
- *      if (image_url && image_url.startsWith("http")) { …gpt-4o-mini vision… }
- *    传路径进去这一段会静默跳过，Roam 的 embedding 退回纯文本。
- *    影响仅限「图片不参与匹配」——content 是必填的，文本 embedding 照常。
- *    他那边加一个「路径就先 signed URL 再送 vision」的分支即可恢复，
- *    我们这边不用改。改这里之前先看 docs/_local/ 的排查文档。
+ * ✅ 2026-08-18：travel-mode 那边已经能认路径了（原来只认 `startsWith("http")`，
+ *    所以改自托管之后图片静默不参与匹配）。现在函数拿到路径会先签一个一小时的
+ *    URL 再送 vision。实测：同样一句话，带图那条和不带图那条的 embedding
+ *    余弦相似度 0.685 —— 图片描述确实进了向量，不是同一个向量。
  */
 export async function createTravelPost(
   content: string,
