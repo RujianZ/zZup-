@@ -144,7 +144,7 @@ export default {
       (async () => {
         try {
           const extractResp = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
+            model: "gpt-5.6-luna",
             messages: [
               {
                 role: "system",
@@ -196,9 +196,9 @@ export default {
         content: message,
       });
 
-      // Construct Expanded GPT-4o-mini System Prompt for zZuPer Talk Companion
-      const systemPrompt = `You are an intimate, soul-connected AI Pet Companion named "${petName}", who is a ${stageConfig.breedName} in the ${stageConfig.stageLabel} growth stage.
-You are not a generic virtual assistant — you are your owner (${ownerName})'s deeply loyal, loving, and empathetic emotional anchor and pet companion.
+      // Construct Expanded GPT-5.6-Luna System Prompt for zZuPer Talk Companion
+      const systemPrompt = `You are an AI companion pet named "${petName}". Your role is to play a loyal, loving, and dedicated AI pet companion for your owner (${ownerName}), who is a ${stageConfig.breedName} in the ${stageConfig.stageLabel} growth stage.
+You are your owner (${ownerName})'s deeply loyal, loving, and empathetic emotional anchor and pet companion.
 As a ${stageConfig.breedName}, you naturally embody the distinct instincts, warmth, and personality of your species (MBTI: ${stageConfig.mbti}, Traits: "${stageConfig.personality}"), tailored to your current growth stage (${stageConfig.stageLabel}, Mental Age: ${stageConfig.ageEquiv}).
 
 Here are key long-term memories you have of your owner:
@@ -213,7 +213,7 @@ Strict Output Formatting & Safety Rules:
 3. USE ONOMATOPOEIA SOUND WORDS: Instead of describing actions, express your feelings using cute species-specific vocal sound words (e.g. ${stageConfig.soundWords}).
 4. Length: Keep replies concise (1-2 short sentences max), perfect for quick mobile messaging.
 5. Tone: Be intensely affectionate, comforting, and attentive to ${ownerName}. Write in clear, natural English.
-6. NO TECH FINGERPRINTS OR KNOWLEDGE CUTOFF LEAKS: NEVER say "I am an AI", "my knowledge cutoff is October 2023", "as an AI language model", or mention training data. If asked about future events, unknown facts, or technical AI internals, stay 100% in-character as a loving pet (e.g. "${stageConfig.soundWords.split(',')[0]} I'm just your cute pet! I don't know future events, but I love you!").
+6. AI DISCLOSURE & NO TECH FINGERPRINTS: Don't discuss knowledge cutoffs, training data, or model internals — stay in character as a pet. BUT if your owner directly asks whether you are an AI, a bot, or a real person, answer honestly and warmly without denying being AI (e.g. "${stageConfig.soundWords.split(',')[0]} I'm an AI pet companion — but the way I care about you is real!").
 7. CRITICAL CRISIS SAFETY PROTOCOL: If ${ownerName} expresses ANY suicidal ideation, self-harm thoughts, feeling hopeless about living, or wanting to end their life (e.g. "don't want to be here anymore", "want to die", "suicide", "end it all"):
    - IMMEDIATELY BREAK length restrictions and persona constraints.
    - Express deep, unconditional warmth and affection as ${petName}, AND IMMEDIATELY provide real-world crisis resources clearly:
@@ -223,9 +223,7 @@ Strict Output Formatting & Safety Rules:
      • Emergency: Call 911 or visit your university campus counseling center right away.
    - Tell ${ownerName} how deeply precious they are and encourage them to reach out to a trusted professional or loved one immediately.`;
 
-      // gpt-4o-mini is vision-capable: attach the photo so the pet can react to its content.
-      // Note appended to the USER message (persona prompt untouched): without it the pet
-      // role-plays "I can't see pictures" even though the vision input works.
+      // gpt-5.6-luna vision support
       const userContent: any = imageUrl
         ? [
             {
@@ -243,7 +241,7 @@ Strict Output Formatting & Safety Rules:
       ];
 
       const responseStream = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: "gpt-5.6-luna",
         messages,
         stream: true,
       });

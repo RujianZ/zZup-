@@ -64,11 +64,11 @@ export default {
         const duration = (duration_hours === 24) ? 24 : 6;
         let textToEmbed = content.trim();
 
-        // If image_url is provided, call GPT-4o-mini Vision to extract multimodal image features
+        // If image_url is provided, call GPT-5.6-Luna Vision to extract multimodal image features
         if (image_url && typeof image_url === "string" && image_url.startsWith("http")) {
           try {
             const visionResp = await openai.chat.completions.create({
-              model: "gpt-4o-mini",
+              model: "gpt-5.6-luna",
               messages: [
                 {
                   role: "user",
