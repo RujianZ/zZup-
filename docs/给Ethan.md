@@ -28,31 +28,60 @@ select public.get_supabase_internal_url();
 
 改成完整的公网 functions URL 即可。这条从 8-15 报到现在,状态未变。
 
-### 2. `agent-chat` 读 `pet_memories.memory_text`,这一列不存在
+### 2. 🔴 `max_tokens` 让宠物记忆 **100% 写不进去** —— 一行的事
+
+**这条和「宠物记忆是空的」是同一个 bug,不是两件事。** 有线上日志实锤。
+
+`pet-chat` 里那段异步记忆提取(v9 的 `index.ts:197`)**每一次调用都 400**:
+
+```
+Async memory extraction error: Error: 400
+Unsupported parameter: 'max_tokens' is not supported with this model.
+Use 'max_completion_tokens' instead.
+    at async file:///var/tmp/sb-compile-edge-runtime/pet-chat/index.ts:197:31
+```
+
+2026-08-18 一天之内查到 **9 次**,每次宠物聊天都有一次,**无一例外**。
+
+所以:
+- **你的提取管道其实是建好的** —— 提取 → embedding → 写 `pet_memories`,代码完整
+- 但它从来没成功过一次,`select count(*) from pet_memories` = **0**
+- 「宠物记得你说过的话」这个功能**上线以来一次都没生效**,
+  而每条消息仍然在为检索它付 embedding 的钱
+
+**⚠️ 注意这不是"截断",是"整个请求被拒"。** 我一开始判断成
+"reasoning token 吃掉了预算导致回复被截断" —— **错了**。
+这个模型直接不接受 `max_tokens` 这个参数,返回 400,函数里被 catch 掉只留一条日志。
+
+**要改的 5 处:**
+
+```
+pet-chat:155        ← 已实锤在 400
+agent-chat:160
+agent-chat:179
+agent-chat:319
+travel-mode:81
+```
+
+后 4 处**没有日志不代表没问题** —— 是因为这段时间它们根本没被调用过
+(`agent-chat` 因为下面第 1 条的 `kong:8000` 打不通;`travel-mode` 要发带图 Roam 才触发)。
+同一个模型、同一个参数,**几乎肯定是同样的 400**。
+
+改法:`max_tokens` → `max_completion_tokens`。顺带把值调大一点
+——记忆提取那处现在是 60,对带推理的模型偏紧。
+
+### 3. 🔴 `agent-chat` 读 `pet_memories.memory_text`,这一列不存在
 
 ```sql
 -- 2026-08-18 实测，pet_memories 的全部列：
 id, user_id, summary, embedding, created_at
 ```
 
-**列名是 `summary`,不是 `memory_text`。** 读一个不存在的列会让整段记忆检索静默失败。
+**列名是 `summary`,不是 `memory_text`。** `pet-chat` 里读的是对的
+(走 `match_pet_memories` RPC 然后取 `m.summary`),**只有 `agent-chat` 这一处写错了**。
 
-顺带:`pet_memories` 现在是 **0 行** —— 写入路径也是断的。
-所以"宠物记得你说过的话"这个功能**从来没有真正生效过**,
-但每条消息仍然在为检索它付费。这两件事要一起看。
-
-### 3. 5 处 `max_tokens` 必须改成 `max_completion_tokens`
-
-```
-pet-chat:155
-agent-chat:160 / 179 / 319
-travel-mode:81
-```
-
-而且**数值要往上调**:推理型模型的 reasoning token 也计入这个预算,
-照旧值可能整段回复被截断 —— 表现是"宠物说到一半没了"。
-
----
+修好第 2 条之后表里才会开始有数据,那时候这一处的错才会显出来 ——
+**两条要一起修,只修一条看不出效果。**
 
 ## 🟠 P1 —— 卖点是断的
 
@@ -102,10 +131,9 @@ grep -ro "images.unsplash.com" app lib components | wc -l   # → 41
 
 ## 📋 需要你办的(不是代码)
 
-- **OpenAI DPA 未签** —— 账号在你名下。Customer 填 `zZuP!, Inc.`。
-  隐私政策里已经写了我们和 OpenAI 的关系,DPA 是那句话的凭证。
-
----
+- ~~OpenAI DPA 未签~~ ✅ **Joe 2026-08-18 确认已解决** —— 账号已转公司邮箱 +
+  公司银行卡,API 客户走标准商务条款时 DPA 自动生效。
+  **建议导一份 PDF 存档** —— 填苹果隐私标签、以后谈校园合作时手上要有那张纸。
 
 ## ✅ 已经解决的(不用再看)
 
