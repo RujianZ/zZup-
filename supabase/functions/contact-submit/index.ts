@@ -77,8 +77,8 @@ function shell(title: string, inner: string) {
     <p style="margin:0;font-size:12px;line-height:1.6;color:#8A939B;">
       zZuP!, Inc., a Delaware corporation — one account, two selves.<br>
       251 Little Falls Drive, Wilmington, New Castle County, DE 19808<br>
-      <a href="https://zzup.org/privacy.html" style="color:#10B981;">Privacy</a> ·
-      <a href="https://zzup.org/terms.html" style="color:#10B981;">Terms</a>
+      <a href="https://zzup.org/privacy" style="color:#10B981;">Privacy</a> ·
+      <a href="https://zzup.org/terms" style="color:#10B981;">Terms</a>
     </p>
   </div>
 </div>`;
@@ -150,9 +150,21 @@ Deno.serve(async (req: Request) => {
   const urgent = URGENT.includes(category);
 
   // ── 2. Discord ─────────────────────────────────────────────────────────
-  if (DISCORD_URL) {
+  //
+  // ⚠️ 必须查 resp.ok。fetch 只在**网络层**失败时抛 —— webhook 返回
+  // 401（密钥被换）/ 404（webhook 被删）/ 429（限流）全都是正常响应，
+  // 不抛异常。只 catch 的话这些情况一条日志都不会留，函数照返 200，
+  // 而我们会以为通知发出去了。后果是某天 webhook 失效，我们不知道自己在漏举报。
+  // 同项目的 ops-notify 就是这么写的，照它来。
+  //
+  // Discord 失败**不阻断请求** —— 库已经落了，那才是审计证据；
+  // 通知只是让我们更快看到。但失败必须留下痕迹。
+  let discordOk = false;
+  if (!DISCORD_URL) {
+    console.error("DISCORD_OPS_WEBHOOK not configured — 表单通知不会送达", row.id);
+  } else {
     try {
-      await fetch(DISCORD_URL, {
+      const resp = await fetch(DISCORD_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -170,7 +182,13 @@ Deno.serve(async (req: Request) => {
           }],
         }),
       });
-    } catch (e) { console.error("discord failed", String(e)); }
+      discordOk = resp.ok;
+      if (!resp.ok) {
+        console.error("Discord rejected:", resp.status, (await resp.text()).slice(0, 500), "contact id:", row.id);
+      }
+    } catch (e) {
+      console.error("Discord unreachable:", String(e), "contact id:", row.id);
+    }
   }
 
   // ── 3. 通知我们 ────────────────────────────────────────────────────────
@@ -207,5 +225,5 @@ Deno.serve(async (req: Request) => {
       .eq("id", row.id);
   }
 
-  return json({ ok: true, id: row.id, acknowledged: acked }, 200, origin);
+  return json({ ok: true, id: row.id, acknowledged: acked, notified: discordOk }, 200, origin);
 });
