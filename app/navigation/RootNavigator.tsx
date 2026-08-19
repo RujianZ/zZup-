@@ -13,6 +13,11 @@ import RegisterScreen from '../screens/auth/RegisterScreen';
 import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
 
+// Legal
+import ConsentScreen from '../screens/legal/ConsentScreen';
+import LegalDocScreen from '../screens/legal/LegalDocScreen';
+import { needsConsent } from '../../lib/api/legal';
+
 // Tabs
 import InboxScreen from '../screens/chat/InboxScreen';
 import ProfileScreen from '../screens/tabs/ProfileScreen';
@@ -118,6 +123,10 @@ function AppStack() {
       <Stack.Screen name="NearbyTravel"      component={NearbyTravelScreen}      />
       <Stack.Screen name="AgentChat"         component={AgentChatScreen}         />
       <Stack.Screen name="Report"            component={ReportScreen}            />
+
+      {/* 同一个阅读器也挂在主栈上：苹果 5.1.1 要求隐私政策在 App 内可访问，
+          不能只在注册那一刻出现一次。Profile 里的入口指这里。 */}
+      <Stack.Screen name="LegalDoc"          component={LegalDocScreen}          options={{ presentation: 'modal' }} />
     </Stack.Navigator>
   );
 }
@@ -147,6 +156,21 @@ export default function RootNavigator() {
   // `!profile?.real_name`，把老用户丢进引导页 —— 也就是启动时闪一下 onboarding
   // 再跳进主界面的那个 bug。
   if (session.user.id !== profileSettledFor) return <Splash offline={authError} />;
+
+  // 条款同意排在引导**前面**：Google Play 的 UGC 政策要的是「产生任何 UGC 之前
+  // 先接受条款」，而引导那两步已经在写 profile 了。老用户和文书改版走同一道门
+  // （判据是版本号对不对得上，不是「新用户」），所以它不能塞进 OnboardingScreen。
+  //
+  // ⚠️ 这一层只是路由。真正拦人的是迁移 100 那四个 BEFORE INSERT 触发器 ——
+  // 没有同意记录，改客户端或直接打 REST 接口都写不进任何一张表。
+  if (needsConsent(profile)) {
+    return (
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Consent" component={ConsentScreen} />
+        <Stack.Screen name="LegalDoc" component={LegalDocScreen} options={{ presentation: 'modal' }} />
+      </Stack.Navigator>
+    );
+  }
 
   if (!profile?.real_name) {
     return (

@@ -44,6 +44,13 @@ export interface Profile {
   notify_friend: boolean | null
   notify_dm: boolean | null
   notify_group: boolean | null
+  // 条款同意（迁移 100）。时间戳是服务端盖的，三个版本号决定这条记录代表什么。
+  // 只有 get_my_profile 会带回来；null = 从未同意过，这个账号发不出任何内容
+  // （四张表上的 BEFORE INSERT 触发器挡着）。
+  terms_accepted_at: string | null
+  terms_version: string | null
+  guidelines_version: string | null
+  privacy_version: string | null
   // 生命周期
   onboarded: boolean
   deleted_at: string | null
