@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { searchUsers, sendFriendRequest, UserSearchResult } from '../../../lib/api/friends';
 import { useTheme } from '../../context/ThemeContext';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
+import HostAvatar from '../../components/HostAvatar';
 
 export default function UserSearchScreen() {
   const navigation = useNavigation<any>();
@@ -52,13 +53,7 @@ export default function UserSearchScreen() {
 
   const renderItem = ({ item }: { item: UserSearchResult & { friendship_status?: string } }) => (
     <TouchableOpacity style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.border }]} onPress={() => navigation.navigate('OtherProfile', { userId: item.id })} activeOpacity={0.7}>
-      {item.avatar_url ? (
-        <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
-      ) : (
-        <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>
-          <Ionicons name="person" size={24} color={colors.brand} />
-        </View>
-      )}
+      <HostAvatar url={item.avatar_url} size={48} />
 
       <View style={styles.info}>
         <Text style={[styles.name, { color: colors.text }]}>{item.real_name}</Text>

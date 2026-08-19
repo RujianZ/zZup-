@@ -16,6 +16,7 @@ import {
 } from '../../../lib/api/friends';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 import PetAvatar from '../../components/PetAvatar';
+import HostAvatar from '../../components/HostAvatar';
 import { useTheme } from '../../context/ThemeContext';
 
 export default function OtherProfileScreen() {
@@ -237,13 +238,7 @@ export default function OtherProfileScreen() {
               style={styles.ring}
             >
               <View style={[styles.ringInner, { backgroundColor: colors.bg }]}>
-                {imageUrl ? (
-                  <Image source={{ uri: imageUrl }} style={styles.avatar} />
-                ) : (
-                  <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>
-                    <Ionicons name="person" size={48} color={colors.brand} />
-                  </View>
-                )}
+                <HostAvatar url={imageUrl} size={96} />
               </View>
             </LinearGradient>
 

@@ -11,6 +11,7 @@ import { listConversations, ConversationListItem } from '../../../lib/api/conver
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import HostAvatar from '../../components/HostAvatar';
 
 export default function FriendsScreen() {
   const navigation = useNavigation<any>();
@@ -59,13 +60,7 @@ export default function FriendsScreen() {
       onPress={() => navigation.navigate('OtherProfile', { userId: item.id })}
       activeOpacity={0.7}
     >
-      {item.avatar_url ? (
-        <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
-      ) : (
-        <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>
-          <Ionicons name="person" size={24} color={colors.brand} />
-        </View>
-      )}
+      <HostAvatar url={item.avatar_url} size={48} />
 
       <View style={styles.cardInfo}>
         <Text style={[styles.cardName, { color: colors.text }]} numberOfLines={1}>{item.real_name}</Text>
