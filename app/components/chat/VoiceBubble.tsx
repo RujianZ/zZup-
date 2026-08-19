@@ -27,20 +27,28 @@ export default function VoiceBubble({
 
   const total = sec ?? status.duration ?? 0;
   const played = status.currentTime ?? 0;
-  const progress = total > 0 ? Math.min(1, played / total) : 0;
+  // 播完之后进度条要归零、时间回到总长 —— 停在满格 + 0:00 看着像"这条已经用掉了"，
+  // 而语音是可以反复听的
+  const done = status.didJustFinish;
+  const progress = done || total <= 0 ? 0 : Math.min(1, played / total);
 
-  const toggle = () => {
+  const toggle = async () => {
     if (!url) return;
     if (status.playing) {
       player.pause();
-    } else {
-      // 放完再按应该从头放，而不是卡在结尾
-      if (total > 0 && played >= total - 0.15) player.seekTo(0);
-      player.play();
+      return;
     }
+    // 放完再按要能从头放。判「播完了」必须用**播放器自己的** duration，
+    // 不能用录制时记下的 sec —— 那个是取整的（35），真实时长可能是 34.8，
+    // 拿它当基准的话「到结尾」永远判不成立，于是从不 seek，再点就是空操作。
+    // seekTo 是异步的，必须 await 完再 play，否则又会在旧位置播。
+    const dur = status.duration ?? 0;
+    const atEnd = status.didJustFinish || (dur > 0 && played >= dur - 0.25);
+    if (atEnd) await player.seekTo(0);
+    player.play();
   };
 
-  const label = fmt(status.playing || played > 0 ? Math.max(0, total - played) : total);
+  const label = fmt(done || played === 0 ? total : Math.max(0, total - played));
 
   return (
     <Pressable onPress={toggle} style={s.row} hitSlop={6}>

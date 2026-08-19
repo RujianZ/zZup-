@@ -694,7 +694,8 @@ export default function ChatScreen() {
                     url={mediaUrls[a.path]}
                     sec={a.sec}
                     tint={isMe ? '#FFFFFF' : colors.brand}
-                    trackColor={isMe ? 'rgba(255,255,255,0.3)' : colors.cardMutedBg}
+                    // 别人那侧的气泡本身就是浅绿，cardMutedBg 压上去几乎看不见轨道
+                    trackColor={isMe ? 'rgba(255,255,255,0.3)' : colors.border}
                   />
                 </TouchableOpacity>
               ))}
