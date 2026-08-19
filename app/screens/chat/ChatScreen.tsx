@@ -26,6 +26,7 @@ import IdentityToggle from '../../components/IdentityToggle';
 import PetAvatar from '../../components/PetAvatar';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 import { supabase } from '../../../lib/supabase';
+import { clockTime, dayLabel, isSameDay } from '../../../lib/format/datetime';
 
 const SCREEN_W = Dimensions.get('window').width;
 
@@ -525,12 +526,26 @@ export default function ChatScreen() {
     });
   };
 
-  const renderMessage = ({ item }: { item: Message }) => {
+  const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const isPetAIResponse = isPetTalk && item.identity_mode === 'pet';
     const isMe = !isPetAIResponse && item.is_mine;
     const isPet = item.identity_mode === 'pet';
 
+    // 列表是 inverted 的：index 越大越旧。所以「这条是不是当天第一条」
+    // 要跟 index+1（更旧的那条）比，比出来不同天就在它上面压一条日期横条。
+    // 最旧的那条（没有更旧的了）永远带横条。
+    const older = messages[index + 1];
+    const showDay = !older || !isSameDay(item.created_at, older.created_at);
+
     return (
+      <View>
+        {showDay && (
+          <View style={styles.dayDivider}>
+            <View style={[styles.dayLine, { backgroundColor: colors.border }]} />
+            <Text style={[styles.dayLabel, { color: colors.tertiaryText }]}>{dayLabel(item.created_at)}</Text>
+            <View style={[styles.dayLine, { backgroundColor: colors.border }]} />
+          </View>
+        )}
       <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
         {!isMe && (
           <TouchableOpacity onPress={() => openAuthorProfile(item)} activeOpacity={0.7}>
@@ -629,7 +644,7 @@ export default function ChatScreen() {
           )}
 
           <Text style={[styles.time, { color: colors.tertiaryText }, isMe && { textAlign: 'right' }]}>
-            {formatTime(item.created_at)}
+            {clockTime(item.created_at)}
           </Text>
         </View>
 
@@ -665,6 +680,7 @@ export default function ChatScreen() {
             )}
           </TouchableOpacity>
         )}
+      </View>
       </View>
     );
   };
@@ -1151,6 +1167,17 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginHorizontal: 4,
   },
+  // 分日横条：Today / Yesterday / Saturday / June 15。日期跟设备时区走。
+  dayDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 18,
+    marginBottom: 10,
+    paddingHorizontal: 24,
+  },
+  dayLine: { flex: 1, height: 1 },
+  dayLabel: { fontSize: 11, fontWeight: '600', letterSpacing: 0.4 },
   inputArea: {
     borderTopWidth: 1,
     paddingHorizontal: 16,
