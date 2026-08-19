@@ -27,6 +27,16 @@ import PetAvatar from '../../components/PetAvatar';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 import { supabase } from '../../../lib/supabase';
 import { clockTime, dayLabel, isSameDay } from '../../../lib/format/datetime';
+import {
+  useAudioRecorder, useAudioRecorderState, RecordingPresets,
+  requestRecordingPermissionsAsync, setAudioModeAsync,
+} from 'expo-audio';
+import VoiceBubble from '../../components/chat/VoiceBubble';
+
+/** 语音上限。两分钟够说清一件事，再长该打字了 —— 也省得一条几 MB。 */
+const MAX_VOICE_SEC = 120;
+
+const fmtSec = (t: number) => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
 
 const SCREEN_W = Dimensions.get('window').width;
 
@@ -86,6 +96,13 @@ export default function ChatScreen() {
   const [uploading, setUploading] = useState(false);
   const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});  // storage path -> signed url
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);         // fullscreen image viewer
+
+  // ── 语音 ──
+  // 语音在数据层就是一条 kind:'audio' 的附件（.m4a），复用聊天附件那整套管道：
+  // 私有桶 → 存路径 → 渲染时签名。所以这里只有「录」这一件新事。
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recState = useAudioRecorderState(recorder, 250);
+  const [recording, setRecording] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
   const sendingRef = useRef(false);   // 同步的发送闸门，见 handleSend
@@ -216,9 +233,61 @@ export default function ChatScreen() {
   // ── Attachment pickers (WeChat-style panel) ──
   const currentSendMode = () => ((isDM || isPetTalk) ? 'real' : identityMode) as 'real' | 'pet';
 
+  // ── 语音：开始 / 取消 / 发送 ─────────────────────────────────────────────
+  const startRecording = async () => {
+    const perm = await requestRecordingPermissionsAsync();
+    if (!perm.granted) {
+      showAlert(
+        'Microphone is off',
+        'Allow microphone access in your phone’s settings to send voice messages.',
+        'info',
+      );
+      return;
+    }
+    try {
+      // iOS 默认不允许在静音档下录音/播放，不设这个的话录出来是空的
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      setAttachOpen(false);
+      setRecording(true);
+    } catch (e: any) {
+      showAlert('Could not start recording', e?.message ?? 'Please try again.', 'error');
+    }
+  };
+
+  /** 停下录音机并交出文件。取消和发送都要先走这一步，否则录音机一直占着麦。 */
+  const stopRecording = async (): Promise<{ uri: string; sec: number } | null> => {
+    const sec = Math.round(recState.durationMillis / 1000);
+    try {
+      await recorder.stop();
+    } catch { /* 已经停了就算了 */ }
+    await setAudioModeAsync({ allowsRecording: false });
+    setRecording(false);
+    return recorder.uri ? { uri: recorder.uri, sec } : null;
+  };
+
+  const cancelRecording = async () => { await stopRecording(); };
+
+  const sendRecording = async () => {
+    const rec = await stopRecording();
+    if (!rec) return;
+    // 太短的多半是误触；一秒以内不值得发出去，也省得对方点开听个寂寞
+    if (rec.sec < 1) return;
+    await uploadAndSend(
+      [{ uri: rec.uri, name: `voice_${Date.now()}.m4a`, mime: 'audio/mp4', sec: Math.min(rec.sec, MAX_VOICE_SEC) }],
+      'audio',
+    );
+  };
+
+  // 到时长上限自动发出去，不要让人对着一个不动的计时器发呆
+  useEffect(() => {
+    if (recording && recState.durationMillis >= MAX_VOICE_SEC * 1000) sendRecording();
+  }, [recording, recState.durationMillis]);
+
   const uploadAndSend = async (
-    items: { uri: string; name: string; mime: string; w?: number; h?: number }[],
-    kind: 'image' | 'file',
+    items: { uri: string; name: string; mime: string; w?: number; h?: number; sec?: number }[],
+    kind: 'image' | 'file' | 'audio',
   ) => {
     if (!realConvId || items.length === 0) return;
     setAttachOpen(false);
@@ -232,11 +301,12 @@ export default function ChatScreen() {
           setUploading(false);
           return;
         }
-        attachments.push({ kind, path, name: it.name, mime: it.mime, size, w: it.w, h: it.h });
+        attachments.push({ kind, path, name: it.name, mime: it.mime, size, w: it.w, h: it.h, sec: it.sec });
       }
       // Auto content for conversation-list preview (bubble hides it when attachments exist)
-      const content = kind === 'image'
-        ? `📷 Photo${attachments.length > 1 ? ` ×${attachments.length}` : ''}`
+      const content =
+        kind === 'image' ? `📷 Photo${attachments.length > 1 ? ` ×${attachments.length}` : ''}`
+        : kind === 'audio' ? '🎤 Voice message'
         : `📎 ${attachments[0].name}`;
       const { error } = await sendMessage(realConvId, content, currentSendMode(), undefined, attachments);
       if (error) { showAlert('Send failed', error, 'error'); return; }
@@ -606,6 +676,28 @@ export default function ChatScreen() {
                   })}
                 </View>
               )}
+              {/* Voice messages */}
+              {item.attachments.filter(a => a.kind === 'audio').map((a, idx) => (
+                <TouchableOpacity
+                  key={`a${idx}`}
+                  activeOpacity={1}
+                  delayLongPress={320}
+                  onLongPress={() => setMsgMenu(item)}
+                  style={[
+                    styles.bubble,
+                    isMe
+                      ? { backgroundColor: colors.bubbleMe }
+                      : { backgroundColor: colors.bubbleOther, borderWidth: 1, borderColor: colors.bubbleOtherBorder },
+                  ]}
+                >
+                  <VoiceBubble
+                    url={mediaUrls[a.path]}
+                    sec={a.sec}
+                    tint={isMe ? '#FFFFFF' : colors.brand}
+                    trackColor={isMe ? 'rgba(255,255,255,0.3)' : colors.cardMutedBg}
+                  />
+                </TouchableOpacity>
+              ))}
               {/* File attachments */}
               {item.attachments.filter(a => a.kind === 'file').map((a, idx) => (
                 <TouchableOpacity
@@ -893,6 +985,37 @@ export default function ChatScreen() {
             <IdentityToggle value={identityMode} onChange={setIdentityMode} />
           )}
 
+          {recording ? (
+            /* 录音中：整行换成录音条。不做「按住说话」——手势在这个界面上要和
+               列表滚动、键盘、长按菜单抢事件，出错的方式比省下的那一次点击多。 */
+            <View style={styles.inputRow}>
+              <TouchableOpacity
+                style={[styles.plusBtn, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+                onPress={cancelRecording}
+                activeOpacity={0.7}
+              >
+                <Feather name="trash-2" size={20} color={colors.subText} />
+              </TouchableOpacity>
+
+              <View style={[styles.recBar, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+                <View style={[styles.recDot, { backgroundColor: '#EF4444' }]} />
+                <Text style={[styles.recTime, { color: colors.text }]}>
+                  {fmtSec(Math.floor(recState.durationMillis / 1000))}
+                </Text>
+                <Text style={[styles.recHint, { color: colors.tertiaryText }]}>
+                  {MAX_VOICE_SEC - Math.floor(recState.durationMillis / 1000)}s left
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.sendBtn, { backgroundColor: colors.brand }]}
+                onPress={sendRecording}
+                activeOpacity={0.8}
+              >
+                <Feather name="arrow-up" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          ) : (
           <View style={styles.inputRow}>
             {/* [+] attachments trigger (like WeChat) */}
             <TouchableOpacity
@@ -921,19 +1044,32 @@ export default function ChatScreen() {
               returnKeyType="send"
               onSubmitEditing={handleSend}
             />
-            <TouchableOpacity
-              style={[styles.sendBtn, { backgroundColor: colors.brand }, (!input.trim() || sending) && styles.sendDisabled]}
-              onPress={handleSend}
-              disabled={!input.trim() || sending}
-              activeOpacity={0.8}
-            >
-              {sending ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Feather name="arrow-up" size={20} color="#FFFFFF" />
-              )}
-            </TouchableOpacity>
+            {/* 输入框空着就是麦克风，有字就是发送 —— 一个位置一个意思 */}
+            {input.trim() || sending ? (
+              <TouchableOpacity
+                style={[styles.sendBtn, { backgroundColor: colors.brand }, sending && styles.sendDisabled]}
+                onPress={handleSend}
+                disabled={sending}
+                activeOpacity={0.8}
+              >
+                {sending ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Feather name="arrow-up" size={20} color="#FFFFFF" />
+                )}
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.sendBtn, { backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.border }]}
+                onPress={startRecording}
+                disabled={uploading}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="mic-outline" size={21} color={colors.brand} />
+              </TouchableOpacity>
+            )}
           </View>
+          )}
 
           {/* WeChat-style attach panel: Photos / Camera / File */}
           {attachOpen && (
@@ -1167,6 +1303,21 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginHorizontal: 4,
   },
+  // 录音条：占的是输入框那一格，所以尺寸跟着它走
+  recBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+  },
+  recDot: { width: 8, height: 8, borderRadius: 4 },
+  recTime: { fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  recHint: { fontSize: 12, marginLeft: 'auto' },
+
   // 分日横条：Today / Yesterday / Saturday / June 15。日期跟设备时区走。
   dayDivider: {
     flexDirection: 'row',

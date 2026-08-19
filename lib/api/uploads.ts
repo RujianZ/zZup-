@@ -8,7 +8,7 @@ import { supabase } from '../supabase'
 import * as FileSystem from 'expo-file-system/legacy'
 import * as ImageManipulator from 'expo-image-manipulator'
 
-export type AttachmentKind = 'image' | 'file'
+export type AttachmentKind = 'image' | 'file' | 'audio'
 
 export interface Attachment {
   kind: AttachmentKind
@@ -18,6 +18,7 @@ export interface Attachment {
   size: number        // bytes
   w?: number          // image width (optional, for bubble aspect ratio)
   h?: number
+  sec?: number        // 语音时长（秒）。录的时候就知道，存下来省得播放前先解码
 }
 
 const BUCKET = 'chat-media'
@@ -49,6 +50,9 @@ export const MAX_IMAGE_BYTES = 20 * 1024 * 1024
 export const ALLOWED_CHAT_EXTS = [
   // images
   'jpg', 'jpeg', 'png', 'webp', 'gif',
+  // 语音消息（expo-audio 两端都产 m4a/AAC）。只加这一个 —— 我们自己不产出
+  // mp3/wav，多一个扩展名就多一份能传进来的东西。服务端强制在迁移 102。
+  'm4a',
   // documents
   'pdf', 'docx', 'xlsx', 'pptx', 'txt', 'md', 'csv', 'rtf',
   // legacy Office — professors still send these
