@@ -230,15 +230,15 @@ The Service is built so that contact is consensual: friend requests require a re
   privacy: {
     key: 'privacy',
     title: "Privacy Notice",
-    version: "0.5",
-    updated: "AUG 18, 2026",
+    version: "0.6",
+    updated: "AUG 19, 2026",
     body: `In this notice, "we" and "us" mean **zZuP!, Inc.**
 
 ---
 
 ## THE SHORT VERSION
 
-- We collect your personal data: your account, your profile, the things you write, and the images you send.
+- We collect your personal data: your account, your profile, the things you write, and the images and voice messages you send.
 - Your pet is an AI. What you say to it — and photos you send it — go to **OpenAI** to generate a reply. Your pet also keeps written notes about you ("pet memories"), which are personal data.
 - **"Anonymous" means one thing here:** in places like group chats and zZuPer Pulse, you can act through your pet instead of your name. **We still know who you are.** That is deliberate — it is what lets us meet our legal obligations and act when someone is harmed.
 - **You cannot delete a message once you have sent it.** You carry the consequences of what you send, including being reported, losing your account, or facing a legal claim.
@@ -272,14 +272,16 @@ Privacy questions, rights requests and complaints: <admin@zzup.org>.
 ### What you write and send
 
 - **Messages** — content, which identity you sent them as, timestamps, and any attachments.
+- **Voice messages** — in one-to-one chats and Packs you can record and send audio. We store the recording. It is not transcribed, and it is not sent to any AI provider. Your pet cannot hear it, and Pulse does not accept it.
 - **Roam notes** — the text or image you hand your pet before sending it out, plus who has already seen it, so the same note is never shown to the same person twice.
 - **Replies** left on other people's roaming pets.
 - **Pulse intent** — the short "what I'm up for right now" line you type before matching.
 
-### Images and files
+### Images, files and voice messages
 
 - **Before an image leaves your phone we re-encode it**, which strips EXIF metadata including GPS coordinates, and cap it at 2048px.
-- **Chat attachments** live in private storage. They are readable only by members of that conversation, and the app fetches them through links that expire after one hour, so a leaked URL stops working.
+- **Voice messages are capped at two minutes** and are stored as recorded. Like every other message, once sent they cannot be deleted.
+- **Chat attachments** — images, files and voice messages — live in private storage. They are readable only by members of that conversation, and the app fetches them through links that expire after one hour, so a leaked URL stops working.
 - **You do not upload a profile picture.** Your avatar is chosen from the looks and decorations we provide.
 
 ### Derived data
@@ -342,7 +344,7 @@ Mapped to the statutory categories California uses:
 | Identifiers | Yes — name, email, zZuP ID, account ID, IP address in server logs |
 | Protected classification characteristics | Yes, if you fill them in — date of birth, gender, nationality |
 | Education information | Yes — the university you type in, and a student email if you add one |
-| Audio, visual or similar information | Yes — images you send |
+| Audio, visual or similar information | Yes — images and voice messages you send |
 | Internet or network activity | Only operational server logs. No browsing history, no cross-site tracking |
 | Inferences drawn to create a profile | **Yes — pet memories and interest vectors** |
 | Geolocation data | No |

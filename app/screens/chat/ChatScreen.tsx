@@ -1045,8 +1045,11 @@ export default function ChatScreen() {
               returnKeyType="send"
               onSubmitEditing={handleSend}
             />
-            {/* 输入框空着就是麦克风，有字就是发送 —— 一个位置一个意思 */}
-            {input.trim() || sending ? (
+            {/* 输入框空着就是麦克风，有字就是发送 —— 一个位置一个意思。
+                ⚠️ zZuPer Talk 里不给麦克风：宠物**听不了**语音（pet-chat 只收
+                文字和图片，我们不做转写），给了按钮就是让人对着一个不会回应的
+                东西说话。Pulse（AgentChatScreen）本来就没有这个入口。 */}
+            {input.trim() || sending || isPetTalk ? (
               <TouchableOpacity
                 style={[styles.sendBtn, { backgroundColor: colors.brand }, sending && styles.sendDisabled]}
                 onPress={handleSend}
