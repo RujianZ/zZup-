@@ -111,7 +111,10 @@ export default function GroupMembersScreen() {
       return;
     }
     if (item.member_identity === 'pet') return;
-    navigation.navigate('OtherProfile', { userId: item.account_id });
+    // 带上来源群：同群的人即使还不是好友也能直接私聊（迁移 101）。
+    // 这个参数只决定**界面给不给按钮**，真正的判定在 create_dm 里查同群关系，
+    // 客户端伪造这个参数没用。
+    navigation.navigate('OtherProfile', { userId: item.account_id, fromPackId: groupId });
   };
 
   const renderItem = ({ item }: { item: ConversationMember }) => {

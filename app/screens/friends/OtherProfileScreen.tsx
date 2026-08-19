@@ -21,7 +21,9 @@ import { useTheme } from '../../context/ThemeContext';
 export default function OtherProfileScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { userId } = route.params;
+  // fromPackId：从群成员列表点进来的。有它才给「不是好友也能私聊」那个入口 ——
+  // 判定在服务端（create_dm 查同群关系），这里只管界面上要不要显示。
+  const { userId, fromPackId } = route.params;
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 
@@ -252,9 +254,22 @@ export default function OtherProfileScreen() {
             )}
           </View>
 
-          {/* Single Action Button (Message) */}
           <View style={styles.actionSection}>
             {renderAction()}
+
+            {/* 同群但还不是好友：加好友之外，也可以直接开一个私聊。
+                对方把「Allow stranger DMs」关掉的话，create_dm 会拒，
+                拒绝原因原样显示给用户（不猜、不静默）。 */}
+            {!!fromPackId && status !== 'accepted' && status !== 'blocked' && !actionLoading && (
+              <TouchableOpacity
+                style={[ghostBtn, { marginTop: 10 }]}
+                onPress={handleSendDM}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.text} />
+                <Text style={[styles.ghostBtnText, { color: colors.text }]}>Message</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Bio Card */}
