@@ -175,6 +175,11 @@ export default function ProfileScreen() {
     { icon: 'shirt-outline', label: 'Closet', onPress: openCloset, danger: false },
     { icon: 'link-outline', label: 'Unlink account', onPress: handleUnlink, danger: false },
     { icon: 'flag-outline', label: 'Report a problem', onPress: () => navigation.navigate('Report'), danger: false },
+    // 苹果 5.1.1 要求隐私政策在 App 内可访问 —— 不能只在注册那一刻出现一次。
+    // 指的是同一个阅读器（app/screens/legal/LegalDocScreen），正文是打包进来的。
+    { icon: 'document-text-outline', label: 'Terms of Service', onPress: () => navigation.navigate('LegalDoc', { doc: 'terms' }), danger: false },
+    { icon: 'people-outline', label: 'Community Guidelines', onPress: () => navigation.navigate('LegalDoc', { doc: 'guidelines' }), danger: false },
+    { icon: 'shield-outline', label: 'Privacy Notice', onPress: () => navigation.navigate('LegalDoc', { doc: 'privacy' }), danger: false },
     { icon: 'log-out-outline', label: 'Sign out', onPress: handleLogout, danger: false },
     { icon: 'trash-outline', label: 'Delete account', onPress: confirmDeleteAccount, danger: true },
   ];
