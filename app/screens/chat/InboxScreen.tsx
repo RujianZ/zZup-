@@ -25,6 +25,7 @@ import { getUnreadCounts } from '../../../lib/api/unread';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import PetAvatar from '../../components/PetAvatar';
+import HostAvatar from '../../components/HostAvatar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../../lib/supabase';
 
@@ -236,12 +237,12 @@ export default function InboxScreen() {
             size={48}
             backgroundColor={colors.cardMutedBg}
           />
-        ) : item.display_avatar ? (
-          <Image source={{ uri: item.display_avatar }} style={styles.avatar} />
         ) : (
-          <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>
-            <Ionicons name={isDM ? 'person' : 'people'} size={24} color={colors.brand} />
-          </View>
+          <HostAvatar
+            url={item.display_avatar}
+            size={48}
+            backgroundColor={colors.cardMutedBg}
+          />
         )}
 
         <View style={styles.chatInfo}>

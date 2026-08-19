@@ -10,6 +10,7 @@ import {
 } from '../../../lib/api/friends';
 import { useTheme } from '../../context/ThemeContext';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
+import HostAvatar from '../../components/HostAvatar';
 
 export default function FriendRequestsScreen() {
   const navigation = useNavigation<any>();
@@ -69,13 +70,7 @@ export default function FriendRequestsScreen() {
 
   const renderReceived = ({ item }: { item: FriendRequest }) => (
     <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
-      {item.avatar_url ? (
-        <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
-      ) : (
-        <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>
-          <Ionicons name="person" size={24} color={colors.brand} />
-        </View>
-      )}
+      <HostAvatar url={item.avatar_url} size={48} />
       <View style={styles.info}>
         <Text style={[styles.name, { color: colors.text }]}>{item.real_name ?? 'User'}</Text>
         <Text style={[styles.sub, { color: colors.subText }]}>{item.university || 'zZuP! Member'}</Text>
@@ -94,13 +89,7 @@ export default function FriendRequestsScreen() {
 
   const renderSent = ({ item }: { item: FriendRequest }) => (
     <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
-      {item.avatar_url ? (
-        <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
-      ) : (
-        <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>
-          <Ionicons name="person" size={24} color={colors.brand} />
-        </View>
-      )}
+      <HostAvatar url={item.avatar_url} size={48} />
       <View style={styles.info}>
         <Text style={[styles.name, { color: colors.text }]}>{item.real_name ?? 'User'}</Text>
         <Text style={[styles.sub, { color: colors.subText }]}>Pending approval</Text>

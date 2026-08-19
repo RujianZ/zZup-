@@ -12,6 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 import PetAvatar from '../../components/PetAvatar';
+import HostAvatar from '../../components/HostAvatar';
 
 export default function GroupMembersScreen() {
   const navigation = useNavigation<any>();
@@ -138,12 +139,12 @@ export default function GroupMembersScreen() {
             size={48}
             backgroundColor={colors.cardMutedBg}
           />
-        ) : item.display_avatar ? (
-          <Image source={{ uri: item.display_avatar }} style={styles.avatar} />
         ) : (
-          <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>
-            <Ionicons name="person" size={24} color={colors.brand} />
-          </View>
+          <HostAvatar
+            url={item.display_avatar}
+            size={48}
+            backgroundColor={colors.cardMutedBg}
+          />
         )}
 
         <View style={styles.info}>

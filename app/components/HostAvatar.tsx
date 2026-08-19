@@ -6,17 +6,21 @@ import { AvatarHost } from '../../assets/avatar';
 /**
  * Universal Host/User Avatar renderer.
  * Automatically handles multi-layer AvatarHost JSON configs, external HTTP image URLs,
- * and fallback default icons.
+ * and fallback default icons with clean circular shell styling.
  */
 export default function HostAvatar({
   url,
   size = 40,
   backgroundColor = '#E5E7EB',
+  borderColor,
+  borderWidth = 0,
   style,
 }: {
   url?: string | null;
   size?: number;
   backgroundColor?: string;
+  borderColor?: string;
+  borderWidth?: number;
   style?: StyleProp<ViewStyle>;
 }) {
   const isCustomLayer = !!(url && url.trim().startsWith('{') && url.trim().endsWith('}'));
@@ -30,6 +34,8 @@ export default function HostAvatar({
       justifyContent: 'center',
       overflow: 'hidden',
       backgroundColor,
+      borderColor,
+      borderWidth,
     },
     style,
   ];
@@ -37,7 +43,7 @@ export default function HostAvatar({
   if (isCustomLayer) {
     return (
       <View style={shell}>
-        <AvatarHost config={url} size={Math.round(size * 0.9)} />
+        <AvatarHost config={url} size={Math.round(size * 1.0)} />
       </View>
     );
   }
@@ -53,7 +59,7 @@ export default function HostAvatar({
   // Fallback to default avatar layers
   return (
     <View style={shell}>
-      <AvatarHost size={Math.round(size * 0.9)} />
+      <AvatarHost size={Math.round(size * 1.0)} />
     </View>
   );
 }

@@ -24,6 +24,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import IdentityToggle from '../../components/IdentityToggle';
 import PetAvatar from '../../components/PetAvatar';
+import HostAvatar from '../../components/HostAvatar';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 import { supabase } from '../../../lib/supabase';
 import { clockTime, dayLabel, isSameDay } from '../../../lib/format/datetime';
@@ -630,12 +631,14 @@ export default function ChatScreen() {
                 borderColor={colors.borderBrand}
                 borderWidth={1.5}
               />
-            ) : item.author_avatar_url ? (
-              <Image source={{ uri: item.author_avatar_url }} style={styles.peerAvatar} />
             ) : (
-              <View style={[styles.peerAvatarFallback, { backgroundColor: colors.cardMutedBg, borderColor: colors.borderBrand, borderWidth: 1.5 }]}>
-                <Ionicons name="person" size={16} color={colors.brand} />
-              </View>
+              <HostAvatar
+                url={item.author_avatar_url}
+                size={36}
+                backgroundColor={colors.cardMutedBg}
+                borderColor={colors.borderBrand}
+                borderWidth={1.5}
+              />
             )}
           </TouchableOpacity>
         )}
@@ -763,13 +766,13 @@ export default function ChatScreen() {
                 borderWidth={1.5}
               />
             ) : (
-              profile?.avatar_url ? (
-                <Image source={{ uri: profile.avatar_url }} style={[styles.myAvatar, { borderColor: colors.brand }]} />
-              ) : (
-                <View style={[styles.myRealAvatarFallback, { backgroundColor: colors.brand }]}>
-                  <Ionicons name="person" size={14} color="#FFFFFF" />
-                </View>
-              )
+              <HostAvatar
+                url={profile?.avatar_url}
+                size={36}
+                backgroundColor={colors.cardMutedBg}
+                borderColor={colors.brand}
+                borderWidth={1.5}
+              />
             )}
           </TouchableOpacity>
         )}
