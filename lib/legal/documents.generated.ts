@@ -149,7 +149,10 @@ zZuP! is a place to meet people. Approach it that way. Talk to others as you wou
 
 The following result in immediate removal and, where applicable, a report to the authorities:
 
-- any sexual content involving minors;
+- any sexual content involving minors, in any form — image, video, drawing, text, or roleplay, and whether the depiction is of a real child or generated;
+- sexualising a minor, including describing, requesting, or soliciting such content;
+- grooming — building a relationship with a minor for the purpose of sexual exploitation;
+- sextortion — threatening to release intimate material in order to obtain more of it, money, or compliance;
 - credible threats of violence, or encouragement of self-harm;
 - doxxing — publishing another person's private information, including their address, schedule, or the identity behind a pet, without consent;
 - sexual harassment, including unsolicited sexual content;
@@ -180,8 +183,8 @@ The Service is built so that contact is consensual: friend requests require a re
   guidelines: {
     key: 'guidelines',
     title: "Community Guidelines",
-    version: "0.3",
-    updated: "AUG 17, 2026",
+    version: "0.4",
+    updated: "AUG 20, 2026",
     body: `VERSION 0.3 · LAST UPDATED AUG 17, 2026
 
 These Guidelines form part of the Terms of Service. They apply to **both of your identities**. A pet identity is a second face on the same person, not a separate account and not an exemption. A violation carries the same consequences regardless of which identity committed it.
@@ -200,7 +203,10 @@ zZuP! is a place to meet people. Approach it that way. Talk to others as you wou
 
 The following result in immediate removal and, where applicable, a report to the authorities:
 
-- any sexual content involving minors;
+- any sexual content involving minors, in any form — image, video, drawing, text, or roleplay, and whether the depiction is of a real child or generated;
+- sexualising a minor, including describing, requesting, or soliciting such content;
+- grooming — building a relationship with a minor for the purpose of sexual exploitation;
+- sextortion — threatening to release intimate material in order to obtain more of it, money, or compliance;
 - credible threats of violence, or encouragement of self-harm;
 - doxxing — publishing another person's private information, including their address, schedule, or the identity behind a pet, without consent;
 - sexual harassment, including unsolicited sexual content;

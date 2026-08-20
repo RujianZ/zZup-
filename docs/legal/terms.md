@@ -134,7 +134,10 @@ zZuP! is a place to meet people. Approach it that way. Talk to others as you wou
 
 The following result in immediate removal and, where applicable, a report to the authorities:
 
-- any sexual content involving minors;
+- any sexual content involving minors, in any form — image, video, drawing, text, or roleplay, and whether the depiction is of a real child or generated;
+- sexualising a minor, including describing, requesting, or soliciting such content;
+- grooming — building a relationship with a minor for the purpose of sexual exploitation;
+- sextortion — threatening to release intimate material in order to obtain more of it, money, or compliance;
 - credible threats of violence, or encouragement of self-harm;
 - doxxing — publishing another person's private information, including their address, schedule, or the identity behind a pet, without consent;
 - sexual harassment, including unsolicited sexual content;
