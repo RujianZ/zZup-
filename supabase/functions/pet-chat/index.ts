@@ -92,7 +92,7 @@ export default {
         });
       }
 
-      const openaiKey = Deno.env.get("OPENAI818") || Deno.env.get("OPENAI_API_KEY");
+      const openaiKey = Deno.env.get("openai818") || Deno.env.get("OPENAI_API_KEY");
       if (!openaiKey) {
         console.error("Missing OPENAI_API_KEY environment variable");
         return new Response(JSON.stringify({ error: "API key configuration error" }), {
