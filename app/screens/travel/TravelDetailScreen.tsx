@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme, ThemeColors } from '../../context/ThemeContext';
+import HostAvatar from '../../components/HostAvatar';
 import { StatusBar } from 'expo-status-bar';
 import {
   createTravelComment,
@@ -113,13 +114,8 @@ export default function TravelDetailScreen() {
                 </View>
               )}
               <View style={styles.ownerAvatarWrap}>
-                {post.author_profile?.avatar_url ? (
-                  <Image source={{ uri: post.author_profile.avatar_url }} style={styles.ownerAvatar} />
-                ) : (
-                  <View style={styles.avatarFallbackBlue}>
-                    <Ionicons name="person" size={12} color="#fff" />
-                  </View>
-                )}
+                {/* avatar_url 可能是换装 JSON —— 统一走 HostAvatar */}
+                <HostAvatar url={post.author_profile?.avatar_url} size={20} style={{ borderRadius: 8 }} />
               </View>
             </View>
 
@@ -182,13 +178,7 @@ export default function TravelDetailScreen() {
             comments.map((c) => (
               <View key={c.id} style={styles.commentCard}>
                 <View style={styles.commentHeader}>
-                  {c.author_avatar_url ? (
-                    <Image source={{ uri: c.author_avatar_url }} style={styles.commentAvatar} />
-                  ) : (
-                    <View style={styles.commentAvatarFallback}>
-                      <Ionicons name="paw" size={14} color="#fff" />
-                    </View>
-                  )}
+                  <HostAvatar url={c.author_avatar_url} size={20} style={{ borderRadius: 6 }} />
                   <Text style={styles.commentAuthor}>{c.author_name}</Text>
                   <Text style={styles.commentTime}>
                     {new Date(c.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

@@ -15,6 +15,7 @@ import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
 
 // Legal
 import ConsentScreen from '../screens/legal/ConsentScreen';
+import SuspendedScreen from '../screens/legal/SuspendedScreen';
 import LegalDocScreen from '../screens/legal/LegalDocScreen';
 import { needsConsent } from '../../lib/api/legal';
 
@@ -43,6 +44,7 @@ import TravelDetailScreen from '../screens/travel/TravelDetailScreen';
 import NearbyTravelScreen from '../screens/travel/NearbyTravelScreen';
 import AgentChatScreen from '../screens/chat/AgentChatScreen';
 import ReportScreen from '../screens/settings/ReportScreen';
+import SettingsScreen from '../screens/settings/SettingsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -123,6 +125,7 @@ function AppStack() {
       <Stack.Screen name="NearbyTravel"      component={NearbyTravelScreen}      />
       <Stack.Screen name="AgentChat"         component={AgentChatScreen}         />
       <Stack.Screen name="Report"            component={ReportScreen}            />
+      <Stack.Screen name="Settings"          component={SettingsScreen}          />
 
       {/* 同一个阅读器也挂在主栈上：苹果 5.1.1 要求隐私政策在 App 内可访问，
           不能只在注册那一刻出现一次。Profile 里的入口指这里。 */}
@@ -156,6 +159,32 @@ export default function RootNavigator() {
   // `!profile?.real_name`，把老用户丢进引导页 —— 也就是启动时闪一下 onboarding
   // 再跳进主界面的那个 bug。
   if (session.user.id !== profileSettledFor) return <Splash offline={authError} />;
+
+  // 封禁排在**所有门的最前面**，包括条款同意和引导。
+  //
+  // 顺序是有讲究的：一个被封的人不该被要求先同意条款、再填引导，
+  // 然后才发现自己什么都发不出去。先告诉他发生了什么。
+  //
+  // ⚠️ 这一层只是界面。真正拦人的是迁移 107 挂在 messages / travel_posts /
+  //    travel_comments / match_queue 上的 BEFORE INSERT 触发器 ——
+  //    改客户端或者直接打 REST 接口都写不进任何一张表。
+  //
+  // suspended 到期了就自动放行：这里比时间，跟服务端的
+  // is_account_writable() 用的是同一条判断，不需要定时任务来解封。
+  const suspendedUntil = profile?.suspended_until ? new Date(profile.suspended_until).getTime() : null;
+  const enforced =
+    profile?.account_status === 'banned' ||
+    (profile?.account_status === 'suspended' &&
+      (suspendedUntil === null || suspendedUntil > Date.now()));
+
+  if (enforced) {
+    return (
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Suspended" component={SuspendedScreen} />
+        <Stack.Screen name="LegalDoc" component={LegalDocScreen} options={{ presentation: 'modal' }} />
+      </Stack.Navigator>
+    );
+  }
 
   // 条款同意排在引导**前面**：Google Play 的 UGC 政策要的是「产生任何 UGC 之前
   // 先接受条款」，而引导那两步已经在写 profile 了。老用户和文书改版走同一道门

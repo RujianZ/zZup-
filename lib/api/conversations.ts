@@ -1,4 +1,4 @@
-import { supabase, USE_MOCK } from '../supabase'
+import { supabase } from '../supabase'
 import type { IdentityType } from './friends'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -233,9 +233,6 @@ export async function removeMember(
   conversationId: string,
   accountId: string
 ): Promise<{ error: string | null }> {
-  if (USE_MOCK) {
-    return { error: null }
-  }
   const { error } = await supabase.rpc('remove_group_member', {
     p_conversation_id: conversationId,
     p_account_id: accountId,
@@ -257,7 +254,6 @@ export async function removeMember(
 export async function clearConversationHistory(
   conversationId: string
 ): Promise<{ error: string | null }> {
-  if (USE_MOCK) return { error: null }
   const { error } = await supabase.rpc('clear_conversation_history', {
     p_conversation: conversationId,
   })
@@ -273,7 +269,6 @@ export async function clearConversationHistory(
 export async function hideConversation(
   conversationId: string
 ): Promise<{ error: string | null }> {
-  if (USE_MOCK) return { error: null }
   const { error } = await supabase.rpc('hide_conversation', {
     p_conversation: conversationId,
   })
@@ -285,7 +280,6 @@ export async function setConversationMuted(
   conversationId: string,
   muted: boolean
 ): Promise<{ error: string | null }> {
-  if (USE_MOCK) return { error: null }
   const { error } = await supabase.rpc('set_conversation_muted', {
     p_conversation: conversationId,
     p_muted: muted,

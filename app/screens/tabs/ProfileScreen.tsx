@@ -12,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
-import { updateProfile, deleteAccount } from '../../../lib/api/auth';
+import { updateProfile } from '../../../lib/api/auth';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 import { PetSvgAvatar } from '../../../assets/pets';
 import {
@@ -135,48 +135,9 @@ export default function ProfileScreen() {
     finally { setSaving(false); }
   };
 
-  const handleLogout = async () => {
-    const { supabase } = require('../../../lib/supabase');
-    await supabase.auth.signOut();
-  };
-  const handleUnlink = () => showAlert('Unlink account', 'Your account credentials have been unlinked.', 'info');
 
-  const confirmDeleteAccount = () => {
-    setAlertConfig({
-      visible: true,
-      title: 'Delete account?',
-      message:
-        'This removes your profile, friends and Pack memberships, and cannot be undone.\n\n' +
-        'Messages you already sent stay in other people’s chats, shown as “Deleted user”. ' +
-        'Some records are kept for safety and legal reasons — see our Privacy Policy.',
-      type: 'error',
-      onConfirm: runDeleteAccount,
-      confirmText: 'Delete',
-      destructive: true,
-    });
-  };
 
-  const runDeleteAccount = async () => {
-    setAlertConfig(prev => ({ ...prev, visible: false }));
-    try {
-      const { error } = await deleteAccount();
-      if (error) showAlert('Error', error, 'error');
-    } catch (e: any) { showAlert('Error', e.message || 'Failed to delete account', 'error'); }
-  };
 
-  const actions = [
-    { icon: 'create-outline', label: 'Edit profile', onPress: openEdit, danger: false },
-    { icon: 'shirt-outline', label: 'Closet', onPress: openCloset, danger: false },
-    { icon: 'link-outline', label: 'Unlink account', onPress: handleUnlink, danger: false },
-    { icon: 'flag-outline', label: 'Report a problem', onPress: () => navigation.navigate('Report'), danger: false },
-    // 苹果 5.1.1 要求隐私政策在 App 内可访问 —— 不能只在注册那一刻出现一次。
-    // 指的是同一个阅读器（app/screens/legal/LegalDocScreen），正文是打包进来的。
-    { icon: 'document-text-outline', label: 'Terms of Service', onPress: () => navigation.navigate('LegalDoc', { doc: 'terms' }), danger: false },
-    { icon: 'people-outline', label: 'Community Guidelines', onPress: () => navigation.navigate('LegalDoc', { doc: 'guidelines' }), danger: false },
-    { icon: 'shield-outline', label: 'Privacy Notice', onPress: () => navigation.navigate('LegalDoc', { doc: 'privacy' }), danger: false },
-    { icon: 'log-out-outline', label: 'Sign out', onPress: handleLogout, danger: false },
-    { icon: 'trash-outline', label: 'Delete account', onPress: confirmDeleteAccount, danger: true },
-  ];
 
   const currentCategoryData = CLOSET_CATEGORIES.find(c => c.id === activeClosetCategory) || CLOSET_CATEGORIES[0];
 
@@ -184,7 +145,18 @@ export default function ProfileScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
       <StatusBar style={colors.statusBarStyle} />
       <View style={[styles.header, { backgroundColor: colors.headerBg }]}>
+        <View style={styles.headerSpacer} />
         <Text style={[styles.title, { color: colors.text }]}>Profile</Text>
+        {/* 原来平铺在页面底部的那一串（登出/删号/法律文书…）全部收进这里，
+            Profile 只留「你是谁」+ 天天要调的主题和陌生人开关。 */}
+        <TouchableOpacity
+          style={[styles.gear, { backgroundColor: colors.cardMutedBg }]}
+          onPress={() => navigation.navigate('Settings')}
+          activeOpacity={0.7}
+          hitSlop={10}
+        >
+          <Ionicons name="settings-outline" size={20} color={colors.text} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -204,28 +176,53 @@ export default function ProfileScreen() {
 
         {/* Hero */}
         <View style={styles.hero}>
-          <View style={styles.avatarWrap}>
-            <LinearGradient colors={[colors.brand, colors.brandSecondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatarRing}>
-              <View style={[styles.avatarInner, { backgroundColor: colors.bg }]}>
-                {isHostTab ? (
-                  <View style={styles.bigAvatarHostBox}>
-                    <AvatarHost config={profile?.avatar_url} size={110} />
-                  </View>
-                ) : (
-                  <View style={[styles.bigAvatar, { backgroundColor: colors.cardMutedBg }]}>
-                    <PetSvgAvatar breed={currentPetBreed} stage={currentPetStage} size={150} />
-                  </View>
-                )}
+          {/* 竖版画框取代原来的圆形头像。
+              圆形会把全身裁成一颗头 —— 换了裤子和鞋根本看不见，
+              40 件衣服等于白做。人物**底部对齐**站在框里，全身入镜。 */}
+          <View style={[styles.frame, { borderColor: colors.border }]}>
+            <LinearGradient
+              colors={[colors.cardMutedBg, colors.cardBg]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+
+            {isHostTab ? (
+              <View style={styles.frameFigure}>
+                <AvatarHost config={profile?.avatar_url} size={250} />
               </View>
-            </LinearGradient>
-            <TouchableOpacity style={[styles.closetFab, { backgroundColor: colors.brand, borderColor: colors.bg }]} onPress={openCloset} activeOpacity={0.85}>
-              <Ionicons name="shirt" size={17} color="#FFFFFF" />
+            ) : (
+              // 宠物走 fill：每张图的留白都不一样，给固定 size 的话有的填满、
+              // 有的浮在框中间。这里给一个占满画框的盒子，让 contain 自己算。
+              <View style={styles.framePetBox}>
+                <PetSvgAvatar breed={currentPetBreed} stage={currentPetStage} fill />
+              </View>
+            )}
+
+            <View style={[styles.frameBadge, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+              <Text style={[styles.frameBadgeText, { color: colors.subText }]}>
+                {isHostTab
+                  ? `#${profile?.zzup_id ?? '00001'}`
+                  : `${currentPetBreed.replace('_', ' ')} · ${currentPetStage}`}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.framePill, { backgroundColor: colors.brand }]}
+              onPress={openCloset}
+              activeOpacity={0.85}
+            >
+              <Ionicons name={isHostTab ? 'shirt' : 'sparkles'} size={15} color="#FFFFFF" />
+              <Text style={styles.framePillText}>{isHostTab ? 'Closet' : 'Form'}</Text>
             </TouchableOpacity>
           </View>
 
           {isHostTab ? (
             <>
-              <Text style={[styles.name, { color: colors.text }]}>{profile?.real_name ?? 'Not configured'}</Text>
+              <TouchableOpacity style={styles.nameRow} onPress={openEdit} activeOpacity={0.7} hitSlop={8}>
+                <Text style={[styles.name, { color: colors.text }]}>{profile?.real_name ?? 'Not configured'}</Text>
+                <Feather name="edit-2" size={15} color={colors.tertiaryText} />
+              </TouchableOpacity>
               <Text style={[styles.subId, { color: colors.brand }]}>zZuPer ID · #{profile?.zzup_id ?? '00001'}</Text>
               <View style={styles.badges}>
                 {profile?.edu_verified && (
@@ -244,7 +241,10 @@ export default function ProfileScreen() {
             </>
           ) : (
             <>
-              <Text style={[styles.name, { color: colors.text }]}>{profile?.pet_name ?? 'My Companion'}</Text>
+              <TouchableOpacity style={styles.nameRow} onPress={openEdit} activeOpacity={0.7} hitSlop={8}>
+                <Text style={[styles.name, { color: colors.text }]}>{profile?.pet_name ?? 'My Companion'}</Text>
+                <Feather name="edit-2" size={15} color={colors.tertiaryText} />
+              </TouchableOpacity>
               <Text style={[styles.subId, { color: colors.brand }]}>
                 {currentPetBreed.toUpperCase()} · Level {profile?.pet_level ?? 1} · {currentPetStage.toUpperCase()}
               </Text>
@@ -264,7 +264,7 @@ export default function ProfileScreen() {
           <View style={[styles.bioCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
             <Text style={[styles.bioLabel, { color: colors.brand }]}>{isHostTab ? 'ABOUT ME' : 'PET PERSONALITY'}</Text>
             <Text style={[styles.bioText, { color: colors.text }]}>
-              {(isHostTab ? profile?.bio : profile?.pet_bio) || 'No description yet. Tap "Edit profile" to share your vibe! ✨'}
+              {(isHostTab ? profile?.bio : profile?.pet_bio) || 'No description yet. Tap the pencil to share your vibe.'}
             </Text>
           </View>
         </View>
@@ -345,16 +345,6 @@ export default function ProfileScreen() {
           </Text>
         </View>
 
-        {/* Actions */}
-        <View style={[styles.actionCard, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
-          {actions.map((a, i) => (
-            <TouchableOpacity key={a.label} style={[styles.actionItem, i < actions.length - 1 && { borderBottomColor: colors.border, borderBottomWidth: 1 }]} onPress={a.onPress} activeOpacity={0.6}>
-              <Ionicons name={a.icon as any} size={20} color={a.danger ? '#EF4444' : colors.text} />
-              <Text style={[styles.actionText, { color: a.danger ? '#EF4444' : colors.text }]}>{a.label}</Text>
-              <Feather name="chevron-right" size={18} color={colors.tertiaryText} />
-            </TouchableOpacity>
-          ))}
-        </View>
       </ScrollView>
 
       {/* Edit modal */}
@@ -524,7 +514,8 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  header: { height: 52, justifyContent: 'center', alignItems: 'center' },
+  // 左右两个 36px 的格子把标题夹在正中间（左边是占位，右边是齿轮）
+  header: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14 },
   title: { fontSize: 18, fontWeight: '700' },
   scroll: { paddingBottom: 60 },
 
@@ -534,6 +525,30 @@ const styles = StyleSheet.create({
 
   hero: { alignItems: 'center', marginTop: 24, paddingHorizontal: 20 },
   avatarWrap: { position: 'relative' },
+  // 画框：略竖的长方形，人物站在框底
+  frame: {
+    alignSelf: 'stretch',
+    aspectRatio: 0.92,
+    borderRadius: 22,
+    borderWidth: 1,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  frameFigure: { alignItems: 'center', justifyContent: 'flex-end' },
+  // 顶上留给 #id 徽章，底下留给 Form 胶囊，剩下的全给宠物。
+  framePetBox: { ...StyleSheet.absoluteFillObject, paddingTop: 46, paddingBottom: 56, paddingHorizontal: 16 },
+  frameBadge: {
+    position: 'absolute', left: 12, top: 12,
+    borderRadius: 9, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 4,
+  },
+  frameBadgeText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.3, textTransform: 'capitalize' },
+  framePill: {
+    position: 'absolute', right: 12, bottom: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9,
+  },
+  framePillText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   avatarRing: { width: 144, height: 144, borderRadius: 72, padding: 3, justifyContent: 'center', alignItems: 'center' },
   avatarInner: { width: 138, height: 138, borderRadius: 69, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   bigAvatar: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
@@ -559,6 +574,9 @@ const styles = StyleSheet.create({
 
   themeSection: { marginHorizontal: 20, marginTop: 24 },
   sectionTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.8, marginBottom: 8 },
+  headerSpacer: { width: 36 },
+  gear: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   themePillContainer: { flexDirection: 'row', borderRadius: 16, padding: 4, borderWidth: 0, gap: 4 },
   themeOption: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 40, borderRadius: 12 },
   themeOptionText: { fontSize: 12, fontWeight: '700' },
@@ -574,9 +592,6 @@ const styles = StyleSheet.create({
   settingSub: { fontSize: 12, lineHeight: 16 },
   settingFootnote: { fontSize: 11, lineHeight: 15, marginTop: 8, marginHorizontal: 4 },
 
-  actionCard: { marginHorizontal: 20, marginTop: 24, borderRadius: 18, overflow: 'hidden' },
-  actionItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 16 },
-  actionText: { fontSize: 15, fontWeight: '600', flex: 1 },
 
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
   modalCard: { width: '100%', maxWidth: 360, borderRadius: 24, padding: 24, borderWidth: 1 },

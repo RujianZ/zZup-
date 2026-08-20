@@ -77,6 +77,42 @@ export const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
   acc: 'acc_headphones',
 };
 
+/**
+ * 起手装。注册时选完身体就直接穿上这一套 —— 光身体（光头 + 白背心短裤）
+ * 摆在选择器里太素，看不出这个 App 是干嘛的。
+ *
+ * 男女各一套，不按身体细分：这里只是个体面的起点，进 App 之后
+ * 衣柜里全部资产都能随便换。
+ */
+export const STARTER_OUTFIT: Record<'male' | 'female', Omit<AvatarConfig, 'body'>> = {
+  // 两套要在**缩略图那么小**的时候就分得出来，所以每一层都不一样：
+  // 裤子 vs 裙子（轮廓）、黑外套 vs 米色针织（明度）、球鞋 vs 长靴。
+  // 第一版两套都是灰卫衣 + 蓝牛仔，只有帽子/项链不同 —— Joe 在选择器里
+  // 认不出谁是谁。
+  male: {
+    // 不戴帽子：帽子会把头发整个盖住，缩略图里就只剩一顶帽子，
+    // 反而看不出是男是女。短寸头本身就是最强的性别信号。
+    hair: 'hair_male_buzz_cut',
+    top: 'top_male_varsity_jacket',
+    bottom: 'bottom_male_cargo_pants',
+    shoes: 'shoes_unisex_sneakers',
+    acc: 'none',
+  },
+  female: {
+    hair: 'hair_female_wavy',
+    top: 'top_female_knitted_sweater',
+    bottom: 'bottom_female_pleated_skirt',
+    shoes: 'shoes_unisex_combat_boots',
+    acc: 'acc_necklace',
+  },
+};
+
+/** 身体键 + 对应的起手装 = 一套完整配置。键名里带 female 就是女款。 */
+export function starterConfigFor(body: string): AvatarConfig {
+  const set = body.includes('female') ? STARTER_OUTFIT.female : STARTER_OUTFIT.male;
+  return { body, ...set };
+}
+
 export const CLOSET_CATEGORIES = [
   {
     id: 'top',
@@ -190,6 +226,10 @@ interface AvatarHostProps {
  * Stacks transparent PNG layers in natural clothing order:
  * Body -> Shoes -> Bottom -> Top -> Hair -> Accessories.
  */
+/** zZuPer 全身图的高宽比：图是竖的，height = size * 这个数。
+ *  外面要装下全身（比如画框）就得按它算高度，用 size 当高度会把脚裁掉。 */
+export const HOST_FIGURE_RATIO = 1.35;
+
 export function AvatarHost({ config, size = 120, style }: AvatarHostProps) {
   const cfg: AvatarConfig = typeof config === 'string' ? parseAvatarConfig(config) : (config || DEFAULT_AVATAR_CONFIG);
 
@@ -201,13 +241,13 @@ export function AvatarHost({ config, size = 120, style }: AvatarHostProps) {
   const accAsset = cfg.acc && cfg.acc !== 'none' ? AVATAR_ASSETS[cfg.acc] : null;
 
   return (
-    <View style={[{ width: size, height: size * 1.35, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }, style]}>
-      {bodyAsset && <Image source={bodyAsset} style={[styles.layer, { width: size, height: size * 1.35 }]} resizeMode="contain" />}
-      {shoesAsset && <Image source={shoesAsset} style={[styles.layer, { width: size, height: size * 1.35 }]} resizeMode="contain" />}
-      {bottomAsset && <Image source={bottomAsset} style={[styles.layer, { width: size, height: size * 1.35 }]} resizeMode="contain" />}
-      {topAsset && <Image source={topAsset} style={[styles.layer, { width: size, height: size * 1.35 }]} resizeMode="contain" />}
-      {hairAsset && <Image source={hairAsset} style={[styles.layer, { width: size, height: size * 1.35 }]} resizeMode="contain" />}
-      {accAsset && <Image source={accAsset} style={[styles.layer, { width: size, height: size * 1.35 }]} resizeMode="contain" />}
+    <View style={[{ width: size, height: size * HOST_FIGURE_RATIO, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }, style]}>
+      {bodyAsset && <Image source={bodyAsset} style={[styles.layer, { width: size, height: size * HOST_FIGURE_RATIO }]} resizeMode="contain" />}
+      {shoesAsset && <Image source={shoesAsset} style={[styles.layer, { width: size, height: size * HOST_FIGURE_RATIO }]} resizeMode="contain" />}
+      {bottomAsset && <Image source={bottomAsset} style={[styles.layer, { width: size, height: size * HOST_FIGURE_RATIO }]} resizeMode="contain" />}
+      {topAsset && <Image source={topAsset} style={[styles.layer, { width: size, height: size * HOST_FIGURE_RATIO }]} resizeMode="contain" />}
+      {hairAsset && <Image source={hairAsset} style={[styles.layer, { width: size, height: size * HOST_FIGURE_RATIO }]} resizeMode="contain" />}
+      {accAsset && <Image source={accAsset} style={[styles.layer, { width: size, height: size * HOST_FIGURE_RATIO }]} resizeMode="contain" />}
     </View>
   );
 }

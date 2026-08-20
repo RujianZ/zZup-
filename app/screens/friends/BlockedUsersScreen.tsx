@@ -8,6 +8,7 @@ import { getBlockedUsers, unblockIdentity, BlockedUser } from '../../../lib/api/
 import { useTheme } from '../../context/ThemeContext';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 import PetAvatar from '../../components/PetAvatar';
+import HostAvatar from '../../components/HostAvatar';
 
 export default function BlockedUsersScreen() {
   const navigation = useNavigation<any>();
@@ -76,12 +77,9 @@ export default function BlockedUsersScreen() {
             size={48}
             backgroundColor={colors.cardMutedBg}
           />
-        ) : item.avatar_url ? (
-          <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
         ) : (
-          <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>
-            <Ionicons name="person" size={22} color={colors.brand} />
-          </View>
+          // avatar_url 可能是换装 JSON，交给 HostAvatar 判
+          <HostAvatar url={item.avatar_url} size={48} backgroundColor={colors.cardMutedBg} />
         )}
         <View style={styles.info}>
           <Text style={[styles.name, { color: colors.text }]}>{name} {isPet ? '🐾' : ''}</Text>

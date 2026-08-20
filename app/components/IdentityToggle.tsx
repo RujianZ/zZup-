@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import HostAvatar from './HostAvatar';
 import { useAuth } from '../context/AuthContext';
 import { useTheme, ThemeColors } from '../context/ThemeContext';
 import PetAvatar from './PetAvatar';
@@ -30,13 +31,9 @@ export default function IdentityToggle({ value, onChange }: IdentityToggleProps)
         onPress={() => onChange('real')}
         activeOpacity={0.7}
       >
-        {profile?.avatar_url ? (
-          <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatarFallback, { backgroundColor: colors.brand }]}>
-            <Ionicons name="person" size={14} color="#fff" />
-          </View>
-        )}
+        {/* avatar_url 从换装系统上线起可能是一段 JSON 配置，不能再直接当图片地址。
+            HostAvatar 三种情况都处理：JSON 配置 / http 链接 / 兜底。 */}
+        <HostAvatar url={profile?.avatar_url} size={22} backgroundColor={colors.brand} />
         <Text style={[styles.label, value === 'real' && styles.labelActive]}>
           {profile?.real_name ?? 'Host'}
         </Text>

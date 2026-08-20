@@ -16,7 +16,7 @@ import {
   createDM, getOrCreateZzuperTalk, clearConversationHistory, isConversationFrozen, touchAiDisclosure,
 } from '../../../lib/api/conversations';
 import {
-  uploadChatMedia, getSignedUrls, formatBytes, normalizeImage, Attachment,
+  uploadChatMedia, removeChatMedia, getSignedUrls, formatBytes, normalizeImage, Attachment,
   MAX_FILE_BYTES, isAllowedChatFile, extensionOf,
 } from '../../../lib/api/uploads';
 import { markConversationRead } from '../../../lib/api/unread';
@@ -304,6 +304,35 @@ export default function ChatScreen() {
         }
         attachments.push({ kind, path, name: it.name, mime: it.mime, size, w: it.w, h: it.h, sec: it.sec });
       }
+      // ── zZuPer Talk 的图片要过一次审核（2026-08-20）──────────────────
+      //
+      // **只有宠物这条路要审，私聊群聊的图片不审。** 区别在于：私聊图片我们
+      // 只是托管，而发给宠物的图片我们会主动签一个 URL 送去 OpenAI 做 vision
+      // （见下面那段）—— 我们是传输方，不只是托管方。
+      //
+      // 挡在建消息行之前：此刻文件已经在存储里，但没有任何消息指向它，
+      // 而且 RLS 按 uid 分文件夹，别人读不到。拦下来就把它删掉。
+      //
+      // 失败放行，同别处：不知情就没有义务（18 U.S.C. §2258A(f)）。
+      if (isPetTalk && kind === 'image') {
+        try {
+          const { data: verdict } = await supabase.functions.invoke('moderate-content', {
+            body: { surface: 'pet_image', image_path: attachments[0].path, bucket: 'chat-media' },
+          });
+          if (verdict && verdict.allowed === false) {
+            await removeChatMedia(attachments.map(a => a.path));
+            showAlert(
+              'Can’t send this',
+              'This doesn’t fit our Community Guidelines.',
+              'error',
+            );
+            return;
+          }
+        } catch {
+          // 审核跑不了就放行
+        }
+      }
+
       // Auto content for conversation-list preview (bubble hides it when attachments exist)
       const content =
         kind === 'image' ? `📷 Photo${attachments.length > 1 ? ` ×${attachments.length}` : ''}`

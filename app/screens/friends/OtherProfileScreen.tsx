@@ -16,6 +16,7 @@ import {
 } from '../../../lib/api/friends';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 import PetAvatar from '../../components/PetAvatar';
+import { PetSvgAvatar } from '../../../assets/pets';
 import HostAvatar from '../../components/HostAvatar';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -36,6 +37,9 @@ export default function OtherProfileScreen() {
 
   // More Menu Modal State
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  // 看这个人的哪一面。宠物在主页上是**完整展示**的（真名、装饰都在）——
+  // 匿名保护不靠主页藏宠物，而是靠匿名场景里只渲染裸形态（迁移 77 的 get_pet_identity）。
+  const [face, setFace] = useState<'zZuPer' | 'Pet'>('zZuPer');
 
   // Luxury Alert Modal State
   const [alertConfig, setAlertConfig] = useState<{
@@ -156,6 +160,7 @@ export default function OtherProfileScreen() {
   // 已随迁移 74 废弃 —— 详见该迁移文件头。宠物强制上主页是有意的：
   // 匿名保护不靠主页藏宠物，而是靠匿名场景里只渲染裸形态（get_pet_identity）。
   const showPetCard = !!profile?.pet_name;
+  const isHostFace = face === 'zZuPer' || !showPetCard;
   const imageUrl = profile?.avatar_url;
   const displayName = profile?.real_name ?? 'zZuP! user';
 
@@ -230,21 +235,56 @@ export default function OtherProfileScreen() {
         <View style={styles.center}><ActivityIndicator color={colors.brand} size="large" /></View>
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {/* Profile Top Section */}
-          <View style={styles.top}>
-            <LinearGradient
-              colors={[colors.brandSecondary, colors.brand]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-              style={styles.ring}
-            >
-              <View style={[styles.ringInner, { backgroundColor: colors.bg }]}>
-                <HostAvatar url={imageUrl} size={96} />
-              </View>
-            </LinearGradient>
+          {/* 跟自己的 Profile 用同一个画框和同一套切换 —— 别人的主页不该是另一种语言 */}
+          {showPetCard && (
+            <View style={[styles.segment, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+              {(['zZuPer', 'Pet'] as const).map(tab => (
+                <TouchableOpacity
+                  key={tab}
+                  style={[styles.segTab, face === tab && { backgroundColor: colors.brand }]}
+                  onPress={() => setFace(tab)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.segText, { color: face === tab ? '#FFFFFF' : colors.subText }]}>{tab}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
-            <Text style={[styles.name, { color: colors.text }]}>{displayName}</Text>
-            <Text style={[styles.subId, { color: colors.brand }]}>#{profile?.zzup_id}</Text>
-            {!!profile?.university && (
+          <View style={styles.top}>
+            <View style={[styles.frame, { borderColor: colors.border }]}>
+              <LinearGradient
+                colors={[colors.cardMutedBg, colors.cardBg]}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+              {isHostFace ? (
+                <View style={styles.frameFigure}>
+                  <HostAvatar url={imageUrl} size={250} backgroundColor="transparent" fullBody />
+                </View>
+              ) : (
+                // 同自己 Profile：宠物用 fill 占满画框，别再靠调 size 猜留白。
+                <View style={styles.framePetBox}>
+                  <PetSvgAvatar breed={profile?.pet_breed} stage={profile?.pet_stage} fill />
+                </View>
+              )}
+              <View style={[styles.frameBadge, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+                <Text style={[styles.frameBadgeText, { color: colors.subText }]}>
+                  {isHostFace
+                    ? `#${profile?.zzup_id ?? '00001'}`
+                    : `${(profile?.pet_breed ?? 'dog').replace('_', ' ')} · ${profile?.pet_stage ?? 'child'}`}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={[styles.name, { color: colors.text }]}>
+              {isHostFace ? displayName : (profile?.pet_name ?? 'Their pet')}
+            </Text>
+            <Text style={[styles.subId, { color: colors.brand }]}>
+              {isHostFace ? `#${profile?.zzup_id}` : `Lv.${profile?.pet_level ?? 1} · ${profile?.pet_xp ?? 0} XP`}
+            </Text>
+            {isHostFace && !!profile?.university && (
               <Text style={[styles.uni, { color: colors.subText }]}>{profile.university}</Text>
             )}
           </View>
@@ -267,37 +307,18 @@ export default function OtherProfileScreen() {
             )}
           </View>
 
-          {/* Bio Card */}
-          {!!profile?.bio && (
+          {/* 简介跟着切换的那一面走 */}
+          {!!(isHostFace ? profile?.bio : profile?.pet_bio) && (
             <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
-              <Text style={[styles.cardLabel, { color: colors.subText }]}>BIO</Text>
-              <Text style={[styles.cardText, { color: colors.text }]}>{profile.bio}</Text>
+              <Text style={[styles.cardLabel, { color: colors.subText }]}>
+                {isHostFace ? 'BIO' : 'PET PERSONALITY'}
+              </Text>
+              <Text style={[styles.cardText, { color: colors.text }]}>
+                {isHostFace ? profile?.bio : profile?.pet_bio}
+              </Text>
             </View>
           )}
 
-          {/* Pet Info Card */}
-          {showPetCard && (
-            <View style={[styles.card, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
-              <View style={styles.petRow}>
-                <PetAvatar
-                  url={profile.pet_avatar_url}
-                  breed={profile.pet_breed}
-                  stage={profile.pet_stage}
-                  size={56}
-                  backgroundColor={colors.cardMutedBg}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.petName, { color: colors.text }]}>{profile.pet_name}</Text>
-                  <Text style={[styles.petLevel, { color: colors.subText }]}>
-                    Lv.{profile.pet_level ?? 1} · {profile.pet_xp ?? 0} XP
-                  </Text>
-                </View>
-              </View>
-              {!!profile.pet_bio && (
-                <Text style={[styles.petBio, { color: colors.subText }]}>{profile.pet_bio}</Text>
-              )}
-            </View>
-          )}
         </ScrollView>
       )}
 
@@ -407,6 +428,25 @@ const styles = StyleSheet.create({
   scroll: {
     paddingBottom: 40,
   },
+  segment: {
+    flexDirection: 'row', marginHorizontal: 20, marginTop: 16, marginBottom: 4,
+    padding: 4, borderRadius: 14, borderWidth: 1, gap: 4,
+  },
+  segTab: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 10 },
+  segText: { fontSize: 14, fontWeight: '700' },
+  // 跟自己 Profile 同一个画框：略竖的长方形，人物站在框底
+  frame: {
+    alignSelf: 'stretch', aspectRatio: 0.92, borderRadius: 22, borderWidth: 1,
+    overflow: 'hidden', justifyContent: 'flex-end', alignItems: 'center',
+  },
+  frameFigure: { alignItems: 'center', justifyContent: 'flex-end' },
+  // 这边框底下没有 Closet 胶囊，所以下留白比自己那页小。
+  framePetBox: { ...StyleSheet.absoluteFillObject, paddingTop: 46, paddingBottom: 18, paddingHorizontal: 16 },
+  frameBadge: {
+    position: 'absolute', left: 12, top: 12,
+    borderRadius: 9, borderWidth: 1, paddingHorizontal: 9, paddingVertical: 4,
+  },
+  frameBadgeText: { fontSize: 11, fontWeight: '600', letterSpacing: 0.3, textTransform: 'capitalize' },
   top: {
     alignItems: 'center',
     paddingTop: 24,

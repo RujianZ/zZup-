@@ -98,6 +98,49 @@ export default {
         const userId = user.id;
         const preMatchIntent = body.pre_match_intent || "";
 
+        // ── 发布前内容审核（2026-08-20）────────────────────────────────
+        //
+        // 这句意向决定**我们把你推给哪个陌生人** —— 是我们的撮合行为，
+        // 不是两个人之间的私聊。而且 Pulse 是 FOSTA 暴露最高的表面
+        // （18 U.S.C. §2421A：明知而促成卖淫是联邦罪）。
+        //
+        // 挡在拿 profile 和跑任何 AI 之前。这段不碰 prompt / 模型 / 推理。
+        // 失败放行 —— 不知情就没有义务（§2258A(f)）。
+        if (preMatchIntent.trim()) {
+          try {
+            const modResp = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/moderate-content`, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                surface: "pulse",
+                text: preMatchIntent.trim(),
+                actor_id: userId,
+                client_meta: {
+                  ip: req.headers.get("cf-connecting-ip")
+                    ?? ((req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || null),
+                  country: req.headers.get("cf-ipcountry"),
+                  user_agent: (req.headers.get("user-agent") ?? "").slice(0, 300),
+                },
+              }),
+            });
+            const verdict = await modResp.json().catch(() => null);
+            if (verdict && verdict.allowed === false) {
+              // 不说命中了哪一类 —— 说了就是在教他改到刚好绕过去
+              return new Response(JSON.stringify({
+                error: "This doesn’t fit our Community Guidelines. Please rewrite it and try again.",
+              }), {
+                status: 400,
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              });
+            }
+          } catch (e) {
+            console.error("moderation unavailable, matching unchecked:", String(e));
+          }
+        }
+
         const { data: profile, error: profErr } = await ctx.supabaseAdmin
           .from("profiles")
           .select("bio, pet_bio, university, pet_name, pet_breed, pet_stage")

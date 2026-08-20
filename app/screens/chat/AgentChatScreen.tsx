@@ -21,6 +21,7 @@ import {
 import { getProfile } from '../../../lib/api/auth';
 import { getConversationPeerProfile } from '../../../lib/api/conversations';
 import PetAvatar from '../../components/PetAvatar';
+import HostAvatar from '../../components/HostAvatar';
 import { useTheme, ThemeColors } from '../../context/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -315,12 +316,9 @@ export default function AgentChatScreen() {
                 stage={item.author_pet_stage}
                 size={32}
               />
-            ) : item.author_avatar_url ? (
-              <Image source={{ uri: item.author_avatar_url }} style={styles.messageAvatar} />
             ) : (
-              <View style={[styles.messageAvatar, styles.avatarFallbackBlue]}>
-                <Ionicons name="person" size={16} color="#fff" />
-              </View>
+              // 换装配置也走这里 —— avatar_url 现在可能是 JSON，不能直接塞 uri
+              <HostAvatar url={item.author_avatar_url} size={34} style={{ borderRadius: 10 }} />
             )}
           </TouchableOpacity>
         )}

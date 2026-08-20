@@ -51,6 +51,11 @@ export interface Profile {
   terms_version: string | null
   guidelines_version: string | null
   privacy_version: string | null
+  // 封禁（迁移 107-109）。只有读自己（get_my_profile）才有值 ——
+  // 读别人恒为 null，能读到就能扫出全站的封禁名单。
+  account_status: 'active' | 'suspended' | 'banned' | null
+  suspended_until: string | null
+  enforcement_reason: string | null
   // 生命周期
   onboarded: boolean
   deleted_at: string | null
@@ -109,14 +114,39 @@ export async function signIn(
   password: string
 ): Promise<{ userId: string | null; error: string | null }> {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-  if (error) return { userId: null, error: error.message }
+  if (error) {
+    // 删过号的账号被 GoTrue 的 banned_until 挡在发令牌之前（迁移 103），
+    // 但它回的是 "User is banned" —— 对删过号的人来说这话既像惩罚又看不懂。
+    // **拦截是服务端做的，这里只负责把话说清楚**，改客户端绕不过去。
+    if (/banned/i.test(error.message)) {
+      return {
+        userId: null,
+        error: 'This account was deleted and can’t be used to sign in. Create a new account with a different email to start over.',
+      }
+    }
+    return { userId: null, error: error.message }
+  }
   if (!data.user) return { userId: null, error: 'Sign in failed' }
   return { userId: data.user.id, error: null }
 }
 
+/**
+ * 登出。**服务端失败也一定要把人登出。**
+ *
+ * 默认的 signOut() 会打一次 /logout。如果这张会话在服务端已经不存在了
+ * （删号会清 auth.sessions；管理员踢人、令牌过期同理），那一发是 500，
+ * supabase-js 直接抛错、**本地会话原样留着** —— 表现是点了登出没反应，
+ * 人卡在一个用不了的账号里出不来。
+ *
+ * 所以服务端那次失败了就退回 scope: 'local'：服务端本来就已经没有可撤销的
+ * 东西了，清掉本地这份就是正确结果。
+ */
 export async function signOut(): Promise<{ error: string | null }> {
   const { error } = await supabase.auth.signOut()
-  return { error: error?.message ?? null }
+  if (!error) return { error: null }
+
+  const { error: localError } = await supabase.auth.signOut({ scope: 'local' })
+  return { error: localError?.message ?? null }
 }
 
 /**
@@ -189,6 +219,9 @@ export async function getProfile(userId?: string): Promise<Profile | null> {
     // 读别人时恒为 null。get_other_profile 故意不返回它 ——
     // 能读到就能扫出谁开了谁没开，那等于把这个设置本身泄露掉。
     allow_stranger_dm: null,
+    account_status: null,
+    suspended_until: null,
+    enforcement_reason: null,
     notify_driftbottle: null,
     notify_petchat: null,
     notify_friend: null,
@@ -218,6 +251,37 @@ export async function updateProfile(
     }
   }
 
+  // ── 内容审核：陌生人看得见的四个字段 ────────────────────────────────
+  //
+  // 为什么在这里而不是在界面里：updateProfile 是所有资料写入的**唯一咽喉点**，
+  // Profile 的编辑和 Onboarding 的两步都走它。挂在界面上就会漏。
+  //
+  // 为什么这四个字段要审：真名 / 简介 / 宠物名 / 宠物简介**陌生人都看得见**
+  // （搜索、Roam、Pulse），按苹果 1.2 的口径它们是 "posted"，跟私聊不是一回事。
+  //
+  // ⚠️ 调用失败 = 放行。我们什么都没学到，就没有知情，也就没有义务
+  //    （18 U.S.C. §2258A(f)）。宁可漏，不要把 OpenAI 抖一下变成用户改不了资料。
+  const moderated = ['real_name', 'bio', 'pet_name', 'pet_bio']
+    .map((k) => sanitizedFields[k])
+    .filter((v) => typeof v === 'string' && v.trim().length > 0)
+    .join(' \n ')
+
+  if (moderated) {
+    try {
+      const { data: verdict, error: modError } = await supabase.functions.invoke('moderate-content', {
+        body: { surface: 'profile', text: moderated },
+      })
+      if (!modError && verdict && verdict.allowed === false) {
+        // **不告诉他命中了哪一类。** 说了就是在教他怎么改到刚好绕过去。
+        return {
+          error: 'This doesn’t fit our Community Guidelines. Please edit it and try again.',
+        }
+      }
+    } catch {
+      // 同上：审核跑不了就放行
+    }
+  }
+
   // `.eq('id', ...)` 看着只是个筛选，但 Postgres 里 **UPDATE ... WHERE 也需要
   // WHERE 引用列的 SELECT 权限**。迁移 79 逐列撤销 SELECT 之后这里整个失效，
   // 表现是新用户填完资料保存失败、卡在 onboarding 出不去。
@@ -238,7 +302,14 @@ export async function deleteAccount(): Promise<{ error: string | null }> {
   const { error } = await supabase.rpc('delete_my_account')
   if (error) return { error: error.message }
 
-  const signOutRes = await signOut()
-  return { error: signOutRes.error }
+  // **必须是 local**。迁移 103 之后 delete_my_account() 会把 auth.sessions 里
+  // 这个人的会话删掉，所以等这个函数返回时，服务端已经不认识手上这张令牌了。
+  // 默认的 signOut() 要打一次 /logout，那一发必然 500 —— 实测下来用户会看到
+  // 「Unexpected failure, please check server logs」，而且**没被登出**，
+  // 顶着一个已删除的账号继续待在 App 里。号删成功了，界面上却像是失败了。
+  //
+  // scope: 'local' 只清本地存的会话，不打服务端 —— 服务端那边已经清干净了。
+  const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' })
+  return { error: signOutError?.message ?? null }
 }
 

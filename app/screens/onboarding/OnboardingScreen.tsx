@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, Image,
+  View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView,
   KeyboardAvoidingView, Platform, ActivityIndicator, Pressable,
 } from 'react-native';
 // react-native 自带的 SafeAreaView 在 Android 上不生效，必须用 safe-area-context 的
@@ -12,6 +12,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { updateProfile } from '../../../lib/api/auth';
 import { useAuth } from '../../context/AuthContext';
 import { PetSvgAvatar } from '../../../assets/pets';
+import { AvatarHost, starterConfigFor } from '../../../assets/avatar';
 import { light, spacing, radius, typography, lightShadow } from '../../theme';
 
 const OFFICIAL_PET_BREEDS = [
@@ -27,13 +28,19 @@ const OFFICIAL_PET_BREEDS = [
   { key: 'time_lord', name: 'Time Lord', mbti: 'ENTJ', desc: 'Perfectionist' },
 ];
 
-const VIRTUAL_HUMAN_PRESETS = [
-  { key: 'asian_f', name: 'Asian Female', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80' },
-  { key: 'asian_m', name: 'Asian Male', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80' },
-  { key: 'caucasian_f', name: 'Caucasian Female', url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80' },
-  { key: 'caucasian_m', name: 'Caucasian Male', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80' },
-  { key: 'african_f', name: 'African Female', url: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?auto=format&fit=crop&w=300&q=80' },
-  { key: 'african_m', name: 'African Male', url: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=300&q=80' },
+// 身体底板。这里曾经是 6 张 Unsplash 的真人照片，还按人种起了名
+// （'Asian Female' / 'African Male' …）—— 既是拿别人的脸当新用户的默认身份，
+// 又是逼人在注册第一步给自己贴人种标签。两件事都不该做。
+//
+// 现在就是这 12 张自家美术图，不排序不分组不写字，自己看着选。
+// 键的顺序 = 界面顺序，故意深浅交错，不让任何一档排在最前面当"默认"。
+const BODY_OPTIONS = [
+  'body_female_asian_light', 'body_male_asian_light',
+  'body_female_black_dark',  'body_male_black_dark',
+  'body_female_white_light', 'body_male_white_light',
+  'body_female_asian_dark',  'body_male_asian_dark',
+  'body_female_black_light', 'body_male_black_light',
+  'body_female_white_dark',  'body_male_white_dark',
 ];
 
 /**
@@ -75,8 +82,7 @@ export default function OnboardingScreen() {
   const [birthday, setBirthday] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [nationality, setNationality] = useState('');
-  const [selectedHumanAvatar, setSelectedHumanAvatar] = useState<string>(VIRTUAL_HUMAN_PRESETS[0].url);
-  const [customAvatarUri] = useState<string | null>(null);
+  const [selectedBody, setSelectedBody] = useState<string | null>(null);
   const [petName, setPetName] = useState('');
   const [selectedBreed, setSelectedBreed] = useState<string>('dog');
   const [petAvatarUrl] = useState<string | null>(null);
@@ -84,6 +90,7 @@ export default function OnboardingScreen() {
   const handleStep1 = () => {
     if (!realName.trim()) { Alert.alert('Required', 'Please enter your real name.'); return; }
     if (!birthday) { Alert.alert('Required', 'Please select your date of birth.'); return; }
+    if (!selectedBody) { Alert.alert('Required', 'Please pick how you look.'); return; }
     setStep(2);
   };
 
@@ -93,12 +100,16 @@ export default function OnboardingScreen() {
   // 匿名保护改由 get_pet_identity 的裸形态承担。引导因此从 3 步缩到 2 步。
   const handleFinish = async () => {
     if (!petName.trim()) { Alert.alert('Required', "Please enter your pet's name."); return; }
+    // 第一步已经拦过了，这里是兜底：没有身体就没有 avatar_url，宁可退回去重选
+    if (!selectedBody) { setStep(1); return; }
     setLoading(true);
     const { error } = await updateProfile({
       real_name: realName.trim(),
       date_of_birth: birthday ? fmtDate(birthday) : undefined,
       nationality: nationality.trim() || undefined,
-      avatar_url: customAvatarUri || selectedHumanAvatar,
+      // 存完整一套而不是只存 body：这是这个人的长相，以后改起手装
+      // 不该把已有用户的衣服一起换掉。
+      avatar_url: JSON.stringify(starterConfigFor(selectedBody)),
       pet_name: petName.trim(),
       pet_breed: selectedBreed,
       pet_avatar_url: petAvatarUrl || undefined,
@@ -142,13 +153,12 @@ export default function OnboardingScreen() {
               </View>
             )}
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carousel} snapToInterval={156} decelerationRate="fast">
-              {VIRTUAL_HUMAN_PRESETS.map(preset => {
-                const sel = selectedHumanAvatar === preset.url;
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carousel} snapToInterval={132} decelerationRate="fast">
+              {BODY_OPTIONS.map(body => {
+                const sel = selectedBody === body;
                 return (
-                  <TouchableOpacity key={preset.key} activeOpacity={0.85} style={[styles.avatarCard, sel && styles.cardActive]} onPress={() => setSelectedHumanAvatar(preset.url)}>
-                    <Image source={{ uri: preset.url }} style={[styles.presetAvatar, sel && { borderColor: light.brand }]} />
-                    <Text style={[styles.cardName, sel && { color: light.brand }]} numberOfLines={1}>{preset.name}</Text>
+                  <TouchableOpacity key={body} activeOpacity={0.85} style={[styles.bodyCard, sel && styles.cardActive]} onPress={() => setSelectedBody(body)}>
+                    <AvatarHost config={starterConfigFor(body)} size={84} />
                     {sel && <View style={styles.checkBadge}><Ionicons name="checkmark" size={13} color="#fff" /></View>}
                   </TouchableOpacity>
                 );
@@ -244,10 +254,9 @@ const styles = StyleSheet.create({
   eduSub: { ...typography.caption, color: light.textSecondary, marginTop: 1 },
 
   carousel: { paddingVertical: spacing.lg, paddingRight: spacing.xl },
-  avatarCard: { width: 140, padding: spacing.md, marginRight: spacing.base, borderRadius: radius.xl, borderWidth: 1.5, borderColor: light.border, alignItems: 'center', backgroundColor: light.surface },
+  bodyCard: { width: 116, paddingVertical: spacing.sm, marginRight: spacing.base, borderRadius: radius.xl, borderWidth: 1.5, borderColor: light.border, alignItems: 'center', backgroundColor: light.surface },
   breedCard: { width: 180, padding: spacing.base, marginRight: spacing.base, borderRadius: radius.xl, borderWidth: 1.5, borderColor: light.border, alignItems: 'center', backgroundColor: light.surface },
   cardActive: { borderColor: light.brand, backgroundColor: light.brandSoft },
-  presetAvatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: 'transparent', marginBottom: spacing.sm },
   svgWrap: { width: 120, height: 120, justifyContent: 'center', alignItems: 'center', marginBottom: spacing.xs },
   cardName: { ...typography.body, color: light.text, fontWeight: '700', textAlign: 'center' },
   mbti: { backgroundColor: light.brandSoft, paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.sm, marginTop: spacing.xs },

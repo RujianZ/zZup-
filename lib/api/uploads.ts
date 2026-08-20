@@ -106,6 +106,21 @@ async function readFileBytes(uri: string): Promise<Uint8Array> {
   return bytes
 }
 
+/**
+ * 删掉刚上传但决定不发的文件。
+ *
+ * 用在内容审核拦下来那一刻：文件已经在桶里，但还没有任何消息指向它。
+ * 不删的话它就是一个谁都看不见、谁也删不掉、还一直占空间的孤儿 ——
+ * 而且如果它是我们拦下来的那种东西，留着比删掉更糟。
+ *
+ * 失败只记日志不抛：删不掉是运维问题，不该让用户界面变成一个错误框。
+ */
+export async function removeChatMedia(paths: string[]): Promise<void> {
+  if (!paths.length) return
+  const { error } = await supabase.storage.from('chat-media').remove(paths)
+  if (error) console.warn('removeChatMedia failed:', error.message, paths)
+}
+
 /** Upload one local file (uri) into the conversation's media folder. */
 export async function uploadChatMedia(
   conversationId: string,

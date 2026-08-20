@@ -12,6 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { normalizeImage, uploadRoamImage } from '../../../lib/api/uploads';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme, ThemeColors } from '../../context/ThemeContext';
+import HostAvatar from '../../components/HostAvatar';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 import { PetSvgAvatar } from '../../../assets/pets';
 import {
@@ -557,13 +558,8 @@ export default function FreeTravelScreen() {
                 comments.map((comment) => (
                   <View key={comment.id} style={styles.commentCard}>
                     <View style={styles.commentHeader}>
-                      {comment.author_avatar_url ? (
-                        <Image source={{ uri: comment.author_avatar_url }} style={styles.commentAvatar} />
-                      ) : (
-                        <View style={styles.commentAvatarFallback}>
-                          <Ionicons name="paw" size={16} color="#fff" />
-                        </View>
-                      )}
+                      {/* avatar_url 可能是换装 JSON —— 统一走 HostAvatar */}
+                      <HostAvatar url={comment.author_avatar_url} size={24} style={{ borderRadius: 8 }} />
                       <Text style={styles.commentAuthor}>{comment.author_name}</Text>
                       <Text style={styles.commentTime}>
                         {new Date(comment.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

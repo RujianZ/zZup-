@@ -1,4 +1,4 @@
-import { supabase, USE_MOCK } from '../supabase'
+import { supabase } from '../supabase'
 import { addXP, getTodayStart, MESSAGE_THRESHOLD, MESSAGE_XP } from './_xp'
 import type { IdentityType } from './friends'
 import type { Attachment } from './uploads'
@@ -145,17 +145,6 @@ export async function sendMessage(
   if (error || !data) return { data: null, error: error?.message ?? 'Failed to send message' }
 
   // Trigger mock listeners in real-time during offline testing
-  if (USE_MOCK) {
-    setTimeout(() => {
-      mockMessageListeners.forEach((listener) => {
-        try {
-          listener(data as Message)
-        } catch (e) {
-          console.error('Mock listener error:', e)
-        }
-      })
-    }, 50)
-  }
 
   // XP：今日消息数首次达到阈值时奖励一次（before/after diff，跳过阈值也只触发一次）
   const todayStart = getTodayStart()
@@ -180,17 +169,6 @@ export function subscribeToMessages(
   conversationId: string,
   onMessage: (message: Message) => void
 ): () => void {
-  if (USE_MOCK) {
-    const listener = (msg: Message) => {
-      if (msg.conversation_id === conversationId) {
-        onMessage(msg)
-      }
-    }
-    mockMessageListeners.add(listener)
-    return () => {
-      mockMessageListeners.delete(listener)
-    }
-  }
 
   const channel = supabase
     .channel(`messages:${conversationId}`)

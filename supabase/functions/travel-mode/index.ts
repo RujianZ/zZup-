@@ -61,6 +61,55 @@ export default {
           });
         }
 
+        // ── 发布前内容审核（2026-08-20）────────────────────────────────
+        //
+        // Roam 是广播给陌生人的，按苹果 1.2 的口径它是 "posted" —— 必须事先审。
+        // 放在这里是因为：**这一步必须挡在 AI 工作之前**。往下就要跑 embedding
+        // 和 vision，不能让不该发布的内容先被送去做推理。
+        //
+        // 这段不碰任何 prompt / 模型 / 推理逻辑，它只是一道闸门。
+        //
+        // 调用方式是服务端到服务端（带 service key），所以要把**真实用户和
+        // 真实 IP** 转述过去，否则 safety_events 记下的会是边缘节点的 IP。
+        //
+        // 失败一律放行：我们什么都没学到，就没有知情，也就没有义务
+        // （18 U.S.C. §2258A(f)）。宁可漏一条，不要让 OpenAI 抖一下就发不了帖。
+        try {
+          const modResp = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/moderate-content`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              surface: "roam",
+              text: content.trim(),
+              image_path: typeof image_url === "string" && image_url && !/^https?:///i.test(image_url)
+                ? image_url : null,
+              bucket: "roam-media",
+              actor_id: userId,
+              client_meta: {
+                ip: req.headers.get("cf-connecting-ip")
+                  ?? ((req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || null),
+                country: req.headers.get("cf-ipcountry"),
+                user_agent: (req.headers.get("user-agent") ?? "").slice(0, 300),
+              },
+            }),
+          });
+          const verdict = await modResp.json().catch(() => null);
+          if (verdict && verdict.allowed === false) {
+            // **不告诉他命中了哪一类** —— 说了就是在教他怎么改到刚好绕过去。
+            return new Response(JSON.stringify({
+              error: "This doesn’t fit our Community Guidelines. Please edit it and try again.",
+            }), {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        } catch (e) {
+          console.error("moderation unavailable, publishing unchecked:", String(e));
+        }
+
         const duration = (duration_hours === 24) ? 24 : 6;
         let textToEmbed = content.trim();
 

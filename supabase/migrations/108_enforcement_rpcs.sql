@@ -1,0 +1,19 @@
+-- 108 · 处置动作
+--
+-- 这几个函数是我们自己在 Supabase 后台跑 SQL 时用的，**不做管理后台** ——
+-- 两个人、举报量个位数，做后台是纯浪费，而且后台本身又是一个要防的攻击面。
+--
+-- 封成函数而不是手打 UPDATE，是为了不会手抖漏步：
+-- 改状态、算第几次、留审计行、发通知，四件事必须一起发生。
+--
+--   enforce_account(target, reason, zero_tolerance, report_id, safety_event_id)
+--   resolve_report(report_id, uphold|uphold_zero_tolerance|dismiss|bad_report, reason)
+--   resolve_safety_event(event_id, confirm|dismiss|reported, note)
+--
+-- 三振（Joe 2026-08-20 定）：3 天 → 14 天 → 永久。零容忍五类直接永久。
+-- **违规记录不过期**（Joe：「不设，这就是你的代价」）。
+--
+-- ⚠️ Postgres 的函数默认对 PUBLIC 授予 EXECUTE —— 四个都显式 revoke 了，
+--    否则任何登录用户都能自己调 enforce_account 把别人封了。
+--
+-- 完整定义以线上为准。

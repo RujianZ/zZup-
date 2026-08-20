@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getFriends, FriendItem } from '../../../lib/api/friends';
 import { createGroup } from '../../../lib/api/conversations';
 import { useTheme } from '../../context/ThemeContext';
+import HostAvatar from '../../components/HostAvatar';
 import LuxuryAlertModal from '../../components/LuxuryAlertModal';
 
 export default function CreateGroupScreen() {
@@ -60,13 +61,7 @@ export default function CreateGroupScreen() {
     const isSel = selectedIds.includes(item.id);
     return (
       <TouchableOpacity style={[styles.card, { backgroundColor: colors.cardBg, borderColor: isSel ? colors.brand : colors.border }]} onPress={() => toggleSelect(item.id)} activeOpacity={0.7}>
-        {item.avatar_url ? (
-          <Image source={{ uri: item.avatar_url }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatarFallback, { backgroundColor: colors.cardMutedBg }]}>
-            <Ionicons name="person" size={24} color={colors.brand} />
-          </View>
-        )}
+        <HostAvatar url={item.avatar_url} size={48} backgroundColor={colors.cardMutedBg} />
 
         <View style={styles.info}>
           <Text style={[styles.name, { color: colors.text }]}>{item.real_name}</Text>

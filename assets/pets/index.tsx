@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Image } from 'react-native';
+import { PET_ART_BOX } from './artbox.generated';
 
 // Pet art is authored as raster bitmaps. They were previously wrapped in giant
 // (3–4 MB) base64 SVGs and rendered through react-native-svg, which parsed the
@@ -63,13 +64,63 @@ export const PET_ASSETS: Record<string, any> = {
   time_lord_youth: require('./png/time_lord_youth.png'),
 };
 
-export function PetSvgAvatar({ breed, stage, size = 64 }: { breed?: string | null; stage?: string | null; size?: number }) {
+/** 幼→成年还是要看得出长大了，但差距要小 —— 扣完留白之后再乘这个。 */
+const FILL_BY_STAGE: Record<string, number> = { child: 0.82, youth: 0.91, adult: 1 };
+
+/**
+ * 画框里的整幅展示：把图里的留白扣掉，让**画的那块**去填满盒子。
+ *
+ * 30 张图都是 417x600 的画布，但每张图里实际画了多少差得离谱
+ * （cat_adult 占 79%x94%，time_lord_child 只占 37%x38%）。
+ * 直接给 <Image> 一个 size + contain，填的是画布不是宠物，
+ * 于是幼年宠物在框里缩成一小坨 —— 就是 Joe 看到的「比例不对」。
+ *
+ * 边界数据是 scripts/measure-pet-art.mjs 量出来的，换图要重跑。
+ */
+function PetArtFill({ artKey, asset, stage }: { artKey: string; asset: any; stage: string }) {
+  const [box, setBox] = React.useState({ w: 0, h: 0 });
+  const art = PET_ART_BOX[artKey] ?? { x: 0, y: 0, w: 1, h: 1 };
+  const nat = Image.resolveAssetSource(asset);
+  const ratio = (nat?.width || 417) / (nat?.height || 600);
+
+  let style: any = { width: 0, height: 0 };
+  if (box.w > 0 && box.h > 0) {
+    const k = FILL_BY_STAGE[stage] ?? 1;
+    // 让「画的那块」内接于盒子：按高卡一次，按宽卡一次，取小的
+    const dh = Math.min(box.h / art.h, box.w / (art.w * ratio)) * k;
+    const dw = dh * ratio;
+    style = {
+      position: 'absolute',
+      width: dw,
+      height: dh,
+      // 把画的那块的中心挪到盒子中心
+      left: box.w / 2 - dw * (art.x + art.w / 2),
+      top: box.h / 2 - dh * (art.y + art.h / 2),
+    };
+  }
+
+  return (
+    <View
+      style={{ flex: 1, overflow: 'hidden' }}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        setBox((p) => (p.w === width && p.h === height ? p : { w: width, h: height }));
+      }}
+    >
+      <Image source={asset} style={style} resizeMode="contain" />
+    </View>
+  );
+}
+
+export function PetSvgAvatar({ breed, stage, size = 64, fill = false }: { breed?: string | null; stage?: string | null; size?: number; fill?: boolean }) {
   const bKey = (breed || 'dog').toLowerCase().trim();
   const sKey = (stage || 'child').toLowerCase().trim();
   const key = `${bKey}_${sKey}`;
   const asset: any = PET_ASSETS[key] || PET_ASSETS['dog_child'];
 
   if (!asset) return null;
+
+  if (fill) return <PetArtFill artKey={key in PET_ASSETS ? key : 'dog_child'} asset={asset} stage={sKey} />;
 
   return (
     <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>

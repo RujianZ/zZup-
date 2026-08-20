@@ -78,8 +78,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const data = await getProfile();
           if (!mounted.current) return;
 
-          if (!data) {
-            await supabase.auth.signOut();
+          // data.deleted_at 有值 = 这个号已经删了。
+          //
+          // 这一条**必须在客户端也判一次**，服务端的封禁挡不住它：
+          // banned_until 只在**发令牌**那一刻起作用，而已经发出去的访问令牌
+          // PostgREST 只验签名、不查 auth.sessions，所以它在过期前（最长 1 小时）
+          // 照样好使。实测：删完号冷启动，App 完整加载，顶着「Deleted user」
+          // 继续用。删号必须是立刻生效的，不能等令牌自己过期。
+          if (!data || data.deleted_at) {
+            await supabase.auth.signOut({ scope: 'local' });
             if (!mounted.current) return;
             setSession(null);
             setProfile(null);
@@ -95,6 +102,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         } catch {
           if (!mounted.current) return;
+
+          // 抛错有两种可能，处理方式相反，必须分清：
+          //   · 网络不通 / 服务端 5xx  → 重试，绝不能登出
+          //   · 这张会话已经被作废    → 重试一万次也没用，必须登出
+          //
+          // 后者不是假想：删号（迁移 103）会清掉 auth.sessions，管理员踢人
+          // 和封号同理。不分清的话，删完号冷启动会永远卡在
+          // 「Can't reach zZuP! — retrying…」，人出不来也登不出去。
+          //
+          // 分辨办法是让 supabase-js 拿刷新令牌去换一次：
+          //   · 换失败且带 HTTP 状态码（>=400）→ 服务端明确说这张会话不认了
+          //   · 网络问题的话 supabase-js 给的是可重试错误，status 是 0/undefined
+          //     —— 这种要落到下面的重试分支，不能登出
+          const { error: refreshError } = await supabase.auth.refreshSession();
+          const status = (refreshError as any)?.status;
+          if (refreshError && typeof status === 'number' && status >= 400) {
+            await supabase.auth.signOut({ scope: 'local' });
+            if (!mounted.current) return;
+            setSession(null);
+            setProfile(null);
+            settledRef.current = null;
+            setProfileSettledFor(null);
+            setAuthError(false);
+            setLoading(false);
+            return;
+          }
+
           setAuthError(true);
           setLoading(false); // 让加载页显示出来（带"连接有问题"的文案），而不是空白
           // 退避重试，上限 10 秒。网络恢复后会自动接上，不需要用户手动操作。

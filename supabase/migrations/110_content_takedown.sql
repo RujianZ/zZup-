@@ -1,0 +1,31 @@
+-- 110 · 内容下架
+--
+-- 在这之前**任何人都删不掉任何东西** —— travel_posts 上没有一条删除路径，
+-- 作者删不了，我们也删不了。于是「封了发帖的人，帖子还挂在那里给所有人看」。
+-- Google 的 UGC 政策明确要求有**移除**违规内容的能力。
+--
+-- ─── 为什么是「替换成墓碑」而不是加一个 removed_at 列 ───────────────────
+--
+-- 加列的话每一条读路径都要记得过滤。实际数了一下有 7 处
+-- （list_messages / get_message / list_conversations / get_unread_counts /
+--  match_travel_posts / list_travel_comments，外加客户端的直接 select）。
+-- 漏掉任何一处下架就是假的 —— 而漏掉的那处**不会报错**，只会静静地继续展示。
+--
+-- 改成在原表上把用户可见的字段换成墓碑：所有读路径自动生效，漏不了。
+-- 原文完整存进 content_takedowns（客户端零权限），证据不丢。
+-- 实测：模拟器上群列表预览立刻变成 [Removed for violating the Community
+-- Guidelines]，**一处 RPC 都没改**。
+--
+-- 这跟「消息永久」不冲突：消息行还在，identity 还在，举报快照还查得到。
+-- Terms 第 58 行本来就写了 "We may remove or restrict any content that
+-- violates these Terms"。
+--
+-- travel_post 下架时 **embedding 一起清掉** —— 不清的话帖子还会继续被
+-- Pulse 撮合出来，内容看不见了但匹配还在跑，等于下架了一半。
+--
+-- ⚠️ take_down_content **不删存储桶里的文件**。墓碑只让内容看不见；
+--    如果那是一张违规图片，文件还躺在桶里，拿着签名 URL 的人照样打得开。
+--    存储的删除只能走 storage API（SQL 删 storage.objects 只删记录，
+--    真正的文件还在 S3 里变成看不见的垃圾）。这一步目前靠人手动做。
+--
+-- 完整定义以线上为准（apply_migration 已应用）。

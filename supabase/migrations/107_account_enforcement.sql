@@ -1,0 +1,19 @@
+-- 107 · 封禁
+--
+-- Google 的 UGC 政策要的是「有能力处理并且真的处理了」。在这条迁移之前，
+-- 我们收得到举报，但收到之后**没有任何可执行的动作** —— 删不掉内容，封不了人。
+--
+-- ⚠️ **不要用 auth.users.banned_until 做封禁。** 那一列已经被删号占用了
+--    （迁移 103/104），而且登录前客户端分不清「被封」和「已删号」。
+--    封禁走 profiles.account_status：**人登得进来，但发不出东西** ——
+--    这样才能给他看「为什么封、封到什么时候、怎么申诉」。
+--    白屏或者直接登不进去，等于逼他去商店打一星，苹果审核也会问。
+--
+-- 建的东西：
+--   profiles.account_status / suspended_until / enforcement_reason（客户端只读）
+--   enforcement_actions      每一次处置的审计行，三振从这里数
+--   is_account_writable()    有期禁言到期自动放行，**不需要定时任务**
+--   enforce_account_status() BEFORE INSERT 触发器，挂在
+--                            messages / travel_posts / travel_comments / match_queue
+--
+-- 完整定义以线上为准（apply_migration 已应用）。改之前先 pg_get_functiondef。
