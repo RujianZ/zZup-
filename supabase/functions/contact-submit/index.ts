@@ -34,6 +34,7 @@ const ALLOWED_ORIGINS = [
 
 const CATEGORIES: Record<string, string> = {
   delete_account: "Delete my account",
+  data_request:   "Privacy or data request",
   account:        "Account or sign-in problem",
   report:         "Report a user or content",
   partnership:    "Partnership",
@@ -42,8 +43,8 @@ const CATEGORIES: Record<string, string> = {
   other:          "Something else",
 };
 
-// 这两类要最显眼：删号有 30 天法定期限，举报涉及他人安全
-const URGENT = ["delete_account", "report"];
+// 这几类要最显眼：删号 30 天、数据请求 45 天，都是法定期限；举报涉及他人安全
+const URGENT = ["delete_account", "data_request", "report"];
 
 function cors(origin: string | null) {
   const allow = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
@@ -203,8 +204,12 @@ Deno.serve(async (req: Request) => {
   );
 
   // ── 4. 回执给提交人 —— AB 1394 的 36 小时凭证 ──────────────────────────
+  // 期限口径必须跟 privacy.html 一致 —— 删号 30 天，数据主体请求 45 天。
+  // 这两个是法定的，其余是我们自己的服务承诺。
   const deadline = category === "delete_account"
     ? `<p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#3F4A55;">Account deletion requests are completed within <strong>30 days</strong>. We may write back first to confirm the request really comes from the account holder.</p>`
+    : category === "data_request"
+    ? `<p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#3F4A55;">We answer requests to know, correct, delete or export your information within <strong>45 days</strong>, extendable once where the law allows — we will tell you if we need it. We may write back first to confirm the request really comes from you.</p>`
     : `<p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#3F4A55;">We review every message we receive and aim to reply within <strong>seven days</strong>.</p>`;
 
   const acked = await sendMail(

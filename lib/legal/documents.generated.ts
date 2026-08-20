@@ -1,5 +1,6 @@
 // 自动生成，不要手改 —— 跑 `node scripts/sync-legal.mjs` 重新生成。
-// 正本：D:/zZuP! website/_source/*.md（网站 HTML 也从它生成）
+// 正本：docs/legal/*.md
+// ⚠️ 网站的 privacy.html / terms.html 是手写的，不是从正本生成的。改文书要改两处。
 // 生成时间不写进来，否则每次跑都产生一个假 diff。
 
 export type LegalDocKey = 'terms' | 'guidelines' | 'privacy';
@@ -230,8 +231,8 @@ The Service is built so that contact is consensual: friend requests require a re
   privacy: {
     key: 'privacy',
     title: "Privacy Notice",
-    version: "0.6",
-    updated: "AUG 19, 2026",
+    version: "0.7",
+    updated: "AUG 20, 2026",
     body: `In this notice, "we" and "us" mean **zZuP!, Inc.**
 
 ---
@@ -293,6 +294,7 @@ Privacy questions, rights requests and complaints: <admin@zzup.org>.
 ### Technical data
 
 - Server-side request logs kept by our infrastructure provider, including **IP address**, timestamps and error traces.
+- **When you file a report, and when our automated check flags something as child sexual content, we record the IP address and country the request came from** and keep it with that record. This is deliberate: without it we cannot tell one bad actor with ten accounts from ten different people, and it is what a law-enforcement referral needs. We do not log your IP against ordinary activity — sending a message, posting a Roam note, or talking to your pet does not create one of these records.
 
 ## Your pet is an AI
 
@@ -341,11 +343,11 @@ Mapped to the statutory categories California uses:
 
 | Category | Do we collect it? |
 |---|---|
-| Identifiers | Yes — name, email, zZuP ID, account ID, IP address in server logs |
+| Identifiers | Yes — name, email, zZuP ID, account ID, IP address in server logs and in safety records |
 | Protected classification characteristics | Yes, if you fill them in — date of birth, gender, nationality |
 | Education information | Yes — the university you type in, and a student email if you add one |
 | Audio, visual or similar information | Yes — images and voice messages you send |
-| Internet or network activity | Only operational server logs. No browsing history, no cross-site tracking |
+| Internet or network activity | Operational server logs, plus the IP address recorded with a report or a child-safety flag. No browsing history, no cross-site tracking |
 | Inferences drawn to create a profile | **Yes — pet memories and interest vectors** |
 | Geolocation data | No |
 | Biometric information | No |
@@ -359,6 +361,8 @@ Mapped to the statutory categories California uses:
 - **Other users** — as much as the identity and visibility settings you chose.
 - **Supabase** — our database, authentication, file storage and server functions. Hosted in **US East (N. Virginia)**.
 - **OpenAI, L.L.C.** (United States) — as described above.
+- **Resend** (United States) — sends our email: sign-up confirmations, password resets, and the receipt you get when you write to us. It handles your email address and the contents of those messages.
+- **Discord** (United States) — our staff alerts arrive in a private channel there. A report, a moderation hit, an enforcement action, a new sign-up or a message sent through our contact form raises one. **These alerts contain personal data**: the zZuP IDs involved, what you wrote in a report or a contact form, the email address you gave us, and — for a moderation hit — the **IP address** and country the request came from. They do not contain your messages to other users or to your pet.
 - **Apple and Google** — they operate the app stores you install from and handle crash reporting at the OS level under their own privacy policies. We have not integrated any third-party crash or analytics service of our own.
 - **Law enforcement and regulators** — when legally compelled, or where we believe in good faith that disclosure is needed to prevent serious harm.
 - **A successor** — if the company is acquired or merged, bound by this notice.
@@ -413,7 +417,9 @@ Whatever state you are in, you can ask us to:
 - **Take it with you**, in a machine-readable form;
 - **Opt out** of any sale, sharing, or profiling that produces legal or similarly significant effects — none of which we do.
 
-Email <admin@zzup.org> and say what you want. We respond within **45 days**, extendable once by another 45 where the law allows, and we will tell you if we need it. We will not charge you, and we will not degrade your experience for asking.
+Email <admin@zzup.org> and say what you want, or use the [privacy request form](https://zzup.org/contact?topic=data_request). We respond within **45 days**, extendable once by another 45 where the law allows, and we will tell you if we need it. We will not charge you, and we will not degrade your experience for asking.
+
+**You do not have to delete your account to do any of this.** These rights apply to a live account — you can ask us to remove particular information and carry on using zZuP!. The one thing deletion cannot reach is sent messages, for the reasons set out above.
 
 We may need to verify that a request really comes from you before we act on it, particularly for deletion. You can use an authorised agent where your state allows it.
 

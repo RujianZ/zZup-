@@ -1,17 +1,31 @@
 /**
- * 把网站仓库里的法律文书正本同步成 App 里可渲染的常量。
+ * 把法律文书正本同步成 App 里可渲染的常量。
  *
  *   node scripts/sync-legal.mjs
  *
- * 正本是 `D:\zZuP! website\_source\*.md`（网站 HTML 也是从它生成的）。
- * 一处编写，两处生成 —— 网页一份、App 一份，不存在"App 里的文案"这种东西。
+ * 正本是本仓库的 `docs/legal/*.md`。
+ *
+ * ── 正本为什么在这个仓库，而不在网站仓库 ──────────────────────────────
+ *
+ * 以前放在 `D:\zZuP! website\_source\`，但那个目录被 .gitignore 排除了 ——
+ * Vercel 拿仓库根当站点根，提交进去就能从 zzup.org/_source/privacy.md
+ * 直接读到 Markdown 原件。于是正本从来没进过任何一个仓库，只存在于
+ * 一台机器的硬盘上。机器没了，正本就没了。
+ *
+ * 这个仓库不对外提供 HTTP 服务，放这里既进版本控制又不会被公网读到。
+ *
+ * ── ⚠️ 网站 HTML 不是从这里生成的 ────────────────────────────────────
+ *
+ * 网站是纯静态站，没有构建步骤，`privacy.html` / `terms.html` 是手写的。
+ * 所以改文书要**改两处**：这里的 .md（喂 App）和网站的 .html（喂网页），
+ * 内容必须一字不差。别只改一处就以为完事了。
  *
  * 为什么不在 App 里开外链看网页：见 docs/_local/上架总排查。简单说是
  * 跳浏览器不好看，而 PDF 在手机上是固定页宽、改一次还要重新导出。
  *
- * ⚠️ 两个仓库是分开的，没有任何东西**强制**你在改完文书后跑这个脚本。
- *    忘了跑的后果是 App 里显示旧版本、并且把旧版本号写进 profiles ——
- *    记录仍然是诚实的（用户确实同意的是他看到的那一版），只是滞后。
+ * ⚠️ 没有任何东西**强制**你在改完文书后跑这个脚本。忘了跑的后果是
+ *    App 里显示旧版本、并且把旧版本号写进 profiles —— 记录仍然是诚实的
+ *    （用户确实同意的是他看到的那一版），只是滞后。
  *    `node scripts/check-legal-drift.mjs` 会拿线上页面的版本号跟这里比对。
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -19,9 +33,12 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const SITE = process.env.ZZUP_WEBSITE_DIR || 'D:/zZuP! website';
-const SRC = join(SITE, '_source');
+const SRC = join(HERE, '..', 'docs', 'legal');
 const OUT = join(HERE, '..', 'lib', 'legal', 'documents.generated.ts');
+
+// 社区规则的版本号只有网站 HTML 里有（见下），所以还是要摸一下网站仓库。
+// 只读这一个文件，其余都不依赖它了。
+const SITE = process.env.ZZUP_WEBSITE_DIR || 'D:/zZuP! website';
 
 /** 抬头那行长这样：`VERSION 0.4 · LAST UPDATED AUG 17, 2026` */
 function parseMeta(text, label) {
@@ -74,7 +91,8 @@ const docs = {
 const lit = (s) => '`' + s.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${') + '`';
 
 const out = `// 自动生成，不要手改 —— 跑 \`node scripts/sync-legal.mjs\` 重新生成。
-// 正本：${SRC.replace(/\\/g, '/')}/*.md（网站 HTML 也从它生成）
+// 正本：docs/legal/*.md
+// ⚠️ 网站的 privacy.html / terms.html 是手写的，不是从正本生成的。改文书要改两处。
 // 生成时间不写进来，否则每次跑都产生一个假 diff。
 
 export type LegalDocKey = 'terms' | 'guidelines' | 'privacy';
