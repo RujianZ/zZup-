@@ -18,7 +18,14 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.zzup.app"
+      "bundleIdentifier": "com.zzup.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "zZuP! needs access to your photo library so you can attach images to chats and to reports you submit.",
+        "NSCameraUsageDescription": "zZuP! uses your camera so you can take a photo and send it in a chat."
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.zzup.app",
@@ -28,7 +35,13 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -40,7 +53,23 @@
         {
           "microphonePermission": "zZuP! uses your microphone so you can record and send voice messages in your chats."
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "36.0.0"
+          }
+        }
       ]
-    ]
+    ],
+    "owner": "joezhang",
+    "extra": {
+      "eas": {
+        "projectId": "6e8e544f-a198-4ff9-b98e-3eb7e02c6704"
+      }
+    }
   }
 }
