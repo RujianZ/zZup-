@@ -48,7 +48,9 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "zZuP! uses your microphone so you can record and send voice messages in your chats."
+          "microphonePermission": "zZuP! uses your microphone so you can record and send voice messages in your chats.",
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
         }
       ],
       [
