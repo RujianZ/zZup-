@@ -1,0 +1,14 @@
+-- 112 · 下架之后自动搬文件
+--
+-- 不自动触发的话，「搬文件」就是一个**要记得手动跑**的步骤 ——
+-- 而这类步骤在半夜处理一条 CSAM 举报时最容易漏掉，
+-- 漏掉的后果是：内容看不见了，但文件还在，上传者照样打得开。
+--
+-- take_down_content 末尾补两步：算出文件清单（takedown_media_paths）
+-- + 触发搬运（request_media_purge → pg_net → purge-media Edge Function）。
+-- 走异步是因为搬文件不该阻塞下架本身；purge-media 是幂等的，重复调没问题。
+--
+-- 另加一个视图 pending_media_purges —— 这是运维要天天看的那一行：
+-- media_quarantined_at 为 null 且有文件 = **内容看不见了，但文件还在**。
+--
+-- 完整定义以线上为准。
