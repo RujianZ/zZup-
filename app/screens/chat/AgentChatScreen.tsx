@@ -90,7 +90,11 @@ export default function AgentChatScreen() {
   useEffect(() => {
     loadChatData();
     const unsubscribe = subscribeToMessages(groupId, (newMsg) => {
-      setMessages((prev) => [newMsg, ...prev]);
+      // 按 id 查重再插。Realtime 会重复投递同一条：频道名只用 conversationId
+      // （见 lib/api/messages.ts），同一个会话有两个订阅同时活着时两边各推一次；
+      // 断线重连也会重投。插进去的后果是 FlatList 报
+      // "Encountered two children with the same key"，然后那条消息渲染两遍。
+      setMessages((prev) => (prev.some((m) => m.id === newMsg.id) ? prev : [newMsg, ...prev]));
       // 宠物身份的消息 sender_id 恒为 null（迁移 77），只能靠服务端算的 is_mine
       if (newMsg.identity_mode === 'real') {
         if (newMsg.is_mine) setIHaveTakenOver(true);

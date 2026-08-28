@@ -203,7 +203,9 @@ export default function ChatScreen() {
     if (!realConvId) return;
     markConversationRead(realConvId);
     const unsub = subscribeToMessages(realConvId, (msg) => {
-      setMessages(prev => [msg, ...prev]);
+      // 按 id 查重再插 —— 理由同 AgentChatScreen：Realtime 会重复投递同一条。
+      // 这边消息稀疏所以一直没撞上，但成因完全一样，先堵上。
+      setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [msg, ...prev]));
       markConversationRead(realConvId);  // message seen live on this screen
     });
     return () => unsub();
