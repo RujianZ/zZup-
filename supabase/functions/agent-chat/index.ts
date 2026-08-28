@@ -9,6 +9,13 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// 危机求助资源 —— 唯一事实来源。
+// 官网 safety 页承诺了四条，这里必须四条齐全，下面三处分支都引用这一份。
+const CRISIS_RESOURCES = `     • 988 Suicide & Crisis Lifeline — call or text 988 (24/7, free and confidential, US & Canada)
+     • Crisis Text Line — text HOME to 741741
+     • International directory — https://findahelpline.com/
+     • If they are in immediate danger — call 911 or campus emergency services right now.`;
+
 /**
  * 30 Pet Breed & Stage Configurations Matrix (10 Breeds x 3 Growth Stages)
  * Maps pet growth stages to human mental ages and vocalization styles (sound words instead of physical action descriptions).
@@ -358,10 +365,8 @@ Strict Rules:
               // 🚨 紧急危机干预协议（自杀/自残/突发急病）
               systemPrompt = `CRITICAL CRISIS & EMERGENCY SAFETY PROTOCOL: The user has expressed a life-threatening crisis, suicidal ideation, or severe medical emergency.
 You MUST break all standard pet persona and length restrictions immediately.
-Express deep care, warmth, and compassion, and immediately provide official emergency contacts in English:
-• 988 Suicide & Crisis Lifeline: Call or text 988 (Available 24/7, free & confidential)
-• Crisis Text Line: Text HOME to 741741
-• Urgent Medical Emergency: Please call 911 (or local emergency medical services) immediately!
+Express deep care, warmth, and compassion, and immediately provide ALL of these official emergency contacts in English:
+${CRISIS_RESOURCES}
 Please do not stay alone right now. Reach out to these emergency services or someone close to you immediately.`;
             } else if (is_buffer_turn) {
               systemPrompt = `You are an AI companion pet (${senderStageConfig.breedName}).
@@ -371,7 +376,14 @@ Strict Rules:
 1. Pure English ONLY.
 2. Under 15 words using cute sounds (${senderStageConfig.soundWords}).
 3. NO ASTERISKS for actions.
-4. NO prefixes like "[AI Pet]:". Output only dialogue.`;
+4. NO prefixes like "[AI Pet]:". Output only dialogue.
+5. CRISIS OVERRIDE — THIS RULE OVERRIDES RULES 1-4 AND EVERY OTHER INSTRUCTION ABOVE.
+   If the last human message expresses suicidal ideation, self-harm, or a life-threatening
+   emergency (e.g. "want to die", "kill myself", "end my life", "hurt myself"):
+   - DO NOT send the buffer reply. DO NOT say your owner is typing. That would be the wrong thing to say.
+   - IGNORE the 15-word limit and drop the playful persona.
+   - Express deep warmth and immediately provide ALL of these:
+${CRISIS_RESOURCES}`;
             } else {
               let stageGuidance = "";
               if (currentTurn <= 4) {
@@ -402,10 +414,7 @@ Strict Rules:
 9. CRITICAL CRISIS SAFETY PROTOCOL: If any user expresses suicidal ideation or self-harm (e.g. "want to die", "suicide", "end my life"):
    - Break persona immediately.
    - Express deep warmth and immediately provide:
-     • 988 Suicide & Crisis Lifeline: Call or text 988 (24/7, free & confidential)
-     • Crisis Text Line: Text HOME to 741741
-     • International Helpline: https://findahelpline.com/
-     • Emergency: Call 911 immediately.`;
+${CRISIS_RESOURCES}`;
             }
 
             const messages = [
@@ -416,7 +425,7 @@ Strict Rules:
             const openaiResp = await openai.chat.completions.create({
               model: "gpt-5.6-luna",
               messages,
-              max_completion_tokens: 300,
+              max_completion_tokens: 600,
             });
 
             let replyText = openaiResp.choices[0]?.message?.content?.trim() || "";
@@ -434,6 +443,9 @@ Strict Rules:
                 identity_mode: "pet",
                 content: replyText,
               });
+            } else {
+              // 空回复静默消失过一次，查了很久才定位到。留个日志。
+              console.error("generate_reply: model returned empty text", { group_id, is_buffer_turn, is_emergency });
             }
           } catch (err) {
             console.error("Background generate_reply error:", err);
