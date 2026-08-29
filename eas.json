@@ -10,7 +10,6 @@
       "android": {
         "buildType": "apk"
       },
-      "channel": "development",
       "environment": "development"
     },
     "ios-sim": {
@@ -18,7 +17,6 @@
       "ios": {
         "simulator": true
       },
-      "channel": "preview",
       "environment": "preview"
     },
     "preview": {
@@ -26,7 +24,6 @@
       "android": {
         "buildType": "apk"
       },
-      "channel": "preview",
       "environment": "preview"
     },
     "production": {
@@ -37,7 +34,6 @@
       "ios": {
         "buildConfiguration": "Release"
       },
-      "channel": "production",
       "environment": "production"
     }
   },
