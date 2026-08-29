@@ -135,8 +135,7 @@ export default function ForgotPasswordScreen() {
 
                 <View style={[styles.field, focused && styles.fieldFocus]}>
                   <Feather name="mail" size={18} color={focused ? colors.textPrimary : colors.textTertiary} />
-                  <TextInput
-                    style={styles.input}
+                  <TextInput keyboardAppearance="dark"                     style={styles.input}
                     placeholder="Email"
                     placeholderTextColor={colors.textTertiary}
                     value={email}

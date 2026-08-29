@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   FlatList,
   TouchableOpacity,
   Image,
@@ -289,7 +288,12 @@ export default function InboxScreen() {
 
   return (
     <TouchableWithoutFeedback onPress={closeAllMenus}>
-      <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
+      {/* 这里**不能**用 SafeAreaView。顶部安全距离由下面的 header 自己用
+          paddingTop: insets.top 处理（故意的，让 header 背景铺满状态栏），
+          底部由 React Navigation 的 tab bar 处理，左右只在横屏有意义而本 App 锁竖屏。
+          再套一层 SafeAreaView 会让 iOS 把顶部安全距离**加两遍**，出现一条白边。
+          安卓上看不出来，因为 react-native 自带的 SafeAreaView 在安卓上是空操作。 */}
+      <View style={[styles.safe, { backgroundColor: colors.bg }]}>
         <StatusBar style={colors.statusBarStyle} />
 
         {/* Top Header */}
@@ -411,7 +415,7 @@ export default function InboxScreen() {
             }
           />
         )}
-      </SafeAreaView>
+      </View>
     </TouchableWithoutFeedback>
   );
 }

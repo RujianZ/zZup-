@@ -82,8 +82,7 @@ export default function LoginScreen() {
           <View style={styles.form}>
             <View style={[styles.field, focus === 'email' && styles.fieldFocus]}>
               <Feather name="mail" size={18} color={focus === 'email' ? colors.textPrimary : colors.textTertiary} />
-              <TextInput
-                style={styles.input}
+              <TextInput keyboardAppearance="dark"                 style={styles.input}
                 placeholder="Email"
                 placeholderTextColor={colors.textTertiary}
                 value={email}
@@ -97,8 +96,7 @@ export default function LoginScreen() {
 
             <View style={[styles.field, focus === 'password' && styles.fieldFocus]}>
               <Feather name="lock" size={18} color={focus === 'password' ? colors.textPrimary : colors.textTertiary} />
-              <TextInput
-                style={styles.input}
+              <TextInput keyboardAppearance="dark"                 style={styles.input}
                 placeholder="Password"
                 placeholderTextColor={colors.textTertiary}
                 value={password}

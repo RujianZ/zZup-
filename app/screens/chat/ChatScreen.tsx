@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, FlatList,
+  View, Text, StyleSheet, FlatList,
   TouchableOpacity, ActivityIndicator, TextInput,
   KeyboardAvoidingView, Platform, Image, Modal, Linking, Dimensions
 } from 'react-native';
@@ -813,7 +813,7 @@ export default function ChatScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
+    <View style={[styles.safe, { backgroundColor: colors.bg }]}>
       <StatusBar style={colors.statusBarStyle} />
 
       {/* Header */}
@@ -1149,7 +1149,7 @@ export default function ChatScreen() {
         type={alertConfig.type}
         onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, ScrollView,
+  View, Text, StyleSheet, ScrollView,
   TouchableOpacity, ActivityIndicator, Image, Modal
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -209,7 +209,7 @@ export default function OtherProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
+    <View style={[styles.safe, { backgroundColor: colors.bg }]}>
       <StatusBar style={colors.statusBarStyle} />
 
       {/* Header */}
@@ -392,7 +392,7 @@ export default function OtherProfileScreen() {
           if (alertConfig.confirmAction) alertConfig.confirmAction();
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 

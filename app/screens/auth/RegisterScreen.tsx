@@ -60,20 +60,20 @@ export default function RegisterScreen() {
             {field('email', (
               <>
                 <Feather name="mail" size={18} color={focus === 'email' ? colors.textPrimary : colors.textTertiary} />
-                <TextInput style={styles.input} placeholder="Email" placeholderTextColor={colors.textTertiary} value={email} onChangeText={setEmail} onFocus={() => setFocus('email')} onBlur={() => setFocus(null)} autoCapitalize="none" keyboardType="email-address" />
+                <TextInput keyboardAppearance="dark" style={styles.input} placeholder="Email" placeholderTextColor={colors.textTertiary} value={email} onChangeText={setEmail} onFocus={() => setFocus('email')} onBlur={() => setFocus(null)} autoCapitalize="none" keyboardType="email-address" />
               </>
             ))}
             {field('pw', (
               <>
                 <Feather name="lock" size={18} color={focus === 'pw' ? colors.textPrimary : colors.textTertiary} />
-                <TextInput style={styles.input} placeholder="Password (min 6)" placeholderTextColor={colors.textTertiary} value={password} onChangeText={setPassword} onFocus={() => setFocus('pw')} onBlur={() => setFocus(null)} secureTextEntry={!showPw} autoCapitalize="none" />
+                <TextInput keyboardAppearance="dark" style={styles.input} placeholder="Password (min 6)" placeholderTextColor={colors.textTertiary} value={password} onChangeText={setPassword} onFocus={() => setFocus('pw')} onBlur={() => setFocus(null)} secureTextEntry={!showPw} autoCapitalize="none" />
                 <TouchableOpacity onPress={() => setShowPw(v => !v)} hitSlop={10}><Feather name={showPw ? 'eye-off' : 'eye'} size={18} color={colors.textTertiary} /></TouchableOpacity>
               </>
             ))}
             {field('confirm', (
               <>
                 <Feather name="check-circle" size={18} color={focus === 'confirm' ? colors.textPrimary : colors.textTertiary} />
-                <TextInput style={styles.input} placeholder="Confirm password" placeholderTextColor={colors.textTertiary} value={confirm} onChangeText={setConfirm} onFocus={() => setFocus('confirm')} onBlur={() => setFocus(null)} secureTextEntry={!showPw} autoCapitalize="none" />
+                <TextInput keyboardAppearance="dark" style={styles.input} placeholder="Confirm password" placeholderTextColor={colors.textTertiary} value={confirm} onChangeText={setConfirm} onFocus={() => setFocus('confirm')} onBlur={() => setFocus(null)} secureTextEntry={!showPw} autoCapitalize="none" />
               </>
             ))}
 

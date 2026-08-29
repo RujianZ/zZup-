@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, SafeAreaView, FlatList,
+  View, Text, StyleSheet, FlatList,
   TouchableOpacity, ActivityIndicator, Image, Switch
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -187,7 +187,7 @@ export default function GroupMembersScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg }]}>
+    <View style={[styles.safe, { backgroundColor: colors.bg }]}>
       <StatusBar style={colors.statusBarStyle} />
 
       {/* Header */}
@@ -273,7 +273,7 @@ export default function GroupMembersScreen() {
         destructive
         onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
