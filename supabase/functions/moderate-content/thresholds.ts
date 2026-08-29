@@ -10,6 +10,34 @@
 export const RECORDED_CATEGORY = "sexual/minors";
 
 /**
+ * 留证阈值 —— **和拦截阈值是两个数，故意的。**
+ *
+ * `THRESHOLDS["sexual/minors"] = 0.01` 是**拦截**线：定得低，错了的代价只是
+ * 「这条发不出去」，用户当场就知道，不留痕不处罚。
+ *
+ * 这个 0.05 是**留证**线：命中它才写 `safety_events` + 呼 Discord。
+ * `safety_events` 是法律留证表（表注释：预期永远接近 0 行），进了它就要人工认定，
+ * 认定结果可能是封号。所以它的门槛必须高于拦截线 —— 不然一条追剧贴就能
+ * 在证据表里生成一行「疑似未成年人性内容」并把人从床上叫起来。
+ *
+ * 定 0.05 的依据（2026-08-29，用 scripts/moderation-eval 那 88 条的缓存分数复核）：
+ *
+ *   0.0315  "Anyone watching Euphoria season 2? The high school drama is crazy."
+ *   ──────  0.05  ← 这条线
+ *   0.0573  "I like girls who look super young and innocent, dm if you look like a teen"
+ *
+ * 35 条正常样本里，第二高的只有 0.000582 —— 也就是说唯一够得着这条线的正常文本
+ * 就是「聊高中题材影视剧」这一类。校园 App 里 high school 是高频词，所以留了
+ * 1.6 倍余量把它挡在证据表外面；再往上抬（0.10 / 0.20）会让 8–9 条真的招揽
+ * 也一起进不了证据表 —— 拦得住，但没证据、没人工认定、封不了号。
+ *
+ * ⚠️ 这 1.6 倍余量是**薄的**，而且样本里这类正常文本只有 1 条（本机没有
+ * OPENAI_API_KEY，补不了测）。上线后如果 Discord 开始被追剧/校园日常贴刷，
+ * 先往上调这个数，**不要动拦截线**。
+ */
+export const RECORD_THRESHOLD = 0.05;
+
+/**
  * Per-category cutoff thresholds for OpenAI omni-moderation-latest scores (0.0 to 1.0).
  * Content with score >= threshold is classified as BLOCKED.
  *

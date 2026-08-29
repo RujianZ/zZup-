@@ -32,7 +32,7 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const MODEL = "omni-moderation-latest";
 
-import { THRESHOLDS, RECORDED_CATEGORY, judge } from "./thresholds.ts";
+import { RECORDED_CATEGORY, RECORD_THRESHOLD, judge } from "./thresholds.ts";
 
 type Verdict = {
   allowed: boolean;
@@ -165,7 +165,14 @@ Deno.serve(async (req: Request) => {
   if (!hit) return json({ allowed: true } satisfies Verdict);
 
   // ── 命中 sexual/minors → 留证 + 通知 + 等人工 ──────────────────────────
-  if (hit === RECORDED_CATEGORY) {
+  //
+  // 但**「拦」和「留证」是两条线**（见 thresholds.ts 的 RECORD_THRESHOLD）：
+  // 拦在 0.01，留证在 0.05。落在两者之间的（拦得住，但置信度不足以进法律证据表）
+  // 走下面那条「拦了就完了」的路 —— 用户发不出去，我们不留痕、不呼人。
+  // 不这么拆的话，一条「聊 Euphoria 的高中剧情」就会在证据表里生成一行
+  // 「疑似未成年人性内容」并呼一次 Discord，而校园 App 里这类词是高频的。
+  const recordScore = result.scores[RECORDED_CATEGORY] ?? 0;
+  if (hit === RECORDED_CATEGORY && recordScore >= RECORD_THRESHOLD) {
     const { data: prof } = await admin
       .from("profiles").select("zzup_id").eq("id", actor.id).maybeSingle();
 
@@ -202,10 +209,11 @@ Deno.serve(async (req: Request) => {
     return json({ allowed: false, reason: "blocked", category: hit } satisfies Verdict);
   }
 
-  // ── 其余 12 类 → 拦了就完了：不留痕、不通知、不处罚 ────────────────────
+  // ── 其余 12 类，外加 0.01 ≤ sexual/minors < 0.05 那一段
+  //    → 拦了就完了：不留痕、不通知、不处罚 ──────────────────────────────
   //
-  // 只有 sexual/minors 会留证和通知。别的类别命中只意味着「这条发不出去」，
-  // 用户当场就知道了，我们不需要也不应该为它建记录。
+  // 命中只意味着「这条发不出去」，用户当场就知道了，
+  // 我们不需要也不应该为它建记录。
   return json({ allowed: false, reason: "blocked", category: hit } satisfies Verdict);
 });
 

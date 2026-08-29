@@ -17,7 +17,7 @@
       "fallbackToCacheTimeout": 0
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.zzup.app",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "zZuP! needs access to your photo library so you can attach images to chats and to reports you submit.",

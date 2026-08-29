@@ -13,6 +13,14 @@
       "channel": "development",
       "environment": "development"
     },
+    "ios-sim": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      },
+      "channel": "preview",
+      "environment": "preview"
+    },
     "preview": {
       "distribution": "internal",
       "android": {
@@ -25,6 +33,9 @@
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
+      },
+      "ios": {
+        "buildConfiguration": "Release"
       },
       "channel": "production",
       "environment": "production"
