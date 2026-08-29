@@ -32,67 +32,7 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const MODEL = "omni-moderation-latest";
 
-/**
- * 每个类别自己的阈值。**不要用一个统一阈值** —— 各类别的分数分布差异极大。
- *
- * 实测依据（2026-08-17 跑的，不要凭感觉推翻）：
- *   一段战争题材课文  violence 0.403 · harassment/threatening 0.0063 · flagged=true
- *   针对具体人的威胁  violence 0.921 · harassment/threatening 0.735
- *
- * 所以：判断「这是不是威胁」只看 harassment/threatening（差 117 倍），
- * violence 单独用会在上线第一天就开始误伤课业讨论 —— 它的阈值定得极高，
- * 基本只在血腥描写那种极端值才生效。
- */
-const THRESHOLDS: Record<string, number> = {
-  // ⚠️ 这一条阈值**故意定得低**。漏掉的代价是不可接受的，
-  //    而命中的代价只是「拦下来 + 人叫过来看一眼」，不是自动封号。
-  "sexual/minors": 0.20,
-
-  "sexual": 0.70,
-  "harassment/threatening": 0.50,
-  "harassment": 0.80,
-  "hate/threatening": 0.50,
-  "hate": 0.80,
-  "illicit/violent": 0.50,
-  "illicit": 0.80,
-  "violence/graphic": 0.80,
-
-  // 「鼓励/教唆自伤」是 Guidelines 的零容忍条款之一，拦。
-  "self-harm/instructions": 0.50,
-
-  // ⚠️ self-harm 和 self-harm/intent **有意不设阈值 = 不拦**。
-  //    那是一个人在说自己难受，不是违规。拦掉他的帖子跟 safety.html 上
-  //    写的东西背道而驰。危机场景由宠物温暖地回应（Ethan 的 prompt 规则 7）。
-
-  // violence 单独几乎没有判别力，只在极端值才当回事
-  "violence": 0.92,
-};
-
-/**
- * ⚠️ 2026-08-20 实测得到的一条硬结论，别再试图推翻：
- *
- * **在 profile 这种短文本上，sexual 分数没有判别力。** 实测：
- *
- *     "sexy little baddie 💅 taken tho"（正当网络用语）   sexual = 0.5634
- *     "Sex and the City"（剧名）                          sexual = 0.2084
- *     "pay for sex tonight, cash ready"（招妓）            sexual = 0.3732
- *     "DaddysLittleSlut69"（性暗示用户名）                sexual = 0.2851
- *     "pay me for nudes, cashapp in bio"（卖裸照）        sexual = 0.2417
- *
- * 正当内容的最高分**高于所有该拦内容**。任何能拦住卖裸照的阈值都会拦掉
- * 正常用户的自我调侃。所以不要为了抓"用户名不体面"去调低 sexual ——
- * 而且我们的 Guidelines 本来就没禁止粗俗用户名，为它发明规则等于
- * 执行一条从未公开过的规则。真的过分了会有人举报。
- *
- * **sexual/minors 完全不同，信噪比是干净的**（同一轮实测）：
- *     正当提到年龄/小孩（18岁新生、小学助教、周末带小孩） 0.0000–0.0004
- *     五条未成年相关（含"anyone into younger girls"这种
- *     没写年龄的隐晦招揽）                                  全部拦下
- * 0.20 这个阈值有极大余量。
- */
-
-// 命中这一类要留证 + 通知 + 人工认定；其余拦了不留痕
-const RECORDED_CATEGORY = "sexual/minors";
+import { THRESHOLDS, RECORDED_CATEGORY, judge } from "./thresholds.ts";
 
 type Verdict = {
   allowed: boolean;
@@ -128,19 +68,6 @@ async function moderate(input: unknown[]): Promise<{ scores: Record<string, numb
     console.error("moderation failed:", String(e));
     return null;
   }
-}
-
-/** 按我们自己的阈值判定。返回命中的类别名，没命中返回 null。 */
-function judge(scores: Record<string, number>): string | null {
-  // sexual/minors 优先判 —— 它同时命中别的类别时，我们要记的是这一个
-  if ((scores[RECORDED_CATEGORY] ?? 0) >= THRESHOLDS[RECORDED_CATEGORY]) {
-    return RECORDED_CATEGORY;
-  }
-  for (const [cat, limit] of Object.entries(THRESHOLDS)) {
-    if (cat === RECORDED_CATEGORY) continue;
-    if ((scores[cat] ?? 0) >= limit) return cat;
-  }
-  return null;
 }
 
 function clientMeta(req: Request) {
