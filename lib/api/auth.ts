@@ -1,4 +1,5 @@
 import { supabase } from '../supabase'
+import { unregisterPushToken } from './push'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 // 字段对齐 v3 profiles（见 25_user_profile_table.sql）。
@@ -142,6 +143,12 @@ export async function signIn(
  * 东西了，清掉本地这份就是正确结果。
  */
 export async function signOut(): Promise<{ error: string | null }> {
+  // 先把这台设备的推送令牌注销掉，再退登录 —— 顺序不能反：
+  // 退了之后 auth.uid() 就没了，unregister_push_token 会 raise exception。
+  // 不注销的话，下一个人在这台设备上登录之前，前任还会继续收到自己的私聊推送。
+  // 注销失败不阻塞退出（人卡在退不出的账号里比多收几条推送严重得多）。
+  await unregisterPushToken().catch(() => { /* 见上：绝不阻塞退出 */ })
+
   const { error } = await supabase.auth.signOut()
   if (!error) return { error: null }
 

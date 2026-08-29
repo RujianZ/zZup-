@@ -2,7 +2,9 @@ import React from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { addNotificationTapListener } from '../../lib/api/push';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { light } from '../theme';
@@ -97,7 +99,34 @@ function MainTabs() {
   );
 }
 
+/**
+ * 点推送横幅 → 跳进那个会话。
+ *
+ * 挂在 AppStack 里而不是 App.tsx，是因为要拿 navigation，而且只有登录后
+ * 才有会话可跳。冷启动（App 被划掉后点通知）那条路径在 push.ts 里靠
+ * getLastNotificationResponseAsync 覆盖 —— 只接 listener 的话，
+ * 从"已划掉"状态点通知会落到首页而不是那个会话。
+ *
+ * 推送只做私聊，所以 isDM 恒为 true、isPetTalk 恒为 false，写死即可。
+ */
+function usePushTapNavigation() {
+  const navigation = useNavigation<any>();
+  React.useEffect(() => {
+    return addNotificationTapListener(({ conversation_id, sender_name }) => {
+      if (!conversation_id) return;
+      navigation.navigate('Chat', {
+        conversationId: conversation_id,
+        // 私聊的会话名就是对方的名字，也就是通知标题上那个
+        groupName: sender_name ?? 'Chat',
+        isDM: true,
+        isPetTalk: false,
+      });
+    });
+  }, [navigation]);
+}
+
 function AppStack() {
+  usePushTapNavigation();
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Main"             component={MainTabs}               />

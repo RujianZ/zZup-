@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { getProfile, Profile } from '../../lib/api/auth';
+import { registerForPushNotifications } from '../../lib/api/push';
 import type { Session } from '@supabase/supabase-js';
 
 export type { Profile };
@@ -96,6 +97,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setProfile(data);
             settledRef.current = s.user.id;
             setProfileSettledFor(s.user.id);
+            // 登记这台设备的推送令牌。放在这里而不是登录页，是因为
+            // 冷启动恢复 session 也要走一遍 —— 令牌会被系统回收/更换，
+            // 只在"登录那一刻"登记的话，换过令牌的老用户就永远收不到推送了。
+            // 内部自己吞掉所有失败（Expo Go 里必然拿不到，那是预期不是错误）。
+            registerForPushNotifications();
           }
           setAuthError(false);
           setLoading(false);
