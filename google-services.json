@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "238997978691",
+    "project_id": "zzup-f40db",
+    "storage_bucket": "zzup-f40db.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:238997978691:android:cc11332e9f13a31e5a1ef6",
+        "android_client_info": {
+          "package_name": "com.zzup.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB-J1WaEuGB6B19Bz2Uvd8KDbGiRzVnUMs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
