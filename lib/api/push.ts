@@ -63,8 +63,14 @@ function projectId(): string | null {
  */
 export async function registerForPushNotifications(): Promise<string | null> {
   try {
-    // 模拟器拿不到真实推送令牌
-    if (!Device.isDevice) return null
+    // iOS 模拟器确实收不了远程推送（苹果不支持），直接跳过。
+    // 但**安卓模拟器只要带 Google Play 服务就能收 FCM** —— 一律按
+    // `!Device.isDevice` 挡掉，等于让安卓侧永远没法在模拟器上验证推送，
+    // 而真机（尤其国产 ROM）对 Google 服务的后台限制千奇百怪，
+    // 出问题时没有干净的对照组可用。
+    // 万一是没有 Play 服务的模拟器，下面 getExpoPushTokenAsync 会抛，
+    // 外层 try/catch 兜住返回 null，所以放开是安全的。
+    if (!Device.isDevice && Platform.OS === 'ios') return null
 
     const pid = projectId()
     if (!pid) {

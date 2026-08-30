@@ -164,9 +164,11 @@ Deno.serve(async (req: Request) => {
     // 不放的话点通知只能进首页，或者要多一次网络请求才能跳对。
     // 除此之外只有 id，消息内容一个字都没有。
     data: { conversation_id: msg.conversation_id, sender_name: senderName },
-    // 同一个会话的多条通知在通知中心里折叠成一组，不刷屏
-    categoryId: "dm",
     channelId: "dm",
+    // **必须 high。** FCM 的默认优先级在设备打盹（Doze）时会被无限期推迟，
+    // 对聊天消息来说等于没有 —— 用户第二天才看到「你有一条新消息」毫无意义。
+    // high 优先级允许 FCM 立刻唤醒设备投递，这正是 IM 类通知的正当用途。
+    priority: "high",
   }));
 
   let receipts: Array<{ status?: string; details?: { error?: string } }> = [];
